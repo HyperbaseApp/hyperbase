@@ -1,0 +1,9 @@
+[package]
+name = "hb_api_rest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+hb_config = { path = "../../config" }
+serde = { version = "1", default-features = false, features = ["rc"] }
