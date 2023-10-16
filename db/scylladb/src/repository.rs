@@ -1,11 +1,11 @@
-use hb_db::DbRepository;
+use hb_db::Repository;
 use scylla::Session;
 
 pub struct ScyllaRepository {
-    pub(super) session: Session,
+    pub session: Session,
 }
 
-impl DbRepository for ScyllaRepository {
+impl Repository for ScyllaRepository {
     fn insert_one(&self) {}
 
     fn insert_many(&self) {}

@@ -1,12 +1,12 @@
 use hb_config::DbScyllaConfig;
-use hb_db::DbRepository;
+use hb_db::Repository;
 use repository::ScyllaRepository;
 use scylla::SessionBuilder;
 
-mod models;
+pub mod model;
 mod repository;
 
-pub async fn new(config: &DbScyllaConfig) -> impl DbRepository {
+pub async fn new(config: &DbScyllaConfig) -> impl Repository {
     let uri = format!("{}:{}", config.host, config.port);
     let session = SessionBuilder::new().known_node(uri).build().await.unwrap();
     ScyllaRepository { session }

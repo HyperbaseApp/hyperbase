@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-chrono = { version = "0.4", default-features = false }
 hb_config = { path = "../../config" }
 hb_db = { path = ".." }
 scylla = "0.10"
