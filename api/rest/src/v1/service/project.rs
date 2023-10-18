@@ -1,13 +1,13 @@
 use actix_web::{web, HttpResponse, Responder};
 
-use crate::model::project::{
+use crate::v1::model::project::{
     DeleteOneProjectPath, FindManyProjectPath, FindOneProjectPath, InsertOneProjectJson,
     InsertOneProjectPath, UpdateOneProjectJson, UpdateOneProjectPath,
 };
 
 pub fn project_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/api/v1/rest/admin/{admin_id}/project")
+        web::scope("/admin/{admin_id}/project")
             .route("", web::post().to(insert_one))
             .route("/{project_id}", web::get().to(find_one))
             .route("/{project_id}", web::patch().to(update_one))

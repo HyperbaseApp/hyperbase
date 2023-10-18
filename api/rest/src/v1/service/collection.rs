@@ -1,13 +1,13 @@
 use actix_web::{web, HttpResponse, Responder};
 
-use crate::model::collection::{
+use crate::v1::model::collection::{
     DeleteOneCollectionPath, FindOneCollectionPath, InsertOneCollectionJson,
     InsertOneCollectionPath, UpdateOneCollectionPath,
 };
 
 pub fn collection_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/api/v1/rest/admin/{admin_id}/project/{project_id}/collection")
+        web::scope("/admin/{admin_id}/project/{project_id}/collection")
             .route("", web::post().to(insert_one))
             .route("/{collection_id}", web::get().to(find_one))
             .route("/{collection_id}", web::patch().to(update_one))

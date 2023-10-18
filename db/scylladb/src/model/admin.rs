@@ -1,15 +1,17 @@
-use hb_db::model::{AdminModel as DbAdminModel, BaseModel as DbBaseModel};
+use validator::Validate;
 
-use super::base::BaseModel;
+use super::base::BaseScyllaModel;
 
-pub struct AdminModel {
-    base_model: BaseModel,
+#[derive(Validate)]
+pub struct AdminScyllaModel {
+    base_model: BaseScyllaModel,
+    #[validate(email)]
     email: String,
     password_hash: String,
 }
 
-impl DbAdminModel for AdminModel {
-    fn base_model(&self) -> &dyn DbBaseModel {
+impl AdminScyllaModel {
+    fn base_model(&self) -> &BaseScyllaModel {
         &self.base_model
     }
 

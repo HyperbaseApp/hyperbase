@@ -1,20 +1,19 @@
-use hb_db::model::{BaseModel as DbBaseModel, ProjectModel as DbProjectModel};
 use uuid::Uuid;
 
-use super::base::BaseModel;
+use super::base::BaseScyllaModel;
 
-pub struct ProjectModel {
-    base_model: BaseModel,
+pub struct ProjectScyllaModel {
+    base_model: BaseScyllaModel,
     admin_id: Uuid,
     name: String,
 }
 
-impl DbProjectModel for ProjectModel {
-    fn base_model(&self) -> &dyn DbBaseModel {
+impl ProjectScyllaModel {
+    fn base_model(&self) -> &BaseScyllaModel {
         &self.base_model
     }
 
-    fn admin_id(&self) -> &uuid::Uuid {
+    fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
 

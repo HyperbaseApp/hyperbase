@@ -1,21 +1,17 @@
-use hb_db::model::{
-    BaseModel as DbBaseModel, CollectionModel as DbCollectionModel,
-    SchemaFieldModel as DbSchemaFieldModel,
-};
 use uuid::Uuid;
 
-use super::base::BaseModel;
+use super::{base::BaseScyllaModel, schema_field::SchemaFieldModel};
 
-pub struct CollectionModel {
-    base_model: BaseModel,
+pub struct CollectionScyllaModel {
+    base_model: BaseScyllaModel,
     project_id: Uuid,
     name: String,
-    schema_fields: Vec<Box<dyn DbSchemaFieldModel>>,
+    schema_fields: Vec<SchemaFieldModel>,
     indexes: Vec<String>,
 }
 
-impl DbCollectionModel for CollectionModel {
-    fn base_model(&self) -> &dyn DbBaseModel {
+impl CollectionScyllaModel {
+    fn base_model(&self) -> &BaseScyllaModel {
         &self.base_model
     }
 
@@ -27,7 +23,7 @@ impl DbCollectionModel for CollectionModel {
         &self.name
     }
 
-    fn schema_fields(&self) -> &Vec<Box<dyn DbSchemaFieldModel>> {
+    fn schema_fields(&self) -> &Vec<SchemaFieldModel> {
         &self.schema_fields
     }
 

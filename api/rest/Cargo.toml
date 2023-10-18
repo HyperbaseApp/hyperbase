@@ -8,5 +8,6 @@ actix-web = "4"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 hb_config = { path = "../../config" }
 serde = { version = "1", default-features = false, features = ["derive"] }
-uuid = { version = "1", features = ["serde"] }
-validator = "0.16"
+serde_json = { version = "1", default-features = false }
+uuid = { version = "1", default-features = false, features = ["serde"] }
+validator = { version = "0.16", features = ["derive"] }

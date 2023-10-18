@@ -1,19 +1,17 @@
-use hb_db::model::{SchemaFieldKind as DbSchemaFieldKind, SchemaFieldModel as DbSchemaFieldModel};
-
-use super::schema_field_kind::SchemaFieldKind;
+use super::schema_field_kind::SchemaScyllaFieldKind;
 
 pub struct SchemaFieldModel {
     name: String,
-    kind: SchemaFieldKind,
+    kind: SchemaScyllaFieldKind,
     required: bool,
 }
 
-impl DbSchemaFieldModel for SchemaFieldModel {
+impl SchemaFieldModel {
     fn name(&self) -> &str {
         &self.name
     }
 
-    fn kind(&self) -> &dyn DbSchemaFieldKind {
+    fn kind(&self) -> &SchemaScyllaFieldKind {
         &self.kind
     }
 

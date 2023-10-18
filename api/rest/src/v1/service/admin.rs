@@ -1,13 +1,13 @@
 use actix_web::{web, HttpResponse, Responder};
 
-use crate::model::admin::{
+use crate::v1::model::admin::{
     DeleteOneAdminPath, FindOneAdminPath, InsertOneAdminJson, UpdateOneAdminJson,
     UpdateOneAdminPath,
 };
 
 pub fn admin_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/api/v1/rest/admin")
+        web::scope("/admin")
             .route("", web::post().to(insert_one))
             .route("/{admin_id}", web::get().to(find_one))
             .route("/{admin_id}", web::patch().to(update_one))
@@ -16,7 +16,11 @@ pub fn admin_api(cfg: &mut web::ServiceConfig) {
 }
 
 async fn insert_one(admin: web::Json<InsertOneAdminJson>) -> impl Responder {
-    HttpResponse::Ok().body(format!("admin insert_one {}", admin.email()))
+    HttpResponse::Ok().body(format!(
+        "admin insert_one {} {}",
+        admin.email(),
+        admin.password()
+    ))
 }
 
 async fn find_one(path: web::Path<FindOneAdminPath>) -> impl Responder {
@@ -28,9 +32,10 @@ async fn update_one(
     admin: web::Json<UpdateOneAdminJson>,
 ) -> impl Responder {
     HttpResponse::Ok().body(format!(
-        "admin update_one {} {:?}",
+        "admin update_one {} {:?} {:?}",
         path.admin_id(),
-        admin.email()
+        admin.email(),
+        admin.password()
     ))
 }
 

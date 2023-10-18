@@ -4,30 +4,77 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Config {
-    pub db: DbConfig,
-    pub api: ApiConfig,
+    db: DbConfig,
+    api: ApiConfig,
+}
+
+impl Config {
+    pub fn db(&self) -> &DbConfig {
+        &self.db
+    }
+
+    pub fn api(&self) -> &ApiConfig {
+        &self.api
+    }
 }
 
 #[derive(Deserialize)]
 pub struct DbConfig {
-    pub scylla: DbScyllaConfig,
+    scylla: DbScyllaConfig,
+}
+
+impl DbConfig {
+    pub fn scylla(&self) -> &DbScyllaConfig {
+        &self.scylla
+    }
 }
 
 #[derive(Deserialize)]
 pub struct DbScyllaConfig {
-    pub host: String,
-    pub port: String,
+    host: String,
+    port: String,
+    replication_factor: i64,
+}
+
+impl DbScyllaConfig {
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn port(&self) -> &str {
+        &self.port
+    }
+
+    pub fn replication_factor(&self) -> &i64 {
+        &self.replication_factor
+    }
 }
 
 #[derive(Deserialize)]
 pub struct ApiConfig {
-    pub rest: ApiRestConfig,
+    rest: ApiRestConfig,
+}
+
+impl ApiConfig {
+    pub fn rest(&self) -> &ApiRestConfig {
+        &self.rest
+    }
 }
 
 #[derive(serde::Deserialize)]
 pub struct ApiRestConfig {
-    pub host: String,
-    pub port: String,
+    host: String,
+    port: String,
+}
+
+impl ApiRestConfig {
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn port(&self) -> &str {
+        &self.port
+    }
 }
 
 pub fn new(path: &str) -> Config {

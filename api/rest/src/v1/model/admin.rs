@@ -1,8 +1,10 @@
 use serde::Deserialize;
 use uuid::Uuid;
+use validator::Validate;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct InsertOneAdminJson {
+    #[validate(email)]
     email: String,
     password: String,
 }
@@ -39,8 +41,9 @@ impl UpdateOneAdminPath {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct UpdateOneAdminJson {
+    #[validate(email)]
     email: Option<String>,
     password: Option<String>,
 }

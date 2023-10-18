@@ -1,28 +1,22 @@
-use std::time::Duration;
-
-use hb_db::{model::BaseModel as DbBaseModel, Driver as DbDriver};
+use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
-pub struct BaseModel {
+pub struct BaseScyllaModel {
     id: Uuid,
-    created_at: Duration,
-    updated_at: Duration,
+    created_at: Timestamp,
+    updated_at: Timestamp,
 }
 
-impl DbBaseModel for BaseModel {
-    fn driver(&self) -> &DbDriver {
-        &DbDriver::Scylla
-    }
-
+impl BaseScyllaModel {
     fn id(&self) -> &Uuid {
         &self.id
     }
 
-    fn created_at(&self) -> &Duration {
+    fn created_at(&self) -> &Timestamp {
         &self.created_at
     }
 
-    fn updated_at(&self) -> &Duration {
+    fn updated_at(&self) -> &Timestamp {
         &self.updated_at
     }
 }
