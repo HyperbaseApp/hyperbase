@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 hb_config = { path = "../../config" }
 scylla = "0.10"
+strum = { version = "0.25", default-features = false, features = ["derive"] }
 uuid = { version = "1", default-features = false, features = [
     "v4",
     "fast-rng",
 ] }
-validator = { version = "0.16", features = ["derive"] }

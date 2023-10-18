@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-futures = "0.3"
 hb_api_rest = { path = "../api/rest" }
 hb_config = { path = "../config" }
 hb_db_scylladb = { path = "../db/scylladb" }
+futures = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread"] }

@@ -1,23 +1,51 @@
+use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
-use super::base::BaseScyllaModel;
-
+#[derive(ValueList, FromRow)]
 pub struct ProjectScyllaModel {
-    base_model: BaseScyllaModel,
+    id: Uuid,
+    created_at: Timestamp,
+    updated_at: Timestamp,
     admin_id: Uuid,
     name: String,
 }
 
 impl ProjectScyllaModel {
-    fn base_model(&self) -> &BaseScyllaModel {
-        &self.base_model
+    pub fn new(
+        id: Uuid,
+        created_at: Timestamp,
+        updated_at: Timestamp,
+        admin_id: Uuid,
+        name: String,
+    ) -> Self {
+        Self {
+            id,
+            created_at,
+            updated_at,
+            admin_id,
+            name,
+        }
+    }
+}
+
+impl ProjectScyllaModel {
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 
-    fn admin_id(&self) -> &Uuid {
+    pub fn created_at(&self) -> &Timestamp {
+        &self.created_at
+    }
+
+    pub fn updated_at(&self) -> &Timestamp {
+        &self.updated_at
+    }
+
+    pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 }

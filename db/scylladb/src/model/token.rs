@@ -1,29 +1,58 @@
-use scylla::frame::value::Timestamp;
+use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
-use super::base::BaseScyllaModel;
-
+#[derive(ValueList, FromRow)]
 pub struct TokenScyllaModel {
-    base_model: BaseScyllaModel,
+    id: Uuid,
+    created_at: Timestamp,
+    updated_at: Timestamp,
     admin_id: Uuid,
     token: String,
     expired_at: Timestamp,
 }
 
 impl TokenScyllaModel {
-    fn base_model(&self) -> &BaseScyllaModel {
-        &self.base_model
+    pub fn new(
+        id: Uuid,
+        created_at: Timestamp,
+        updated_at: Timestamp,
+        admin_id: Uuid,
+        token: String,
+        expired_at: Timestamp,
+    ) -> Self {
+        Self {
+            id,
+            created_at,
+            updated_at,
+            admin_id,
+            token,
+            expired_at,
+        }
+    }
+}
+
+impl TokenScyllaModel {
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 
-    fn admin_id(&self) -> &Uuid {
+    pub fn created_at(&self) -> &Timestamp {
+        &self.created_at
+    }
+
+    pub fn updated_at(&self) -> &Timestamp {
+        &self.updated_at
+    }
+
+    pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
 
-    fn token(&self) -> &str {
+    pub fn token(&self) -> &str {
         &self.token
     }
 
-    fn expired_at(&self) -> &Timestamp {
+    pub fn expired_at(&self) -> &Timestamp {
         &self.expired_at
     }
 }

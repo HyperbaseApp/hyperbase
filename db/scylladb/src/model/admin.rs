@@ -1,25 +1,51 @@
-use validator::Validate;
+use scylla::{frame::value::Timestamp, FromRow, ValueList};
+use uuid::Uuid;
 
-use super::base::BaseScyllaModel;
-
-#[derive(Validate)]
+#[derive(ValueList, FromRow)]
 pub struct AdminScyllaModel {
-    base_model: BaseScyllaModel,
-    #[validate(email)]
+    id: Uuid,
+    created_at: Timestamp,
+    updated_at: Timestamp,
     email: String,
     password_hash: String,
 }
 
 impl AdminScyllaModel {
-    fn base_model(&self) -> &BaseScyllaModel {
-        &self.base_model
+    pub fn new(
+        id: Uuid,
+        created_at: Timestamp,
+        updated_at: Timestamp,
+        email: String,
+        password_hash: String,
+    ) -> Self {
+        Self {
+            id,
+            created_at,
+            updated_at,
+            email,
+            password_hash,
+        }
+    }
+}
+
+impl AdminScyllaModel {
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 
-    fn email(&self) -> &str {
+    pub fn created_at(&self) -> &Timestamp {
+        &self.created_at
+    }
+
+    pub fn updated_at(&self) -> &Timestamp {
+        &self.updated_at
+    }
+
+    pub fn email(&self) -> &str {
         &self.email
     }
 
-    fn password_hash(&self) -> &str {
+    pub fn password_hash(&self) -> &str {
         &self.password_hash
     }
 }
