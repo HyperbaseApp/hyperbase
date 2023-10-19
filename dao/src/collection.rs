@@ -8,13 +8,13 @@ use uuid::Uuid;
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
 pub struct CollectionModel {
-    pub id: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub project_id: Uuid,
-    pub name: String,
-    pub schema_fields: Vec<SchemaFieldModel>,
-    pub indexes: Vec<String>,
+    id: Uuid,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    project_id: Uuid,
+    name: String,
+    schema_fields: Vec<SchemaFieldModel>,
+    indexes: Vec<String>,
 }
 
 impl CollectionModel {
@@ -37,9 +37,9 @@ impl CollectionModel {
 
 #[derive(Clone)]
 pub struct SchemaFieldModel {
-    pub name: String,
-    pub kind: SchemaFieldKind,
-    pub required: bool,
+    name: String,
+    kind: SchemaFieldKind,
+    required: bool,
 }
 
 impl SchemaFieldModel {
@@ -50,17 +50,29 @@ impl SchemaFieldModel {
 
 #[derive(Clone)]
 pub enum SchemaFieldKind {
+    Boolean,
     Integer,
     Float,
     String,
+    Uuid,
+    Date,
+    Time,
+    Datetime,
+    Timestamp,
 }
 
 impl SchemaFieldKind {
     pub fn to_scylla_model(&self) -> SchemaScyllaFieldKind {
         match self {
+            Self::Boolean => SchemaScyllaFieldKind::Boolean,
             Self::Integer => SchemaScyllaFieldKind::Int,
             Self::Float => SchemaScyllaFieldKind::Double,
             Self::String => SchemaScyllaFieldKind::Text,
+            Self::Uuid => SchemaScyllaFieldKind::Uuid,
+            Self::Date => SchemaScyllaFieldKind::Date,
+            Self::Time => SchemaScyllaFieldKind::Time,
+            Self::Datetime => SchemaScyllaFieldKind::Timestamp,
+            Self::Timestamp => SchemaScyllaFieldKind::Timestamp,
         }
     }
 }

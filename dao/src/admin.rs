@@ -6,11 +6,11 @@ use uuid::Uuid;
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
 pub struct AdminModel {
-    pub id: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub email: String,
-    pub password_hash: String,
+    id: Uuid,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    email: String,
+    password_hash: String,
 }
 
 impl AdminModel {

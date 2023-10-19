@@ -6,12 +6,12 @@ use uuid::Uuid;
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
 pub struct TokenModel {
-    pub id: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub admin_id: Uuid,
-    pub token: String,
-    pub expired_at: DateTime<Utc>,
+    id: Uuid,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    admin_id: Uuid,
+    token: String,
+    expired_at: DateTime<Utc>,
 }
 
 impl TokenModel {

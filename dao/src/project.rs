@@ -6,11 +6,11 @@ use uuid::Uuid;
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
 pub struct ProjectModel {
-    pub id: Uuid,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub admin_id: Uuid,
-    pub name: String,
+    id: Uuid,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    admin_id: Uuid,
+    name: String,
 }
 
 impl ProjectModel {
