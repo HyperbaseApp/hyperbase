@@ -1,8 +1,11 @@
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{error, web, HttpResponse, Responder, Result};
 
-use crate::v1::model::auth::{
-    ConfirmPasswordResetJson, PasswordBasedJson, RegisterJson, RequestPasswordResetJson,
-    TokenBasedJson,
+use crate::{
+    v1::model::auth::{
+        ConfirmPasswordResetJson, PasswordBasedJson, RegisterJson, RequestPasswordResetJson,
+        TokenBasedJson,
+    },
+    Context,
 };
 
 pub fn auth_api(cfg: &mut web::ServiceConfig) {
@@ -22,12 +25,21 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
     );
 }
 
-async fn register(data: web::Json<RegisterJson>) -> impl Responder {
-    HttpResponse::Ok().body(format!(
-        "auth register {} {}",
+async fn register(
+    ctx: web::Data<Context>,
+    data: web::Json<RegisterJson>,
+) -> Result<impl Responder> {
+    let password_hash = ctx
+        .argon2_hash
+        .hash_password(data.password().as_bytes())
+        .map_err(|err| error::ErrorInternalServerError(err))?;
+
+    Ok(HttpResponse::Ok().body(format!(
+        "auth register {} {} {}",
         data.email(),
-        data.password()
-    ))
+        data.password(),
+        password_hash
+    )))
 }
 
 async fn password_based(data: web::Json<PasswordBasedJson>) -> impl Responder {

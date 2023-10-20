@@ -1,3 +1,29 @@
 [workspace]
 resolver = "2"
-members = ["hyperbase", "config", "db/scylladb", "dao", "api/rest"]
+members = [
+    "hyperbase",
+    "config",
+    "hash/argon2",
+    "db/scylladb",
+    "dao",
+    "api/rest",
+]
+
+[workspace.dependencies]
+hb_api_rest = { path = "./api/rest" }
+hb_config = { path = "./config" }
+hb_db_scylladb = { path = "./db/scylladb" }
+hb_hash_argon2 = { path = "./hash/argon2" }
+
+actix-web = "4"
+argon2 = "0.5"
+chrono = { version = "0.4", default-features = false }
+futures = "0.3"
+scylla = "0.10"
+serde = { version = "1", default-features = false }
+serde_json = { version = "1", default-features = false }
+serde_yaml = "0.9"
+strum = { version = "0.25", default-features = false }
+tokio = "1"
+uuid = { version = "1", default-features = false }
+validator = "0.16"

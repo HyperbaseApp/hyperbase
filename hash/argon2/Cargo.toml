@@ -1,0 +1,9 @@
+[package]
+name = "hb_hash_argon2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hb_config = { workspace = true }
+
+argon2 = { workspace = true }

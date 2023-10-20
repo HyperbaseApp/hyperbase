@@ -5,12 +5,17 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Config {
     db: DbConfig,
+    hash: HashConfig,
     api: ApiConfig,
 }
 
 impl Config {
     pub fn db(&self) -> &DbConfig {
         &self.db
+    }
+
+    pub fn hash(&self) -> &HashConfig {
+        &self.hash
     }
 
     pub fn api(&self) -> &ApiConfig {
@@ -47,6 +52,38 @@ impl DbScyllaConfig {
 
     pub fn replication_factor(&self) -> &i64 {
         &self.replication_factor
+    }
+}
+
+#[derive(Deserialize)]
+pub struct HashConfig {
+    argon2: Argon2HashConfig,
+}
+
+impl HashConfig {
+    pub fn argon2(&self) -> &Argon2HashConfig {
+        &self.argon2
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Argon2HashConfig {
+    algorithm: String,
+    version: String,
+    salt: String,
+}
+
+impl Argon2HashConfig {
+    pub fn algorithm(&self) -> &str {
+        &self.algorithm
+    }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    pub fn salt(&self) -> &str {
+        &self.salt
     }
 }
 

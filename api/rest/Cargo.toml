@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hb_config = { path = "../../config" }
-actix-web = "4"
-serde = { version = "1", default-features = false, features = ["derive"] }
-serde_json = { version = "1", default-features = false }
-uuid = { version = "1", default-features = false, features = ["serde"] }
-validator = { version = "0.16", features = ["derive"] }
+hb_config = { workspace = true }
+hb_hash_argon2 = { workspace = true }
+
+actix-web = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+validator = { workspace = true, features = ["derive"] }

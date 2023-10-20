@@ -4,10 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hb_config = { path = "../../config" }
-scylla = "0.10"
-strum = { version = "0.25", default-features = false, features = ["derive"] }
-uuid = { version = "1", default-features = false, features = [
-    "v4",
-    "fast-rng",
-] }
+hb_config = { workspace = true }
+
+scylla = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4", "fast-rng"] }
