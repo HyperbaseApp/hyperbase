@@ -34,6 +34,7 @@ async fn register(
         .hash_password(data.password().as_bytes())
         .map_err(|err| error::ErrorInternalServerError(err))?;
 
+
     Ok(HttpResponse::Ok().body(format!(
         "auth register {} {} {}",
         data.email(),

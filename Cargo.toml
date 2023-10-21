@@ -6,19 +6,30 @@ members = [
     "hash/argon2",
     "db/scylladb",
     "dao",
+    "mailer",
     "api/rest",
 ]
 
 [workspace.dependencies]
 hb_api_rest = { path = "./api/rest" }
 hb_config = { path = "./config" }
+hb_dao = { path = "./dao" }
 hb_db_scylladb = { path = "./db/scylladb" }
 hb_hash_argon2 = { path = "./hash/argon2" }
+hb_mailer = { path = "./mailer" }
 
 actix-web = "4"
+anyhow = "1"
 argon2 = "0.5"
 chrono = { version = "0.4", default-features = false }
 futures = "0.3"
+lettre = { version = "0.11", default-features = false, features = [
+    "rustls-tls",
+    "builder",
+    "hostname",
+    "smtp-transport",
+    "pool",
+] }
 scylla = "0.10"
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }

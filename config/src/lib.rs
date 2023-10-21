@@ -39,6 +39,7 @@ pub struct DbScyllaConfig {
     host: String,
     port: String,
     replication_factor: i64,
+    temp_ttl: i64,
 }
 
 impl DbScyllaConfig {
@@ -52,6 +53,10 @@ impl DbScyllaConfig {
 
     pub fn replication_factor(&self) -> &i64 {
         &self.replication_factor
+    }
+
+    pub fn temp_ttl(&self) -> &i64 {
+        &self.temp_ttl
     }
 }
 

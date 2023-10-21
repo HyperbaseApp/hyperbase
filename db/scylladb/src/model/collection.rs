@@ -42,9 +42,7 @@ impl CollectionScyllaModel {
             indexes,
         }
     }
-}
 
-impl CollectionScyllaModel {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
@@ -89,9 +87,7 @@ impl SchemaScyllaFieldModel {
             required,
         }
     }
-}
 
-impl SchemaScyllaFieldModel {
     pub fn name(&self) -> &str {
         &self.name
     }

@@ -1,29 +1,28 @@
-use scylla::{frame::value::Timestamp, FromRow, ValueList};
+use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
-#[derive(ValueList, FromRow)]
-pub struct ProjectScyllaModel {
+pub struct AdminPasswordResetScyllaModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
-    admin_id: Uuid,
-    name: String,
+    email: String,
+    code: String,
 }
 
-impl ProjectScyllaModel {
+impl AdminPasswordResetScyllaModel {
     pub fn new(
         id: Uuid,
         created_at: Timestamp,
         updated_at: Timestamp,
-        admin_id: Uuid,
-        name: String,
+        email: String,
+        code: String,
     ) -> Self {
         Self {
             id,
             created_at,
             updated_at,
-            admin_id,
-            name,
+            email,
+            code,
         }
     }
 
@@ -39,11 +38,11 @@ impl ProjectScyllaModel {
         &self.updated_at
     }
 
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
+    pub fn email(&self) -> &str {
+        &self.email
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn code(&self) -> &str {
+        &self.code
     }
 }

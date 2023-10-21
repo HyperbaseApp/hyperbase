@@ -29,9 +29,7 @@ impl TokenScyllaModel {
             expired_at,
         }
     }
-}
 
-impl TokenScyllaModel {
     pub fn id(&self) -> &Uuid {
         &self.id
     }

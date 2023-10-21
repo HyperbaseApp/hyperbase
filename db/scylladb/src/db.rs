@@ -5,8 +5,9 @@ use scylla::{
 };
 
 use crate::prepared_statement::{
-    admin::AdminPreparedStatement, collection::CollectionPreparedStatement,
-    project::ProjectPreparedStatement, token::TokenPreparedStatement,
+    admin::AdminPreparedStatement, admin_password_reset::AdminPasswordResetPreparedStatement,
+    collection::CollectionPreparedStatement, project::ProjectPreparedStatement,
+    registration::RegistrationPreparedStatement, token::TokenPreparedStatement,
 };
 
 pub struct ScyllaDb {
@@ -19,13 +20,7 @@ impl ScyllaDb {
         let uri = format!("{}:{}", config.host(), config.port());
         let session = SessionBuilder::new().known_node(uri).build().await.unwrap();
 
-        ScyllaDb::init(
-            &session,
-            ScyllaDbOpts {
-                replication_factor: *config.replication_factor(),
-            },
-        )
-        .await;
+        ScyllaDb::init(&session, config).await;
 
         ScyllaDb {
             prepared_statement: ScyllaPreparedStatement {
@@ -33,14 +28,16 @@ impl ScyllaDb {
                 token: TokenPreparedStatement::new(&session).await,
                 project: ProjectPreparedStatement::new(&session).await,
                 collection: CollectionPreparedStatement::new(&session).await,
+                registration: RegistrationPreparedStatement::new(&session).await,
+                admin_password_reset: AdminPasswordResetPreparedStatement::new(&session).await,
             },
             session,
         }
     }
 
-    async fn init(session: &Session, opts: ScyllaDbOpts) {
+    async fn init(session: &Session, config: &DbScyllaConfig) {
         // Create keyspace
-        session.query(format!("CREATE KEYSPACE IF NOT EXISTS ks WITH REPLICATION = {{'class' : 'NetworkTopologyStrategy', 'replication_factor' :{}}}", opts.replication_factor), &[]).await.unwrap();
+        session.query(format!("CREATE KEYSPACE IF NOT EXISTS ks WITH REPLICATION = {{'class' : 'NetworkTopologyStrategy', 'replication_factor' :{}}}", config.replication_factor()), &[]).await.unwrap();
 
         // Create types
         session
@@ -52,10 +49,18 @@ impl ScyllaDb {
             .unwrap();
 
         // Create tables
+        // admins
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))", AdminPreparedStatement::table_name()),&[]).await.unwrap();
+        // tokens
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"token\" text, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", TokenPreparedStatement::table_name()), &[]).await.unwrap();
+        // projects
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"name\" text, PRIMARY KEY (\"id\"))", ProjectPreparedStatement::table_name()), &[]).await.unwrap();
+        // collections
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" list<frozen<schema_field>>, \"indexes\" list<text>, PRIMARY KEY (\"id\"))", CollectionPreparedStatement::table_name()), &[]).await.unwrap();
+        // registrations
+        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", RegistrationPreparedStatement::table_name(), config.temp_ttl() ), &[]).await.unwrap();
+        // admin_password_resets
+        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", AdminPreparedStatement::table_name(), config.temp_ttl()), &[]).await.unwrap();
     }
 
     pub fn prepared_statement(&self) -> &ScyllaPreparedStatement {
@@ -84,6 +89,9 @@ pub struct ScyllaPreparedStatement {
     token: TokenPreparedStatement,
     project: ProjectPreparedStatement,
     collection: CollectionPreparedStatement,
+
+    registration: RegistrationPreparedStatement,
+    admin_password_reset: AdminPasswordResetPreparedStatement,
 }
 
 impl ScyllaPreparedStatement {
@@ -102,8 +110,12 @@ impl ScyllaPreparedStatement {
     pub fn collection(&self) -> &CollectionPreparedStatement {
         &self.collection
     }
-}
 
-pub struct ScyllaDbOpts {
-    pub replication_factor: i64,
+    pub fn registration(&self) -> &RegistrationPreparedStatement {
+        &self.registration
+    }
+
+    pub fn admin_password_reset(&self) -> &AdminPasswordResetPreparedStatement {
+        &self.admin_password_reset
+    }
 }

@@ -50,28 +50,36 @@ impl SchemaFieldModel {
 
 #[derive(Clone)]
 pub enum SchemaFieldKind {
-    Boolean,
-    Integer,
-    Float,
-    String,
-    Uuid,
-    Date,
-    Time,
-    Datetime,
-    Timestamp,
+    Boolean,      // boolean
+    TinyInteger,  // 8-bit signed int
+    SmallInteger, // 16-bit signed int
+    Integer,      // 32-bit signed int
+    BigInteger,   // 64-bit signed long
+    Float,        // 32-bit IEEE-754 floating point
+    Double,       // 64-bit IEEE-754 floating point
+    String,       // UTF8 encoded string
+    Uuid,         // A UUID (of any version)
+    Date,         // A date (with no corresponding time value)
+    Time,         // A time (with no corresponding date value)
+    DateTime,     // A datetime
+    Timestamp,    // A timestamp (date and time)
 }
 
 impl SchemaFieldKind {
     pub fn to_scylla_model(&self) -> SchemaScyllaFieldKind {
         match self {
             Self::Boolean => SchemaScyllaFieldKind::Boolean,
+            Self::TinyInteger => SchemaScyllaFieldKind::Tinyint,
+            Self::SmallInteger => SchemaScyllaFieldKind::Smallint,
             Self::Integer => SchemaScyllaFieldKind::Int,
-            Self::Float => SchemaScyllaFieldKind::Double,
+            Self::BigInteger => SchemaScyllaFieldKind::Bigint,
+            Self::Float => SchemaScyllaFieldKind::Float,
+            Self::Double => SchemaScyllaFieldKind::Double,
             Self::String => SchemaScyllaFieldKind::Text,
             Self::Uuid => SchemaScyllaFieldKind::Uuid,
             Self::Date => SchemaScyllaFieldKind::Date,
             Self::Time => SchemaScyllaFieldKind::Time,
-            Self::Datetime => SchemaScyllaFieldKind::Timestamp,
+            Self::DateTime => SchemaScyllaFieldKind::Timestamp,
             Self::Timestamp => SchemaScyllaFieldKind::Timestamp,
         }
     }

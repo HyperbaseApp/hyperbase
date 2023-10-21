@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 hb_config = { workspace = true }
+hb_dao = { workspace = true }
 hb_hash_argon2 = { workspace = true }
 
 actix-web = { workspace = true }
