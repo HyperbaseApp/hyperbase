@@ -30,6 +30,7 @@ lettre = { version = "0.11", default-features = false, features = [
     "smtp-transport",
     "pool",
 ] }
+rand = "0.8"
 scylla = "0.10"
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }

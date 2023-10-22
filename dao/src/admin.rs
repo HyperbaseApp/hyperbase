@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
-pub struct AdminModel {
+pub struct AdminDao {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -13,8 +13,8 @@ pub struct AdminModel {
     password_hash: String,
 }
 
-impl AdminModel {
-    pub fn to_scylla_model(&self) -> AdminScyllaModel {
+impl AdminDao {
+    pub fn to_scylladb_model(&self) -> AdminScyllaModel {
         AdminScyllaModel::new(
             self.id,
             Timestamp(datetime_to_duration_since_epoch(self.created_at)),

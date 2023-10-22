@@ -1,4 +1,5 @@
 use actix_web::{error, web, HttpResponse, Responder, Result};
+use hb_dao::{register::RegistrationDao, Db};
 
 use crate::{
     v1::model::auth::{
@@ -30,10 +31,18 @@ async fn register(
     data: web::Json<RegisterJson>,
 ) -> Result<impl Responder> {
     let password_hash = ctx
-        .argon2_hash
+        .hash
+        .argon2
         .hash_password(data.password().as_bytes())
         .map_err(|err| error::ErrorInternalServerError(err))?;
 
+    let registration_data =
+        RegistrationDao::new(data.email().to_string(), password_hash.to_string());
+
+    registration_data
+        .insert(Db::ScyllaDb(&ctx.db.scylladb))
+        .await
+        .map_err(|err| error::ErrorInternalServerError(err))?;
 
     Ok(HttpResponse::Ok().body(format!(
         "auth register {} {} {}",

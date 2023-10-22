@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
-pub struct CollectionModel {
+pub struct CollectionDao {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -17,8 +17,8 @@ pub struct CollectionModel {
     indexes: Vec<String>,
 }
 
-impl CollectionModel {
-    pub fn to_scylla_model(&self) -> CollectionScyllaModel {
+impl CollectionDao {
+    pub fn to_scylladb_model(&self) -> CollectionScyllaModel {
         CollectionScyllaModel::new(
             self.id,
             Timestamp(datetime_to_duration_since_epoch(self.created_at)),
@@ -28,7 +28,7 @@ impl CollectionModel {
             self.schema_fields
                 .clone()
                 .into_iter()
-                .map(|schema_field| schema_field.to_scylla_model())
+                .map(|schema_field| schema_field.to_scylladb_model())
                 .collect(),
             self.indexes.clone(),
         )
@@ -43,8 +43,8 @@ pub struct SchemaFieldModel {
 }
 
 impl SchemaFieldModel {
-    pub fn to_scylla_model(self) -> SchemaScyllaFieldModel {
-        SchemaScyllaFieldModel::new(self.name, self.kind.to_scylla_model(), self.required)
+    pub fn to_scylladb_model(self) -> SchemaScyllaFieldModel {
+        SchemaScyllaFieldModel::new(self.name, self.kind.to_scylladb_model(), self.required)
     }
 }
 
@@ -66,7 +66,7 @@ pub enum SchemaFieldKind {
 }
 
 impl SchemaFieldKind {
-    pub fn to_scylla_model(&self) -> SchemaScyllaFieldKind {
+    pub fn to_scylladb_model(&self) -> SchemaScyllaFieldKind {
         match self {
             Self::Boolean => SchemaScyllaFieldKind::Boolean,
             Self::TinyInteger => SchemaScyllaFieldKind::Tinyint,

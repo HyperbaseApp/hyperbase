@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hb_config = { workspace = true }
-
 scylla = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }

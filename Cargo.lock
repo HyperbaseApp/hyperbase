@@ -775,6 +775,7 @@ dependencies = [
  "actix-web",
  "hb_config",
  "hb_dao",
+ "hb_db_scylladb",
  "hb_hash_argon2",
  "serde",
  "serde_json",
@@ -794,8 +795,10 @@ dependencies = [
 name = "hb_dao"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "hb_db_scylladb",
+ "rand",
  "scylla",
  "uuid",
  "validator",
@@ -805,7 +808,6 @@ dependencies = [
 name = "hb_db_scylladb"
 version = "0.1.0"
 dependencies = [
- "hb_config",
  "scylla",
  "strum 0.25.0",
  "uuid",
@@ -816,7 +818,6 @@ name = "hb_hash_argon2"
 version = "0.1.0"
 dependencies = [
  "argon2",
- "hb_config",
 ]
 
 [[package]]

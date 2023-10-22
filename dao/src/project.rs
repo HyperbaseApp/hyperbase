@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
-pub struct ProjectModel {
+pub struct ProjectDao {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -13,8 +13,8 @@ pub struct ProjectModel {
     name: String,
 }
 
-impl ProjectModel {
-    pub fn to_scylla_model(&self) -> ProjectScyllaModel {
+impl ProjectDao {
+    pub fn to_scylladb_model(&self) -> ProjectScyllaModel {
         ProjectScyllaModel::new(
             self.id,
             Timestamp(datetime_to_duration_since_epoch(self.created_at)),

@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 hb_db_scylladb = { workspace = true }
 
+anyhow = { workspace = true }
 chrono = { workspace = true }
+rand = { workspace = true }
 scylla = { workspace = true }
 uuid = { workspace = true }
 validator = { workspace = true, features = ["derive"] }

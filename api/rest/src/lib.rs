@@ -1,12 +1,22 @@
 use actix_web::{web, App, HttpServer};
 use hb_config::ApiRestConfig;
-use hb_hash_argon2::Argon2Hash;
+use hb_db_scylladb::db::ScyllaDb;
+use hb_hash_argon2::argon2::Argon2Hash;
 use v1::v1_api;
 
 mod v1;
 
 pub struct Context {
-    pub argon2_hash: Argon2Hash,
+    pub hash: HashCtx,
+    pub db: DbCtx,
+}
+
+pub struct HashCtx {
+    pub argon2: Argon2Hash,
+}
+
+pub struct DbCtx {
+    pub scylladb: ScyllaDb,
 }
 
 pub async fn run(config: &ApiRestConfig, ctx: Context) {

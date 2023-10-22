@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::util::conversion::datetime_to_duration_since_epoch;
 
-pub struct TokenModel {
+pub struct TokenDao {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -14,8 +14,8 @@ pub struct TokenModel {
     expired_at: DateTime<Utc>,
 }
 
-impl TokenModel {
-    pub fn to_scylla_model(&self) -> TokenScyllaModel {
+impl TokenDao {
+    pub fn to_scylladb_model(&self) -> TokenScyllaModel {
         TokenScyllaModel::new(
             self.id,
             Timestamp(datetime_to_duration_since_epoch(self.created_at)),

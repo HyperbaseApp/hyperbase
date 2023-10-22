@@ -20,4 +20,20 @@ impl RegistrationPreparedStatement {
     pub fn table_name() -> &'static str {
         "ks.registrations"
     }
+
+    pub fn insert(&self) -> &PreparedStatement {
+        &self.insert
+    }
+
+    pub fn select(&self) -> &PreparedStatement {
+        &self.select
+    }
+
+    pub fn update(&self) -> &PreparedStatement {
+        &self.update
+    }
+
+    pub fn delete(&self) -> &PreparedStatement {
+        &self.delete
+    }
 }
