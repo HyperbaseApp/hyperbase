@@ -1,5 +1,39 @@
 use serde::Deserialize;
+use uuid::Uuid;
 use validator::Validate;
+
+#[derive(Deserialize, Validate)]
+pub struct RegisterJson {
+    #[validate(email)]
+    email: String,
+    password: String,
+}
+
+impl RegisterJson {
+    pub fn email(&self) -> &str {
+        &self.email
+    }
+
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+}
+
+#[derive(Deserialize)]
+pub struct VerifyRegistrationJson {
+    id: Uuid,
+    code: String,
+}
+
+impl VerifyRegistrationJson {
+    pub fn id(&self) -> &Uuid {
+        &self.id
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+}
 
 #[derive(Deserialize, Validate)]
 pub struct PasswordBasedJson {
@@ -26,23 +60,6 @@ pub struct TokenBasedJson {
 impl TokenBasedJson {
     pub fn token(&self) -> &str {
         &self.token
-    }
-}
-
-#[derive(Deserialize, Validate)]
-pub struct RegisterJson {
-    #[validate(email)]
-    email: String,
-    password: String,
-}
-
-impl RegisterJson {
-    pub fn email(&self) -> &str {
-        &self.email
-    }
-
-    pub fn password(&self) -> &str {
-        &self.password
     }
 }
 

@@ -5,7 +5,10 @@ use rand::Rng;
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
-use crate::{util::conversion::datetime_to_duration_since_epoch, Db};
+use crate::{
+    util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
+    Db,
+};
 
 pub struct RegistrationDao {
     id: Uuid,
@@ -17,21 +20,55 @@ pub struct RegistrationDao {
 }
 
 impl RegistrationDao {
-    pub fn new(email: String, password_hash: String) -> Self {
+    pub fn new(email: &str, password_hash: &str) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             created_at: now,
             updated_at: now,
-            email,
-            password_hash,
+            email: email.to_string(),
+            password_hash: password_hash.to_string(),
             code: rand::thread_rng().gen_range(100000..=999999).to_string(),
         }
     }
 
+    pub fn id(&self) -> &Uuid {
+        &self.id
+    }
+
+    pub fn created_at(&self) -> &DateTime<Utc> {
+        &self.created_at
+    }
+
+    pub fn updated_at(&self) -> &DateTime<Utc> {
+        &self.updated_at
+    }
+
+    pub fn email(&self) -> &str {
+        &self.email
+    }
+
+    pub fn password_hash(&self) -> &str {
+        &self.password_hash
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+}
+
+impl RegistrationDao {
     pub async fn insert(&self, db: Db<'_>) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
+        }
+    }
+
+    pub async fn select(db: Db<'_>, id: &Uuid) -> Result<Self> {
+        match db {
+            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
+                &Self::scylladb_select(db, id).await?,
+            )?),
         }
     }
 }
@@ -44,6 +81,27 @@ impl RegistrationDao {
         )
         .await?;
         Ok(())
+    }
+
+    async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<RegistrationScyllaModel> {
+        Ok(db
+            .execute(
+                db.prepared_statement().registration().select(),
+                [id].as_ref(),
+            )
+            .await?
+            .first_row_typed::<RegistrationScyllaModel>()?)
+    }
+
+    fn from_scylladb_model(model: &RegistrationScyllaModel) -> Result<Self> {
+        Ok(Self {
+            id: *model.id(),
+            created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
+            updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
+            email: model.email().to_string(),
+            password_hash: model.password_hash().to_string(),
+            code: model.code().to_string(),
+        })
     }
 
     fn to_scylladb_model(&self) -> RegistrationScyllaModel {

@@ -4,22 +4,90 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Config {
-    db: DbConfig,
     hash: HashConfig,
+    mailer: MailerConfig,
+    db: DbConfig,
     api: ApiConfig,
 }
 
 impl Config {
-    pub fn db(&self) -> &DbConfig {
-        &self.db
-    }
-
     pub fn hash(&self) -> &HashConfig {
         &self.hash
     }
 
+    pub fn mailer(&self) -> &MailerConfig {
+        &self.mailer
+    }
+
+    pub fn db(&self) -> &DbConfig {
+        &self.db
+    }
+
     pub fn api(&self) -> &ApiConfig {
         &self.api
+    }
+}
+
+#[derive(Deserialize)]
+pub struct HashConfig {
+    argon2: Argon2HashConfig,
+}
+
+impl HashConfig {
+    pub fn argon2(&self) -> &Argon2HashConfig {
+        &self.argon2
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Argon2HashConfig {
+    algorithm: String,
+    version: String,
+    salt: String,
+}
+
+impl Argon2HashConfig {
+    pub fn algorithm(&self) -> &str {
+        &self.algorithm
+    }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    pub fn salt(&self) -> &str {
+        &self.salt
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MailerConfig {
+    smtp_host: String,
+    smtp_username: String,
+    smtp_password: String,
+    sender_name: String,
+    sender_email: String,
+}
+
+impl MailerConfig {
+    pub fn smtp_host(&self) -> &str {
+        &self.smtp_host
+    }
+
+    pub fn smtp_username(&self) -> &str {
+        &self.smtp_username
+    }
+
+    pub fn smtp_password(&self) -> &str {
+        &self.smtp_password
+    }
+
+    pub fn sender_name(&self) -> &str {
+        &self.sender_name
+    }
+
+    pub fn sender_email(&self) -> &str {
+        &self.sender_email
     }
 }
 
@@ -57,38 +125,6 @@ impl DbScyllaConfig {
 
     pub fn temp_ttl(&self) -> &i64 {
         &self.temp_ttl
-    }
-}
-
-#[derive(Deserialize)]
-pub struct HashConfig {
-    argon2: Argon2HashConfig,
-}
-
-impl HashConfig {
-    pub fn argon2(&self) -> &Argon2HashConfig {
-        &self.argon2
-    }
-}
-
-#[derive(Deserialize)]
-pub struct Argon2HashConfig {
-    algorithm: String,
-    version: String,
-    salt: String,
-}
-
-impl Argon2HashConfig {
-    pub fn algorithm(&self) -> &str {
-        &self.algorithm
-    }
-
-    pub fn version(&self) -> &str {
-        &self.version
-    }
-
-    pub fn salt(&self) -> &str {
-        &self.salt
     }
 }
 

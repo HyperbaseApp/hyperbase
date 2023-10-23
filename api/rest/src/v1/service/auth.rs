@@ -1,10 +1,11 @@
 use actix_web::{error, web, HttpResponse, Responder, Result};
 use hb_dao::{register::RegistrationDao, Db};
+use hb_mailer::MailPayload;
 
 use crate::{
     v1::model::auth::{
         ConfirmPasswordResetJson, PasswordBasedJson, RegisterJson, RequestPasswordResetJson,
-        TokenBasedJson,
+        TokenBasedJson, VerifyRegistrationJson,
     },
     Context,
 };
@@ -13,6 +14,7 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/auth")
             .route("/register", web::post().to(register))
+            .route("/verify-registration", web::post().to(verify_registration))
             .route("/password-based", web::post().to(password_based))
             .route("/token-based", web::post().to(token_based))
             .route(
@@ -36,8 +38,16 @@ async fn register(
         .hash_password(data.password().as_bytes())
         .map_err(|err| error::ErrorInternalServerError(err))?;
 
-    let registration_data =
-        RegistrationDao::new(data.email().to_string(), password_hash.to_string());
+    let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
+
+    ctx.mailer
+        .sender
+        .send(MailPayload::new(
+            data.email().to_string(),
+            "Registration Verification Code".to_string(),
+            registration_data.code().to_string(),
+        ))
+        .map_err(|err| error::ErrorInternalServerError(err))?;
 
     registration_data
         .insert(Db::ScyllaDb(&ctx.db.scylladb))
@@ -49,6 +59,25 @@ async fn register(
         data.email(),
         data.password(),
         password_hash
+    )))
+}
+
+async fn verify_registration(
+    ctx: web::Data<Context>,
+    data: web::Json<VerifyRegistrationJson>,
+) -> Result<impl Responder> {
+    let registration_data = RegistrationDao::select(Db::ScyllaDb(&ctx.db.scylladb), data.id())
+        .await
+        .map_err(|err| error::ErrorInternalServerError(err))?;
+
+    if data.code() != registration_data.code() {
+        return Err(error::ErrorBadRequest("wrong code"));
+    }
+
+    Ok(HttpResponse::Ok().body(format!(
+        "auth verify_registration {} {}",
+        data.id(),
+        data.code()
     )))
 }
 
