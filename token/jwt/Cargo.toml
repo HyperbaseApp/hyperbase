@@ -1,8 +1,9 @@
 [package]
-name = "hb_config"
+name = "hb_token_jwt"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+jsonwebtoken = { workspace = true }
 serde = { workspace = true }
-serde_yaml = { workspace = true }
+uuid = { workspace = true }

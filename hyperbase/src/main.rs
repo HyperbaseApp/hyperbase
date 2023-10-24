@@ -1,4 +1,7 @@
-use hb_api_rest::context::{Context, DbCtx, HashCtx, MailerCtx};
+use hb_api_rest::{
+    context::{ApiRestContext, DbCtx, HashCtx, MailerCtx},
+    ApiRestServer,
+};
 use hb_db_scylladb::db::ScyllaDb;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::Mailer;
@@ -29,23 +32,23 @@ async fn main() {
     )
     .await;
 
-    tokio::join!(
-        mailer.run(),
-        hb_api_rest::run(
-            config.api().rest(),
-            Context {
-                hash: HashCtx {
-                    argon2: argon2_hash,
-                },
-                mailer: MailerCtx {
-                    sender: mailer_sender,
-                },
-                db: DbCtx {
-                    scylladb: scylla_db,
-                },
+    let api_rest_server = ApiRestServer::new(
+        config.api().rest().host(),
+        config.api().rest().port(),
+        ApiRestContext {
+            hash: HashCtx {
+                argon2: argon2_hash,
             },
-        )
+            mailer: MailerCtx {
+                sender: mailer_sender,
+            },
+            db: DbCtx {
+                scylladb: scylla_db,
+            },
+        },
     );
+
+    tokio::join!(mailer.run(), api_rest_server.run());
 
     println!("Hello, world!");
 }

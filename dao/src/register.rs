@@ -58,17 +58,23 @@ impl RegistrationDao {
 }
 
 impl RegistrationDao {
-    pub async fn insert(&self, db: Db<'_>) -> Result<()> {
-        match db {
-            Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
+    pub async fn insert(&self, db: &Db<'_>) -> Result<()> {
+        match *db {
+            Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
         }
     }
 
-    pub async fn select(db: Db<'_>, id: &Uuid) -> Result<Self> {
-        match db {
+    pub async fn select(db: &Db<'_>, id: &Uuid) -> Result<Self> {
+        match *db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
+        }
+    }
+
+    pub async fn delete(&self, db: &Db<'_>) -> Result<()> {
+        match *db {
+            Db::ScyllaDb(db) => Self::scylladb_delete(self, db).await,
         }
     }
 }
@@ -91,6 +97,15 @@ impl RegistrationDao {
             )
             .await?
             .first_row_typed::<RegistrationScyllaModel>()?)
+    }
+
+    async fn scylladb_delete(&self, db: &ScyllaDb) -> Result<()> {
+        db.execute(
+            db.prepared_statement().registration().delete(),
+            [self.id()].as_ref(),
+        )
+        .await?;
+        Ok(())
     }
 
     fn from_scylladb_model(model: &RegistrationScyllaModel) -> Result<Self> {

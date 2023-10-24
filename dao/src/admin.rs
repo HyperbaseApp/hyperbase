@@ -51,16 +51,24 @@ impl AdminDao {
 }
 
 impl AdminDao {
-    pub async fn insert(&self, db: Db<'_>) -> Result<()> {
-        match db {
+    pub async fn insert(&self, db: &Db<'_>) -> Result<()> {
+        match *db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: Db<'_>, id: &Uuid) -> Result<Self> {
-        match db {
+    pub async fn select(db: &Db<'_>, id: &Uuid) -> Result<Self> {
+        match *db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
+            )?),
+        }
+    }
+
+    pub async fn select_by_email(db: &Db<'_>, email: &str) -> Result<Self> {
+        match *db {
+            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
+                &Self::scylladb_select_by_email(db, email).await?,
             )?),
         }
     }
@@ -79,6 +87,16 @@ impl AdminDao {
     async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<AdminScyllaModel> {
         Ok(db
             .execute(db.prepared_statement().admin().select(), [id].as_ref())
+            .await?
+            .first_row_typed::<AdminScyllaModel>()?)
+    }
+
+    async fn scylladb_select_by_email(db: &ScyllaDb, email: &str) -> Result<AdminScyllaModel> {
+        Ok(db
+            .execute(
+                db.prepared_statement().admin().select_by_email(),
+                [email].as_ref(),
+            )
             .await?
             .first_row_typed::<AdminScyllaModel>()?)
     }

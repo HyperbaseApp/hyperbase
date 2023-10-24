@@ -1,6 +1,6 @@
 use argon2::{
     password_hash::{self, SaltString},
-    Algorithm, Argon2, Params, PasswordHash, PasswordHasher, Version,
+    Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
 };
 
 pub struct Argon2Hash {
@@ -31,5 +31,10 @@ impl Argon2Hash {
 
     pub fn hash_password(&self, password: &[u8]) -> Result<PasswordHash<'_>, password_hash::Error> {
         self.argon2.hash_password(password, &self.salt)
+    }
+
+    pub fn verify_password(&self, password: &str, hash: &str) -> Result<(), password_hash::Error> {
+        let hash = PasswordHash::new(hash)?;
+        self.argon2.verify_password(password.as_bytes(), &hash)
     }
 }

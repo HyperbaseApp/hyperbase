@@ -50,6 +50,7 @@ impl ScyllaDb {
         // Create tables
         // admins
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))", AdminPreparedStatement::table_name()),&[]).await.unwrap();
+        session.query(format!("CREATE INDEX IF NOT EXISTS ON {}(\"email\")", AdminPreparedStatement::table_name()), &[]).await.unwrap();
         // tokens
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"token\" text, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", TokenPreparedStatement::table_name()), &[]).await.unwrap();
         // projects

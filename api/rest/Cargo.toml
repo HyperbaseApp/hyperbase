@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hb_config = { workspace = true }
 hb_dao = { workspace = true }
 hb_db_scylladb = { workspace = true }
 hb_hash_argon2 = { workspace = true }
 hb_mailer = { workspace = true }
+hb_token_jwt = { workspace = true }
 
 actix-web = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 validator = { workspace = true, features = ["derive"] }

@@ -2,23 +2,6 @@ use serde::Deserialize;
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Deserialize, Validate)]
-pub struct InsertOneAdminJson {
-    #[validate(email)]
-    email: String,
-    password: String,
-}
-
-impl InsertOneAdminJson {
-    pub fn email(&self) -> &str {
-        &self.email
-    }
-
-    pub fn password(&self) -> &str {
-        &self.password
-    }
-}
-
 #[derive(Deserialize)]
 pub struct FindOneAdminPath {
     admin_id: Uuid,

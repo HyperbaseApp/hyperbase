@@ -1,6 +1,7 @@
 use actix_web::{error, web, HttpResponse, Responder, Result};
-use hb_dao::{register::RegistrationDao, Db};
+use hb_dao::{admin::AdminDao, register::RegistrationDao, Db};
 use hb_mailer::MailPayload;
+use validator::Validate;
 
 use crate::{
     v1::model::auth::{
@@ -32,6 +33,10 @@ async fn register(
     ctx: web::Data<Context>,
     data: web::Json<RegisterJson>,
 ) -> Result<impl Responder> {
+    data.validate().map_err(|err| error::ErrorBadRequest(err))?;
+
+    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+
     let password_hash = ctx
         .hash
         .argon2
@@ -50,7 +55,7 @@ async fn register(
         .map_err(|err| error::ErrorInternalServerError(err))?;
 
     registration_data
-        .insert(Db::ScyllaDb(&ctx.db.scylladb))
+        .insert(&scylladb)
         .await
         .map_err(|err| error::ErrorInternalServerError(err))?;
 
@@ -66,13 +71,27 @@ async fn verify_registration(
     ctx: web::Data<Context>,
     data: web::Json<VerifyRegistrationJson>,
 ) -> Result<impl Responder> {
-    let registration_data = RegistrationDao::select(Db::ScyllaDb(&ctx.db.scylladb), data.id())
+    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+
+    let registration_data = RegistrationDao::select(&scylladb, data.id())
         .await
         .map_err(|err| error::ErrorInternalServerError(err))?;
 
     if data.code() != registration_data.code() {
         return Err(error::ErrorBadRequest("wrong code"));
     }
+
+    let admin_data = AdminDao::new(registration_data.email(), registration_data.password_hash());
+
+    admin_data
+        .insert(&scylladb)
+        .await
+        .map_err(|err| error::ErrorInternalServerError(err))?;
+
+    registration_data
+        .delete(&scylladb)
+        .await
+        .map_err(|err| error::ErrorInternalServerError(err))?;
 
     Ok(HttpResponse::Ok().body(format!(
         "auth verify_registration {} {}",
@@ -81,12 +100,28 @@ async fn verify_registration(
     )))
 }
 
-async fn password_based(data: web::Json<PasswordBasedJson>) -> impl Responder {
-    HttpResponse::Ok().body(format!(
+async fn password_based(
+    ctx: web::Data<Context>,
+    data: web::Json<PasswordBasedJson>,
+) -> Result<impl Responder> {
+    data.validate().map_err(|err| error::ErrorBadRequest(err))?;
+
+    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+
+    let admin_data = AdminDao::select_by_email(&scylladb, data.email())
+        .await
+        .map_err(|err| error::ErrorInternalServerError(err))?;
+
+    ctx.hash
+        .argon2
+        .verify_password(data.password(), admin_data.password_hash())
+        .map_err(|err| error::ErrorBadRequest(err))?;
+
+    Ok(HttpResponse::Ok().body(format!(
         "auth password_based {} {}",
         data.email(),
         data.password()
-    ))
+    )))
 }
 
 async fn token_based(data: web::Json<TokenBasedJson>) -> impl Responder {

@@ -7,6 +7,7 @@ members = [
     "db/scylladb",
     "dao",
     "mailer",
+    "token/jwt",
     "api/rest",
 ]
 
@@ -17,11 +18,13 @@ hb_dao = { path = "./dao" }
 hb_db_scylladb = { path = "./db/scylladb" }
 hb_hash_argon2 = { path = "./hash/argon2" }
 hb_mailer = { path = "./mailer" }
+hb_token_jwt = { path = "./token/jwt" }
 
 actix-web = "4"
 anyhow = "1"
 argon2 = "0.5"
 chrono = { version = "0.4", default-features = false }
+jsonwebtoken = "9"
 lettre = { version = "0.10.4", default-features = false, features = [
     "rustls-tls",
     "builder",
