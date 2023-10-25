@@ -12,18 +12,18 @@ pub struct ProjectScyllaModel {
 
 impl ProjectScyllaModel {
     pub fn new(
-        id: Uuid,
-        created_at: Timestamp,
-        updated_at: Timestamp,
-        admin_id: Uuid,
-        name: String,
+        id: &Uuid,
+        created_at: &Timestamp,
+        updated_at: &Timestamp,
+        admin_id: &Uuid,
+        name: &str,
     ) -> Self {
         Self {
-            id,
-            created_at,
-            updated_at,
-            admin_id,
-            name,
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            admin_id: *admin_id,
+            name: name.to_string(),
         }
     }
 

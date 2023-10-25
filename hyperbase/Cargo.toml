@@ -9,5 +9,6 @@ hb_config = { workspace = true }
 hb_db_scylladb = { workspace = true }
 hb_hash_argon2 = { workspace = true }
 hb_mailer = { workspace = true }
+hb_token_jwt = { workspace = true }
 
 tokio = { workspace = true, features = ["rt-multi-thread"] }

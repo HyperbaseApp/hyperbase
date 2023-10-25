@@ -24,22 +24,22 @@ pub struct CollectionScyllaModel {
 
 impl CollectionScyllaModel {
     pub fn new(
-        id: Uuid,
-        created_at: Timestamp,
-        updated_at: Timestamp,
-        project_id: Uuid,
-        name: String,
-        schema_fields: Vec<SchemaScyllaFieldModel>,
-        indexes: Vec<String>,
+        id: &Uuid,
+        created_at: &Timestamp,
+        updated_at: &Timestamp,
+        project_id: &Uuid,
+        name: &str,
+        schema_fields: &Vec<SchemaScyllaFieldModel>,
+        indexes: &Vec<String>,
     ) -> Self {
         Self {
-            id,
-            created_at,
-            updated_at,
-            project_id,
-            name,
-            schema_fields,
-            indexes,
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            project_id: *project_id,
+            name: name.to_string(),
+            schema_fields: schema_fields.to_vec(),
+            indexes: indexes.to_vec(),
         }
     }
 
@@ -72,7 +72,7 @@ impl CollectionScyllaModel {
     }
 }
 
-#[derive(IntoUserType, FromUserType)]
+#[derive(IntoUserType, FromUserType, Clone)]
 pub struct SchemaScyllaFieldModel {
     name: String,
     kind: SchemaScyllaFieldKind,
@@ -80,11 +80,11 @@ pub struct SchemaScyllaFieldModel {
 }
 
 impl SchemaScyllaFieldModel {
-    pub fn new(name: String, kind: SchemaScyllaFieldKind, required: bool) -> Self {
+    pub fn new(name: &str, kind: &SchemaScyllaFieldKind, required: &bool) -> Self {
         Self {
-            name,
-            kind,
-            required,
+            name: name.to_string(),
+            kind: *kind,
+            required: *required,
         }
     }
 
@@ -101,7 +101,7 @@ impl SchemaScyllaFieldModel {
     }
 }
 
-#[derive(Display, EnumString)]
+#[derive(Display, EnumString, Clone, Copy)]
 pub enum SchemaScyllaFieldKind {
     Boolean,
     Tinyint,

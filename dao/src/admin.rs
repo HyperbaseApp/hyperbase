@@ -1,6 +1,9 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_db_scylladb::{db::ScyllaDb, model::admin::AdminScyllaModel};
+use hb_db_scylladb::{
+    db::{self, ScyllaDb},
+    model::admin::AdminScyllaModel,
+};
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
@@ -48,6 +51,10 @@ impl AdminDao {
     pub fn password_hash(&self) -> &str {
         &self.password_hash
     }
+
+    pub fn set_password_hash(&mut self, password_hash: &str) {
+        self.password_hash = password_hash.to_string();
+    }
 }
 
 impl AdminDao {
@@ -70,6 +77,12 @@ impl AdminDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select_by_email(db, email).await?,
             )?),
+        }
+    }
+
+    pub async fn update(&self, db: &Db<'_>) -> Result<()> {
+        match *db {
+            Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
     }
 }
@@ -101,6 +114,15 @@ impl AdminDao {
             .first_row_typed::<AdminScyllaModel>()?)
     }
 
+    async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
+        db.execute(
+            db.prepared_statement().admin().update(),
+            self.to_scylladb_model(),
+        )
+        .await?;
+        Ok(())
+    }
+
     fn from_scylladb_model(model: &AdminScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
@@ -113,11 +135,11 @@ impl AdminDao {
 
     fn to_scylladb_model(&self) -> AdminScyllaModel {
         AdminScyllaModel::new(
-            self.id,
-            Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
-            self.email.clone(),
-            self.password_hash.clone(),
+            &self.id,
+            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &self.email,
+            &self.password_hash,
         )
     }
 }

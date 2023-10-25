@@ -77,11 +77,16 @@ impl RequestPasswordResetJson {
 
 #[derive(Deserialize)]
 pub struct ConfirmPasswordResetJson {
+    id: Uuid,
     code: String,
     password: String,
 }
 
 impl ConfirmPasswordResetJson {
+    pub fn id(&self) -> &Uuid {
+        &self.id
+    }
+
     pub fn code(&self) -> &str {
         &self.code
     }

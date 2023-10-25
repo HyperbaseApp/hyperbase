@@ -1,2 +1,3 @@
-pub mod claim;
+mod claim;
 pub mod context;
+pub mod kind;

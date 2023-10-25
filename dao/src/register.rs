@@ -121,12 +121,12 @@ impl RegistrationDao {
 
     fn to_scylladb_model(&self) -> RegistrationScyllaModel {
         RegistrationScyllaModel::new(
-            self.id,
-            Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
-            self.email.clone(),
-            self.password_hash.clone(),
-            self.code.clone(),
+            &self.id,
+            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &self.email,
+            &self.password_hash,
+            &self.code,
         )
     }
 }

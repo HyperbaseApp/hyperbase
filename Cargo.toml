@@ -25,7 +25,7 @@ anyhow = "1"
 argon2 = "0.5"
 chrono = { version = "0.4", default-features = false }
 jsonwebtoken = "9"
-lettre = { version = "0.10.4", default-features = false, features = [
+lettre = { version = "0.11", default-features = false, features = [
     "rustls-tls",
     "builder",
     "hostname",

@@ -104,7 +104,11 @@ pub struct MailPayload {
 }
 
 impl MailPayload {
-    pub fn new(to: String, subject: String, body: String) -> Self {
-        Self { to, subject, body }
+    pub fn new(to: &str, subject: &str, body: &str) -> Self {
+        Self {
+            to: to.to_string(),
+            subject: subject.to_string(),
+            body: body.to_string(),
+        }
     }
 }

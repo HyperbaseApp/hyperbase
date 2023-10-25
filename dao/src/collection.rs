@@ -121,17 +121,18 @@ impl CollectionDao {
 
     fn to_scylladb_model(&self) -> CollectionScyllaModel {
         CollectionScyllaModel::new(
-            self.id,
-            Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
-            self.project_id,
-            self.name.clone(),
-            self.schema_fields
+            &self.id,
+            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &self.project_id,
+            &self.name,
+            &self
+                .schema_fields
                 .clone()
                 .into_iter()
                 .map(|schema_field| schema_field.to_scylladb_model())
                 .collect(),
-            self.indexes.clone(),
+            &self.indexes,
         )
     }
 }
@@ -153,7 +154,7 @@ impl SchemaFieldModel {
     }
 
     fn to_scylladb_model(self) -> SchemaScyllaFieldModel {
-        SchemaScyllaFieldModel::new(self.name, self.kind.to_scylladb_model(), self.required)
+        SchemaScyllaFieldModel::new(&self.name, &self.kind.to_scylladb_model(), &self.required)
     }
 }
 

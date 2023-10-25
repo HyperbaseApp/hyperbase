@@ -5,6 +5,7 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 pub struct Config {
     hash: HashConfig,
+    token: TokenConfig,
     mailer: MailerConfig,
     db: DbConfig,
     api: ApiConfig,
@@ -13,6 +14,10 @@ pub struct Config {
 impl Config {
     pub fn hash(&self) -> &HashConfig {
         &self.hash
+    }
+
+    pub fn token(&self) -> &TokenConfig {
+        &self.token
     }
 
     pub fn mailer(&self) -> &MailerConfig {
@@ -57,6 +62,33 @@ impl Argon2HashConfig {
 
     pub fn salt(&self) -> &str {
         &self.salt
+    }
+}
+
+#[derive(Deserialize)]
+pub struct TokenConfig {
+    jwt: JwtTokenConfig,
+}
+
+impl TokenConfig {
+    pub fn jwt(&self) -> &JwtTokenConfig {
+        &self.jwt
+    }
+}
+
+#[derive(Deserialize)]
+pub struct JwtTokenConfig {
+    secret: String,
+    expiration_time: usize,
+}
+
+impl JwtTokenConfig {
+    pub fn secret(&self) -> &str {
+        &self.secret
+    }
+
+    pub fn expiration_time(&self) -> &usize {
+        &self.expiration_time
     }
 }
 
@@ -107,7 +139,7 @@ pub struct DbScyllaConfig {
     host: String,
     port: String,
     replication_factor: i64,
-    temp_ttl: i64,
+    temporary_ttl: i64,
 }
 
 impl DbScyllaConfig {
@@ -123,8 +155,8 @@ impl DbScyllaConfig {
         &self.replication_factor
     }
 
-    pub fn temp_ttl(&self) -> &i64 {
-        &self.temp_ttl
+    pub fn temporary_ttl(&self) -> &i64 {
+        &self.temporary_ttl
     }
 }
 

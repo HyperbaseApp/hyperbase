@@ -1,6 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{db::ScyllaDb, model::admin_password_reset::AdminPasswordResetScyllaModel};
+use rand::Rng;
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
@@ -13,19 +14,19 @@ pub struct AdminPasswordResetDao {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
-    email: String,
+    admin_id: Uuid,
     code: String,
 }
 
 impl AdminPasswordResetDao {
-    pub fn new(email: &str, code: &str) -> Self {
+    pub fn new(admin_id: &Uuid) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             created_at: now,
             updated_at: now,
-            email: email.to_string(),
-            code: code.to_string(),
+            admin_id: *admin_id,
+            code: rand::thread_rng().gen_range(100000..=999999).to_string(),
         }
     }
 
@@ -41,8 +42,8 @@ impl AdminPasswordResetDao {
         &self.updated_at
     }
 
-    pub fn email(&self) -> &str {
-        &self.email
+    pub fn admin_id(&self) -> &Uuid {
+        &self.admin_id
     }
 
     pub fn code(&self) -> &str {
@@ -91,18 +92,18 @@ impl AdminPasswordResetDao {
             id: *model.id(),
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
-            email: model.email().to_string(),
+            admin_id: *model.admin_id(),
             code: model.code().to_string(),
         })
     }
 
     fn to_scylladb_model(&self) -> AdminPasswordResetScyllaModel {
         AdminPasswordResetScyllaModel::new(
-            self.id,
-            Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
-            self.email.clone(),
-            self.code.clone(),
+            &self.id,
+            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &self.admin_id,
+            &self.code,
         )
     }
 }

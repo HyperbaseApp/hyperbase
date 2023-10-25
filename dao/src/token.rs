@@ -70,6 +70,14 @@ impl TokenDao {
             )?),
         }
     }
+
+    pub async fn select_by_token(db: &Db<'_>, token: &str) -> Result<Self> {
+        match *db {
+            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
+                &Self::scylladb_select_by_token(db, token).await?,
+            )?),
+        }
+    }
 }
 
 impl TokenDao {
@@ -89,6 +97,16 @@ impl TokenDao {
             .first_row_typed::<TokenScyllaModel>()?)
     }
 
+    async fn scylladb_select_by_token(db: &ScyllaDb, token: &str) -> Result<TokenScyllaModel> {
+        Ok(db
+            .execute(
+                db.prepared_statement().token().select_by_token(),
+                [token].as_ref(),
+            )
+            .await?
+            .first_row_typed::<TokenScyllaModel>()?)
+    }
+
     fn from_scylladb_model(model: &TokenScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
@@ -102,12 +120,12 @@ impl TokenDao {
 
     fn to_scylladb_model(&self) -> TokenScyllaModel {
         TokenScyllaModel::new(
-            self.id,
-            Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
-            self.admin_id,
-            self.token.clone(),
-            Timestamp(datetime_to_duration_since_epoch(self.expired_at)),
+            &self.id,
+            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &self.admin_id,
+            &self.token,
+            &Timestamp(datetime_to_duration_since_epoch(self.expired_at)),
         )
     }
 }

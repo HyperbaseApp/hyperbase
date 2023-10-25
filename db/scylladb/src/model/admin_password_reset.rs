@@ -6,24 +6,24 @@ pub struct AdminPasswordResetScyllaModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
-    email: String,
+    admin_id: Uuid,
     code: String,
 }
 
 impl AdminPasswordResetScyllaModel {
     pub fn new(
-        id: Uuid,
-        created_at: Timestamp,
-        updated_at: Timestamp,
-        email: String,
-        code: String,
+        id: &Uuid,
+        created_at: &Timestamp,
+        updated_at: &Timestamp,
+        admin_id: &Uuid,
+        code: &str,
     ) -> Self {
         Self {
-            id,
-            created_at,
-            updated_at,
-            email,
-            code,
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            admin_id: *admin_id,
+            code: code.to_string(),
         }
     }
 
@@ -39,8 +39,8 @@ impl AdminPasswordResetScyllaModel {
         &self.updated_at
     }
 
-    pub fn email(&self) -> &str {
-        &self.email
+    pub fn admin_id(&self) -> &Uuid {
+        &self.admin_id
     }
 
     pub fn code(&self) -> &str {

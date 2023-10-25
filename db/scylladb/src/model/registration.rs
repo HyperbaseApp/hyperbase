@@ -13,20 +13,20 @@ pub struct RegistrationScyllaModel {
 
 impl RegistrationScyllaModel {
     pub fn new(
-        id: Uuid,
-        created_at: Timestamp,
-        updated_at: Timestamp,
-        email: String,
-        password_hash: String,
-        code: String,
+        id: &Uuid,
+        created_at: &Timestamp,
+        updated_at: &Timestamp,
+        email: &str,
+        password_hash: &str,
+        code: &str,
     ) -> Self {
         Self {
-            id,
-            created_at,
-            updated_at,
-            email,
-            password_hash,
-            code,
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            email: email.to_string(),
+            password_hash: password_hash.to_string(),
+            code: code.to_string(),
         }
     }
 

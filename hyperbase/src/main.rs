@@ -1,10 +1,11 @@
 use hb_api_rest::{
-    context::{ApiRestContext, DbCtx, HashCtx, MailerCtx},
+    context::{ApiRestContext, DbCtx, HashCtx, MailerCtx, TokenCtx},
     ApiRestServer,
 };
 use hb_db_scylladb::db::ScyllaDb;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::Mailer;
+use hb_token_jwt::context::JwtToken;
 
 #[tokio::main]
 async fn main() {
@@ -17,6 +18,10 @@ async fn main() {
         config.hash().argon2().version(),
         config.hash().argon2().salt(),
     );
+    let jwt_token = JwtToken::new(
+        config.token().jwt().secret(),
+        config.token().jwt().expiration_time(),
+    );
     let (mailer, mailer_sender) = Mailer::new(
         config.mailer().smtp_host(),
         config.mailer().smtp_username(),
@@ -28,7 +33,7 @@ async fn main() {
         config.db().scylla().host(),
         config.db().scylla().port(),
         config.db().scylla().replication_factor(),
-        config.db().scylla().temp_ttl(),
+        config.db().scylla().temporary_ttl(),
     )
     .await;
 
@@ -39,12 +44,14 @@ async fn main() {
             hash: HashCtx {
                 argon2: argon2_hash,
             },
+            token: TokenCtx { jwt: jwt_token },
             mailer: MailerCtx {
                 sender: mailer_sender,
             },
             db: DbCtx {
                 scylladb: scylla_db,
             },
+            verify_code_ttl: *config.db().scylla().temporary_ttl(),
         },
     );
 

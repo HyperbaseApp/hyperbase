@@ -12,18 +12,18 @@ pub struct AdminScyllaModel {
 
 impl AdminScyllaModel {
     pub fn new(
-        id: Uuid,
-        created_at: Timestamp,
-        updated_at: Timestamp,
-        email: String,
-        password_hash: String,
+        id: &Uuid,
+        created_at: &Timestamp,
+        updated_at: &Timestamp,
+        email: &str,
+        password_hash: &str,
     ) -> Self {
         Self {
-            id,
-            created_at,
-            updated_at,
-            email,
-            password_hash,
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            email: email.to_string(),
+            password_hash: password_hash.to_string(),
         }
     }
 

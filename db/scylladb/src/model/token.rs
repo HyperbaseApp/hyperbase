@@ -13,20 +13,20 @@ pub struct TokenScyllaModel {
 
 impl TokenScyllaModel {
     pub fn new(
-        id: Uuid,
-        created_at: Timestamp,
-        updated_at: Timestamp,
-        admin_id: Uuid,
-        token: String,
-        expired_at: Timestamp,
+        id: &Uuid,
+        created_at: &Timestamp,
+        updated_at: &Timestamp,
+        admin_id: &Uuid,
+        token: &str,
+        expired_at: &Timestamp,
     ) -> Self {
         Self {
-            id,
-            created_at,
-            updated_at,
-            admin_id,
-            token,
-            expired_at,
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            admin_id: *admin_id,
+            token: token.to_string(),
+            expired_at: *expired_at,
         }
     }
 
