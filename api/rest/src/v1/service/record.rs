@@ -1,8 +1,8 @@
 use actix_web::{web, HttpResponse, Responder};
 
 use crate::v1::model::record::{
-    DeleteOneRecordPath, FindOneRecordPath, InsertOneRecordJson, InsertOneRecordPath,
-    UpdateOneRecordJson, UpdateOneRecordPath,
+    DeleteOneRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson, InsertOneRecordReqPath,
+    UpdateOneRecordReqJson, UpdateOneRecordReqPath,
 };
 
 pub fn record_api(cfg: &mut web::ServiceConfig) {
@@ -16,8 +16,8 @@ pub fn record_api(cfg: &mut web::ServiceConfig) {
 }
 
 async fn insert_one(
-    path: web::Path<InsertOneRecordPath>,
-    data: web::Json<InsertOneRecordJson>,
+    path: web::Path<InsertOneRecordReqPath>,
+    data: web::Json<InsertOneRecordReqJson>,
 ) -> impl Responder {
     let data = data.into_inner();
     for (key, value) in &data {
@@ -26,7 +26,7 @@ async fn insert_one(
     HttpResponse::Ok().body(format!("record insert_one {}", path.collection_id()))
 }
 
-async fn find_one(path: web::Path<FindOneRecordPath>) -> impl Responder {
+async fn find_one(path: web::Path<FindOneRecordReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "record find_one {} {}",
         path.collection_id(),
@@ -35,8 +35,8 @@ async fn find_one(path: web::Path<FindOneRecordPath>) -> impl Responder {
 }
 
 async fn update_one(
-    path: web::Path<UpdateOneRecordPath>,
-    data: web::Json<UpdateOneRecordJson>,
+    path: web::Path<UpdateOneRecordReqPath>,
+    data: web::Json<UpdateOneRecordReqJson>,
 ) -> impl Responder {
     let data = data.into_inner();
     for (key, value) in &data {
@@ -49,7 +49,7 @@ async fn update_one(
     ))
 }
 
-async fn delete_one(path: web::Path<DeleteOneRecordPath>) -> impl Responder {
+async fn delete_one(path: web::Path<DeleteOneRecordReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "record delete_one {} {}",
         path.collection_id(),

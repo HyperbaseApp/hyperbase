@@ -1,8 +1,8 @@
 use actix_web::{web, HttpResponse, Responder};
 
 use crate::v1::model::collection::{
-    DeleteOneCollectionPath, FindOneCollectionPath, InsertOneCollectionJson,
-    InsertOneCollectionPath, UpdateOneCollectionPath,
+    DeleteOneCollectionReqPath, FindOneCollectionReqPath, InsertOneCollectionReqJson,
+    InsertOneCollectionReqPath, UpdateOneCollectionReqPath,
 };
 
 pub fn collection_api(cfg: &mut web::ServiceConfig) {
@@ -18,8 +18,8 @@ pub fn collection_api(cfg: &mut web::ServiceConfig) {
 }
 
 async fn insert_one(
-    path: web::Path<InsertOneCollectionPath>,
-    data: web::Json<InsertOneCollectionJson>,
+    path: web::Path<InsertOneCollectionReqPath>,
+    data: web::Json<InsertOneCollectionReqJson>,
 ) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "collection insert_one {} {} {}",
@@ -29,13 +29,13 @@ async fn insert_one(
     ))
 }
 
-async fn find_one(path: web::Path<FindOneCollectionPath>) -> impl Responder {
+async fn find_one(path: web::Path<FindOneCollectionReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!("collection find_one: {}", path.collection_id()))
 }
 
 async fn update_one(
-    path: web::Path<UpdateOneCollectionPath>,
-    data: web::Json<InsertOneCollectionJson>,
+    path: web::Path<UpdateOneCollectionReqPath>,
+    data: web::Json<InsertOneCollectionReqJson>,
 ) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "collection update_one: {}, {}",
@@ -44,7 +44,7 @@ async fn update_one(
     ))
 }
 
-async fn delete_one(path: web::Path<DeleteOneCollectionPath>) -> impl Responder {
+async fn delete_one(path: web::Path<DeleteOneCollectionReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!("collection delete_one: {}", path.collection_id()))
 }
 

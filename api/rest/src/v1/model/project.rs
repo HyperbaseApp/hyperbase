@@ -2,34 +2,34 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
-pub struct InsertOneProjectPath {
+pub struct InsertOneProjectReqPath {
     admin_id: Uuid,
 }
 
-impl InsertOneProjectPath {
+impl InsertOneProjectReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
 }
 
 #[derive(Deserialize)]
-pub struct InsertOneProjectJson {
+pub struct InsertOneProjectReqJson {
     name: String,
 }
 
-impl InsertOneProjectJson {
+impl InsertOneProjectReqJson {
     pub fn name(&self) -> &str {
         &self.name
     }
 }
 
 #[derive(Deserialize)]
-pub struct FindOneProjectPath {
+pub struct FindOneProjectReqPath {
     admin_id: Uuid,
     project_id: Uuid,
 }
 
-impl FindOneProjectPath {
+impl FindOneProjectReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
@@ -40,12 +40,12 @@ impl FindOneProjectPath {
 }
 
 #[derive(Deserialize)]
-pub struct UpdateOneProjectPath {
+pub struct UpdateOneProjectReqPath {
     admin_id: Uuid,
     project_id: Uuid,
 }
 
-impl UpdateOneProjectPath {
+impl UpdateOneProjectReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
@@ -56,23 +56,23 @@ impl UpdateOneProjectPath {
 }
 
 #[derive(Deserialize)]
-pub struct UpdateOneProjectJson {
+pub struct UpdateOneProjectReqJson {
     name: Option<String>,
 }
 
-impl UpdateOneProjectJson {
+impl UpdateOneProjectReqJson {
     pub fn name(&self) -> &Option<String> {
         &self.name
     }
 }
 
 #[derive(Deserialize)]
-pub struct DeleteOneProjectPath {
+pub struct DeleteOneProjectReqPath {
     admin_id: Uuid,
     project_id: Uuid,
 }
 
-impl DeleteOneProjectPath {
+impl DeleteOneProjectReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
@@ -83,11 +83,11 @@ impl DeleteOneProjectPath {
 }
 
 #[derive(Deserialize)]
-pub struct FindManyProjectPath {
+pub struct FindManyProjectReqPath {
     admin_id: Uuid,
 }
 
-impl FindManyProjectPath {
+impl FindManyProjectReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }

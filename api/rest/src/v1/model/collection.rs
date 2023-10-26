@@ -4,12 +4,12 @@ use uuid::Uuid;
 use super::schema_field::SchemaFieldModel;
 
 #[derive(Deserialize)]
-pub struct InsertOneCollectionPath {
+pub struct InsertOneCollectionReqPath {
     admin_id: Uuid,
     project_id: Uuid,
 }
 
-impl InsertOneCollectionPath {
+impl InsertOneCollectionReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
@@ -20,14 +20,14 @@ impl InsertOneCollectionPath {
 }
 
 #[derive(Deserialize)]
-pub struct InsertOneCollectionJson {
+pub struct InsertOneCollectionReqJson {
     name: String,
     #[serde(rename = "schemaFields")]
     schema_fields: Vec<SchemaFieldModel>,
     indexes: Option<Vec<String>>,
 }
 
-impl InsertOneCollectionJson {
+impl InsertOneCollectionReqJson {
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -42,13 +42,13 @@ impl InsertOneCollectionJson {
 }
 
 #[derive(Deserialize)]
-pub struct FindOneCollectionPath {
+pub struct FindOneCollectionReqPath {
     admin_id: Uuid,
     project_id: Uuid,
     collection_id: Uuid,
 }
 
-impl FindOneCollectionPath {
+impl FindOneCollectionReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
@@ -63,13 +63,13 @@ impl FindOneCollectionPath {
 }
 
 #[derive(Deserialize)]
-pub struct UpdateOneCollectionPath {
+pub struct UpdateOneCollectionReqPath {
     admin_id: Uuid,
     project_id: Uuid,
     collection_id: Uuid,
 }
 
-impl UpdateOneCollectionPath {
+impl UpdateOneCollectionReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
@@ -84,14 +84,14 @@ impl UpdateOneCollectionPath {
 }
 
 #[derive(Deserialize)]
-pub struct UpdateOneCollectionJson {
+pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
     #[serde(rename = "schemaFields")]
     schema_fields: Option<Vec<SchemaFieldModel>>,
     indexes: Option<Vec<String>>,
 }
 
-impl UpdateOneCollectionJson {
+impl UpdateOneCollectionReqJson {
     pub fn name(&self) -> &Option<String> {
         &self.name
     }
@@ -106,13 +106,13 @@ impl UpdateOneCollectionJson {
 }
 
 #[derive(Deserialize)]
-pub struct DeleteOneCollectionPath {
+pub struct DeleteOneCollectionReqPath {
     admin_id: Uuid,
     project_id: Uuid,
     collection_id: Uuid,
 }
 
-impl DeleteOneCollectionPath {
+impl DeleteOneCollectionReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }

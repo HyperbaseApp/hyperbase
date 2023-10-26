@@ -20,7 +20,7 @@ async fn main() {
     );
     let jwt_token = JwtToken::new(
         config.token().jwt().secret(),
-        config.token().jwt().expiration_time(),
+        config.token().jwt().expiry_duration(),
     );
     let (mailer, mailer_sender) = Mailer::new(
         config.mailer().smtp_host(),

@@ -79,7 +79,7 @@ impl TokenConfig {
 #[derive(Deserialize)]
 pub struct JwtTokenConfig {
     secret: String,
-    expiration_time: usize,
+    expiry_duration: u64,
 }
 
 impl JwtTokenConfig {
@@ -87,8 +87,8 @@ impl JwtTokenConfig {
         &self.secret
     }
 
-    pub fn expiration_time(&self) -> &usize {
-        &self.expiration_time
+    pub fn expiry_duration(&self) -> &u64 {
+        &self.expiry_duration
     }
 }
 

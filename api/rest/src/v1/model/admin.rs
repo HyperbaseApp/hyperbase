@@ -3,35 +3,35 @@ use uuid::Uuid;
 use validator::Validate;
 
 #[derive(Deserialize)]
-pub struct FindOneAdminPath {
+pub struct FindOneAdminReqPath {
     admin_id: Uuid,
 }
 
-impl FindOneAdminPath {
+impl FindOneAdminReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
 }
 
 #[derive(Deserialize)]
-pub struct UpdateOneAdminPath {
+pub struct UpdateOneAdminReqPath {
     admin_id: Uuid,
 }
 
-impl UpdateOneAdminPath {
+impl UpdateOneAdminReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }
 }
 
 #[derive(Deserialize, Validate)]
-pub struct UpdateOneAdminJson {
+pub struct UpdateOneAdminReqJson {
     #[validate(email)]
     email: Option<String>,
     password: Option<String>,
 }
 
-impl UpdateOneAdminJson {
+impl UpdateOneAdminReqJson {
     pub fn email(&self) -> &Option<String> {
         &self.email
     }
@@ -42,11 +42,11 @@ impl UpdateOneAdminJson {
 }
 
 #[derive(Deserialize)]
-pub struct DeleteOneAdminPath {
+pub struct DeleteOneAdminReqPath {
     admin_id: Uuid,
 }
 
-impl DeleteOneAdminPath {
+impl DeleteOneAdminReqPath {
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
     }

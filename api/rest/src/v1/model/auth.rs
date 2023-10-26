@@ -1,15 +1,15 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
 #[derive(Deserialize, Validate)]
-pub struct RegisterJson {
+pub struct RegisterReqJson {
     #[validate(email)]
     email: String,
     password: String,
 }
 
-impl RegisterJson {
+impl RegisterReqJson {
     pub fn email(&self) -> &str {
         &self.email
     }
@@ -20,12 +20,12 @@ impl RegisterJson {
 }
 
 #[derive(Deserialize)]
-pub struct VerifyRegistrationJson {
+pub struct VerifyRegistrationReqJson {
     id: Uuid,
     code: String,
 }
 
-impl VerifyRegistrationJson {
+impl VerifyRegistrationReqJson {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
@@ -36,13 +36,13 @@ impl VerifyRegistrationJson {
 }
 
 #[derive(Deserialize, Validate)]
-pub struct PasswordBasedJson {
+pub struct PasswordBasedReqJson {
     #[validate(email)]
     email: String,
     password: String,
 }
 
-impl PasswordBasedJson {
+impl PasswordBasedReqJson {
     pub fn email(&self) -> &str {
         &self.email
     }
@@ -53,36 +53,36 @@ impl PasswordBasedJson {
 }
 
 #[derive(Deserialize)]
-pub struct TokenBasedJson {
+pub struct TokenBasedReqJson {
     token: String,
 }
 
-impl TokenBasedJson {
+impl TokenBasedReqJson {
     pub fn token(&self) -> &str {
         &self.token
     }
 }
 
 #[derive(Deserialize, Validate)]
-pub struct RequestPasswordResetJson {
+pub struct RequestPasswordResetReqJson {
     #[validate(email)]
     email: String,
 }
 
-impl RequestPasswordResetJson {
+impl RequestPasswordResetReqJson {
     pub fn email(&self) -> &str {
         &self.email
     }
 }
 
 #[derive(Deserialize)]
-pub struct ConfirmPasswordResetJson {
+pub struct ConfirmPasswordResetReqJson {
     id: Uuid,
     code: String,
     password: String,
 }
 
-impl ConfirmPasswordResetJson {
+impl ConfirmPasswordResetReqJson {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
@@ -93,5 +93,75 @@ impl ConfirmPasswordResetJson {
 
     pub fn password(&self) -> &str {
         &self.password
+    }
+}
+
+#[derive(Serialize)]
+pub struct RegisterResJson {
+    id: Uuid,
+}
+
+impl RegisterResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
+    }
+}
+
+#[derive(Serialize)]
+pub struct VerifyRegistrationResJson {
+    id: Uuid,
+}
+
+impl VerifyRegistrationResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
+    }
+}
+
+#[derive(Serialize)]
+pub struct PasswordBasedResJson {
+    token: String,
+}
+
+impl PasswordBasedResJson {
+    pub fn new(token: &str) -> Self {
+        Self {
+            token: token.to_string(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct TokenBasedResJson {
+    token: String,
+}
+
+impl TokenBasedResJson {
+    pub fn new(token: &str) -> Self {
+        Self {
+            token: token.to_string(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct RequestPasswordResetResJson {
+    id: Uuid,
+}
+
+impl RequestPasswordResetResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
+    }
+}
+
+#[derive(Serialize)]
+pub struct ConfirmPasswordResetResJson {
+    id: Uuid,
+}
+
+impl ConfirmPasswordResetResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
     }
 }

@@ -1,9 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_db_scylladb::{
-    db::{self, ScyllaDb},
-    model::admin::AdminScyllaModel,
-};
+use hb_db_scylladb::{db::ScyllaDb, model::admin::AdminScyllaModel};
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
@@ -80,9 +77,12 @@ impl AdminDao {
         }
     }
 
-    pub async fn update(&self, db: &Db<'_>) -> Result<()> {
+    pub async fn update(&mut self, db: &Db<'_>) -> Result<()> {
         match *db {
-            Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
+            Db::ScyllaDb(db) => {
+                self.updated_at = Utc::now();
+                Self::scylladb_update(&self, db).await
+            }
         }
     }
 }
@@ -115,9 +115,15 @@ impl AdminDao {
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
+        let data = self.to_scylladb_model();
         db.execute(
             db.prepared_statement().admin().update(),
-            self.to_scylladb_model(),
+            (
+                data.updated_at(),
+                data.email(),
+                data.password_hash(),
+                data.id(),
+            ),
         )
         .await?;
         Ok(())

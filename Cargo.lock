@@ -830,6 +830,7 @@ dependencies = [
 name = "hb_token_jwt"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "jsonwebtoken",
  "serde",
  "uuid",

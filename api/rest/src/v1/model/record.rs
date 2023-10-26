@@ -5,41 +5,25 @@ use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
-pub struct InsertOneRecordPath {
+pub struct InsertOneRecordReqPath {
     collection_id: Uuid,
 }
 
-impl InsertOneRecordPath {
+impl InsertOneRecordReqPath {
     pub fn collection_id(&self) -> &Uuid {
         &self.collection_id
     }
 }
 
-pub type InsertOneRecordJson = HashMap<String, Value>;
+pub type InsertOneRecordReqJson = HashMap<String, Value>;
 
 #[derive(Deserialize)]
-pub struct FindOneRecordPath {
+pub struct FindOneRecordReqPath {
     collection_id: Uuid,
     record_id: Uuid,
 }
 
-impl FindOneRecordPath {
-    pub fn collection_id(&self) -> &Uuid {
-        &self.collection_id
-    }
-
-    pub fn record_id(&self) -> &Uuid {
-        &self.record_id
-    }
-}
-
-#[derive(Deserialize)]
-pub struct UpdateOneRecordPath {
-    collection_id: Uuid,
-    record_id: Uuid,
-}
-
-impl UpdateOneRecordPath {
+impl FindOneRecordReqPath {
     pub fn collection_id(&self) -> &Uuid {
         &self.collection_id
     }
@@ -49,15 +33,31 @@ impl UpdateOneRecordPath {
     }
 }
 
-pub type UpdateOneRecordJson = HashMap<String, Value>;
-
 #[derive(Deserialize)]
-pub struct DeleteOneRecordPath {
+pub struct UpdateOneRecordReqPath {
     collection_id: Uuid,
     record_id: Uuid,
 }
 
-impl DeleteOneRecordPath {
+impl UpdateOneRecordReqPath {
+    pub fn collection_id(&self) -> &Uuid {
+        &self.collection_id
+    }
+
+    pub fn record_id(&self) -> &Uuid {
+        &self.record_id
+    }
+}
+
+pub type UpdateOneRecordReqJson = HashMap<String, Value>;
+
+#[derive(Deserialize)]
+pub struct DeleteOneRecordReqPath {
+    collection_id: Uuid,
+    record_id: Uuid,
+}
+
+impl DeleteOneRecordReqPath {
     pub fn collection_id(&self) -> &Uuid {
         &self.collection_id
     }

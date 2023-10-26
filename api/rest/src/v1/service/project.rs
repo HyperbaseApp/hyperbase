@@ -1,8 +1,8 @@
 use actix_web::{web, HttpResponse, Responder};
 
 use crate::v1::model::project::{
-    DeleteOneProjectPath, FindManyProjectPath, FindOneProjectPath, InsertOneProjectJson,
-    InsertOneProjectPath, UpdateOneProjectJson, UpdateOneProjectPath,
+    DeleteOneProjectReqPath, FindManyProjectReqPath, FindOneProjectReqPath, InsertOneProjectReqJson,
+    InsertOneProjectReqPath, UpdateOneProjectReqJson, UpdateOneProjectReqPath,
 };
 
 pub fn project_api(cfg: &mut web::ServiceConfig) {
@@ -20,8 +20,8 @@ pub fn project_api(cfg: &mut web::ServiceConfig) {
 }
 
 async fn insert_one(
-    path: web::Path<InsertOneProjectPath>,
-    data: web::Json<InsertOneProjectJson>,
+    path: web::Path<InsertOneProjectReqPath>,
+    data: web::Json<InsertOneProjectReqJson>,
 ) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "project insert_one {} {}",
@@ -30,7 +30,7 @@ async fn insert_one(
     ))
 }
 
-async fn find_one(path: web::Path<FindOneProjectPath>) -> impl Responder {
+async fn find_one(path: web::Path<FindOneProjectReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "project find_one {} {}",
         path.admin_id(),
@@ -39,8 +39,8 @@ async fn find_one(path: web::Path<FindOneProjectPath>) -> impl Responder {
 }
 
 async fn update_one(
-    path: web::Path<UpdateOneProjectPath>,
-    data: web::Json<UpdateOneProjectJson>,
+    path: web::Path<UpdateOneProjectReqPath>,
+    data: web::Json<UpdateOneProjectReqJson>,
 ) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "project update_one {} {} {:?}",
@@ -50,7 +50,7 @@ async fn update_one(
     ))
 }
 
-async fn delete_one(path: web::Path<DeleteOneProjectPath>) -> impl Responder {
+async fn delete_one(path: web::Path<DeleteOneProjectReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "project delete_one {} {}",
         path.admin_id(),
@@ -58,6 +58,6 @@ async fn delete_one(path: web::Path<DeleteOneProjectPath>) -> impl Responder {
     ))
 }
 
-async fn find_many(path: web::Path<FindManyProjectPath>) -> impl Responder {
+async fn find_many(path: web::Path<FindManyProjectReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!("project find_many {}", path.admin_id()))
 }

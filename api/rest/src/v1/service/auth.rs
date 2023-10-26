@@ -1,4 +1,4 @@
-use actix_web::{error, web, HttpResponse, Responder, Result};
+use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
     admin::AdminDao, admin_password_reset::AdminPasswordResetDao, register::RegistrationDao,
     token::TokenDao, Db,
@@ -8,9 +8,14 @@ use hb_token_jwt::kind::JwtTokenKind;
 use validator::Validate;
 
 use crate::{
-    v1::model::auth::{
-        ConfirmPasswordResetJson, PasswordBasedJson, RegisterJson, RequestPasswordResetJson,
-        TokenBasedJson, VerifyRegistrationJson,
+    v1::model::{
+        auth::{
+            ConfirmPasswordResetReqJson, ConfirmPasswordResetResJson, PasswordBasedReqJson,
+            PasswordBasedResJson, RegisterReqJson, RegisterResJson, RequestPasswordResetReqJson,
+            RequestPasswordResetResJson, TokenBasedReqJson, TokenBasedResJson,
+            VerifyRegistrationReqJson, VerifyRegistrationResJson,
+        },
+        Response,
     },
     Context,
 };
@@ -33,209 +38,219 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
     );
 }
 
-async fn register(
-    ctx: web::Data<Context>,
-    data: web::Json<RegisterJson>,
-) -> Result<impl Responder> {
-    data.validate().map_err(|err| error::ErrorBadRequest(err))?;
+async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> HttpResponse {
+    if let Err(err) = data.validate() {
+        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+    }
 
     let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let password_hash = ctx
-        .hash
-        .argon2
-        .hash_password(data.password().as_bytes())
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Ok(_) = AdminDao::select_by_email(&scylladb, data.email()).await {
+        return Response::error(StatusCode::BAD_REQUEST, "Account has been registered");
+    };
+
+    let password_hash = match ctx.hash.argon2.hash_password(data.password().as_bytes()) {
+        Ok(hash) => hash,
+        Err(err) => {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+        }
+    };
 
     let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
 
-    registration_data
-        .insert(&scylladb)
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Err(err) = registration_data.insert(&scylladb).await {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
 
-    ctx.mailer
-        .sender
-        .send(MailPayload::new(
-            data.email(),
-            "Registration Verification Code",
-            &format!(
-                "Your registration verification code is {}. This code will expire in {}",
-                registration_data.code(),
-                ctx.verify_code_ttl
-            ),
-        ))
-        .map_err(|err| error::ErrorInternalServerError(err))?;
-
-    Ok(HttpResponse::Ok().body(format!(
-        "auth register {} {} {}",
+    if let Err(err) = ctx.mailer.sender.send(MailPayload::new(
         data.email(),
-        data.password(),
-        password_hash
-    )))
+        "Registration Verification Code",
+        &format!(
+            "Your registration verification code is {}. This code will expire in {} seconds",
+            registration_data.code(),
+            ctx.verify_code_ttl
+        ),
+    )) {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
+
+    Response::data(
+        StatusCode::OK,
+        None,
+        RegisterResJson::new(registration_data.id()),
+    )
 }
 
 async fn verify_registration(
     ctx: web::Data<Context>,
-    data: web::Json<VerifyRegistrationJson>,
-) -> Result<impl Responder> {
+    data: web::Json<VerifyRegistrationReqJson>,
+) -> HttpResponse {
     let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let registration_data = RegistrationDao::select(&scylladb, data.id())
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let registration_data = match RegistrationDao::select(&scylladb, data.id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
 
     if data.code() != registration_data.code() {
-        return Err(error::ErrorBadRequest("wrong code"));
+        return Response::error(StatusCode::BAD_REQUEST, "Wrong code");
     }
 
     let admin_data = AdminDao::new(registration_data.email(), registration_data.password_hash());
 
-    admin_data
-        .insert(&scylladb)
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Err(err) = admin_data.insert(&scylladb).await {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
 
-    registration_data
-        .delete(&scylladb)
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Err(err) = registration_data.delete(&scylladb).await {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
 
-    Ok(HttpResponse::Ok().body(format!(
-        "auth verify_registration {} {}",
-        data.id(),
-        data.code()
-    )))
+    Response::data(
+        StatusCode::CREATED,
+        None,
+        VerifyRegistrationResJson::new(admin_data.id()),
+    )
 }
 
 async fn password_based(
     ctx: web::Data<Context>,
-    data: web::Json<PasswordBasedJson>,
-) -> Result<impl Responder> {
-    data.validate().map_err(|err| error::ErrorBadRequest(err))?;
+    data: web::Json<PasswordBasedReqJson>,
+) -> HttpResponse {
+    if let Err(err) = data.validate() {
+        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+    }
 
     let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let admin_data = AdminDao::select_by_email(&scylladb, data.email())
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let admin_data = match AdminDao::select_by_email(&scylladb, data.email()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
 
-    ctx.hash
+    if let Err(err) = ctx
+        .hash
         .argon2
         .verify_password(data.password(), admin_data.password_hash())
-        .map_err(|err| error::ErrorBadRequest(err))?;
+    {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
 
-    let token = ctx
-        .token
-        .jwt
-        .encode(admin_data.id(), &JwtTokenKind::Admin)
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let token = match ctx.token.jwt.encode(admin_data.id(), &JwtTokenKind::Admin) {
+        Ok(token) => token,
+        Err(err) => {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+        }
+    };
 
-    Ok(HttpResponse::Ok().body(format!(
-        "auth password_based {} {} {}",
-        data.email(),
-        data.password(),
-        token
-    )))
+    Response::data(StatusCode::OK, None, PasswordBasedResJson::new(&token))
 }
 
-async fn token_based(
-    ctx: web::Data<Context>,
-    data: web::Json<TokenBasedJson>,
-) -> Result<impl Responder> {
+async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>) -> HttpResponse {
     let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let token_data = TokenDao::select_by_token(&scylladb, data.token())
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let token_data = match TokenDao::select_by_token(&scylladb, data.token()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
 
-    let token = ctx
-        .token
-        .jwt
-        .encode(token_data.id(), &JwtTokenKind::Token)
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let token = match ctx.token.jwt.encode(token_data.id(), &JwtTokenKind::Token) {
+        Ok(token) => token,
+        Err(err) => {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+        }
+    };
 
-    Ok(HttpResponse::Ok().body(format!("auth token_based {} {}", data.token(), token)))
+    Response::data(StatusCode::OK, None, TokenBasedResJson::new(&token))
 }
 
 async fn request_password_reset(
     ctx: web::Data<Context>,
-    data: web::Json<RequestPasswordResetJson>,
-) -> Result<impl Responder> {
-    data.validate().map_err(|err| error::ErrorBadRequest(err))?;
+    data: web::Json<RequestPasswordResetReqJson>,
+) -> HttpResponse {
+    if let Err(err) = data.validate() {
+        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+    };
 
     let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let admin_data = AdminDao::select_by_email(&scylladb, data.email())
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let admin_data = match AdminDao::select_by_email(&scylladb, data.email()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
 
     let password_reset_data = AdminPasswordResetDao::new(admin_data.id());
 
-    password_reset_data
-        .insert(&scylladb)
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Err(err) = password_reset_data.insert(&scylladb).await {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
 
-    ctx.mailer
+    if let Err(err)= ctx.mailer
         .sender
         .send(MailPayload::new(
             data.email(),
             "Request Password Reset Verification Code",
             &format!(
-                "Your request password reset verification code is {}. This code will expire in {}",
+                "Your request password reset verification code is {}. This code will expire in {} seconds",
                 password_reset_data.code(),
                 ctx.verify_code_ttl
             ),
-        ))
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+        )) {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
 
-    Ok(HttpResponse::Ok().body(format!("auth token_based {}", data.email(),)))
+        }
+
+    Response::data(
+        StatusCode::OK,
+        None,
+        RequestPasswordResetResJson::new(password_reset_data.id()),
+    )
 }
 
 async fn confirm_password_reset(
     ctx: web::Data<Context>,
-    data: web::Json<ConfirmPasswordResetJson>,
-) -> Result<impl Responder> {
+    data: web::Json<ConfirmPasswordResetReqJson>,
+) -> HttpResponse {
     let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let password_reset_data = AdminPasswordResetDao::select(&scylladb, data.id())
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let password_reset_data = match AdminPasswordResetDao::select(&scylladb, data.id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
 
     if data.code() != password_reset_data.code() {
-        return Err(error::ErrorBadRequest("wrong code"));
+        return Response::error(StatusCode::BAD_REQUEST, "Wrong code");
     }
 
-    let mut admin_data = AdminDao::select(&scylladb, password_reset_data.admin_id())
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let mut admin_data = match AdminDao::select(&scylladb, password_reset_data.admin_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
 
-    let password_hash = ctx
-        .hash
-        .argon2
-        .hash_password(data.password().as_bytes())
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    let password_hash = match ctx.hash.argon2.hash_password(data.password().as_bytes()) {
+        Ok(hash) => hash,
+        Err(err) => {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+        }
+    };
 
     admin_data.set_password_hash(&password_hash.to_string());
 
-    admin_data
-        .update(&scylladb)
-        .await
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Err(err) = admin_data.update(&scylladb).await {
+        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+    }
 
-    ctx.mailer
-        .sender
-        .send(MailPayload::new(
-            admin_data.email(),
-            "Your Password Has Been Reset Successfully",
-            "Your account password has been successfully changed",
-        ))
-        .map_err(|err| error::ErrorInternalServerError(err))?;
+    if let Err(err) = ctx.mailer.sender.send(MailPayload::new(
+        admin_data.email(),
+        "Your Password Has Been Reset Successfully",
+        "Your account password has been successfully changed",
+    )) {
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+    }
 
-    Ok(HttpResponse::Ok().body(format!(
-        "auth confirm_password_reset {} {}",
-        data.code(),
-        data.password()
-    )))
+    Response::data(
+        StatusCode::OK,
+        None,
+        ConfirmPasswordResetResJson::new(admin_data.id()),
+    )
 }

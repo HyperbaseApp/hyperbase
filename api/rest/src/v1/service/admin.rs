@@ -1,25 +1,25 @@
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder, middleware::Logger};
 
 use crate::v1::model::admin::{
-    DeleteOneAdminPath, FindOneAdminPath, UpdateOneAdminJson, UpdateOneAdminPath,
+    DeleteOneAdminReqPath, FindOneAdminReqPath, UpdateOneAdminReqJson, UpdateOneAdminReqPath,
 };
 
 pub fn admin_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/admin")
-            .route("/{admin_id}", web::get().to(find_one))
+            .route("/{admin_id}", web::get().wrap(Logger::default()).to(find_one))
             .route("/{admin_id}", web::patch().to(update_one))
             .route("/{admin_id}", web::delete().to(delete_one)),
     );
 }
 
-async fn find_one(path: web::Path<FindOneAdminPath>) -> impl Responder {
+async fn find_one(path: web::Path<FindOneAdminReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!("admin find_one {}", path.admin_id()))
 }
 
 async fn update_one(
-    path: web::Path<UpdateOneAdminPath>,
-    admin: web::Json<UpdateOneAdminJson>,
+    path: web::Path<UpdateOneAdminReqPath>,
+    admin: web::Json<UpdateOneAdminReqJson>,
 ) -> impl Responder {
     HttpResponse::Ok().body(format!(
         "admin update_one {} {:?} {:?}",
@@ -29,6 +29,6 @@ async fn update_one(
     ))
 }
 
-async fn delete_one(path: web::Path<DeleteOneAdminPath>) -> impl Responder {
+async fn delete_one(path: web::Path<DeleteOneAdminReqPath>) -> impl Responder {
     HttpResponse::Ok().body(format!("admin delete_one {}", path.admin_id()))
 }
