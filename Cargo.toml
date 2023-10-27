@@ -20,6 +20,7 @@ hb_hash_argon2 = { path = "./hash/argon2" }
 hb_mailer = { path = "./mailer" }
 hb_token_jwt = { path = "./token/jwt" }
 
+actix_header = "0.1"
 actix-web = "4"
 anyhow = "1"
 argon2 = "0.5"

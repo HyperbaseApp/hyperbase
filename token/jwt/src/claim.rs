@@ -22,4 +22,8 @@ impl Claim {
     pub fn id(&self) -> &Uuid {
         &self.id
     }
+
+    pub fn kind(&self) -> &JwtTokenKind {
+        &self.kind
+    }
 }

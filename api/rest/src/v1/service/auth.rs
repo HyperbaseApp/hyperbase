@@ -43,9 +43,9 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 
-    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    if let Ok(_) = AdminDao::select_by_email(&scylladb, data.email()).await {
+    if let Ok(_) = AdminDao::select_by_email(&db, data.email()).await {
         return Response::error(StatusCode::BAD_REQUEST, "Account has been registered");
     };
 
@@ -58,7 +58,7 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
 
     let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
 
-    if let Err(err) = registration_data.insert(&scylladb).await {
+    if let Err(err) = registration_data.insert(&db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -68,7 +68,7 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
         &format!(
             "Your registration verification code is {}. This code will expire in {} seconds",
             registration_data.code(),
-            ctx.verify_code_ttl
+            ctx.verification_code_ttl
         ),
     )) {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
@@ -85,9 +85,9 @@ async fn verify_registration(
     ctx: web::Data<Context>,
     data: web::Json<VerifyRegistrationReqJson>,
 ) -> HttpResponse {
-    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let registration_data = match RegistrationDao::select(&scylladb, data.id()).await {
+    let registration_data = match RegistrationDao::select(&db, data.id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -98,11 +98,11 @@ async fn verify_registration(
 
     let admin_data = AdminDao::new(registration_data.email(), registration_data.password_hash());
 
-    if let Err(err) = admin_data.insert(&scylladb).await {
+    if let Err(err) = admin_data.insert(&db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
-    if let Err(err) = registration_data.delete(&scylladb).await {
+    if let Err(err) = registration_data.delete(&db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -121,9 +121,9 @@ async fn password_based(
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 
-    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let admin_data = match AdminDao::select_by_email(&scylladb, data.email()).await {
+    let admin_data = match AdminDao::select_by_email(&db, data.email()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -133,7 +133,7 @@ async fn password_based(
         .argon2
         .verify_password(data.password(), admin_data.password_hash())
     {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 
     let token = match ctx.token.jwt.encode(admin_data.id(), &JwtTokenKind::Admin) {
@@ -147,9 +147,9 @@ async fn password_based(
 }
 
 async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>) -> HttpResponse {
-    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let token_data = match TokenDao::select_by_token(&scylladb, data.token()).await {
+    let token_data = match TokenDao::select_by_token(&db, data.token()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -172,16 +172,16 @@ async fn request_password_reset(
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     };
 
-    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let admin_data = match AdminDao::select_by_email(&scylladb, data.email()).await {
+    let admin_data = match AdminDao::select_by_email(&db, data.email()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
 
     let password_reset_data = AdminPasswordResetDao::new(admin_data.id());
 
-    if let Err(err) = password_reset_data.insert(&scylladb).await {
+    if let Err(err) = password_reset_data.insert(&db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -193,7 +193,7 @@ async fn request_password_reset(
             &format!(
                 "Your request password reset verification code is {}. This code will expire in {} seconds",
                 password_reset_data.code(),
-                ctx.verify_code_ttl
+                ctx.verification_code_ttl
             ),
         )) {
             return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
@@ -211,9 +211,9 @@ async fn confirm_password_reset(
     ctx: web::Data<Context>,
     data: web::Json<ConfirmPasswordResetReqJson>,
 ) -> HttpResponse {
-    let scylladb = Db::ScyllaDb(&ctx.db.scylladb);
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    let password_reset_data = match AdminPasswordResetDao::select(&scylladb, data.id()).await {
+    let password_reset_data = match AdminPasswordResetDao::select(&db, data.id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -222,7 +222,7 @@ async fn confirm_password_reset(
         return Response::error(StatusCode::BAD_REQUEST, "Wrong code");
     }
 
-    let mut admin_data = match AdminDao::select(&scylladb, password_reset_data.admin_id()).await {
+    let mut admin_data = match AdminDao::select(&db, password_reset_data.admin_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -236,7 +236,7 @@ async fn confirm_password_reset(
 
     admin_data.set_password_hash(&password_hash.to_string());
 
-    if let Err(err) = admin_data.update(&scylladb).await {
+    if let Err(err) = admin_data.update(&db).await {
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 

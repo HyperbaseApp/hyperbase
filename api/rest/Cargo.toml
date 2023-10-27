@@ -10,7 +10,9 @@ hb_hash_argon2 = { workspace = true }
 hb_mailer = { workspace = true }
 hb_token_jwt = { workspace = true }
 
+actix_header = { workspace = true }
 actix-web = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }

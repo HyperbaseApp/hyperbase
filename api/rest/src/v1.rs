@@ -5,7 +5,6 @@ use self::service::{
     record::record_api,
 };
 
-mod middleware;
 mod model;
 mod service;
 

@@ -1,34 +1,144 @@
-use actix_web::{web, HttpResponse, Responder, middleware::Logger};
+use actix_web::{http::StatusCode, web, HttpResponse};
+use hb_dao::{admin::AdminDao, Db};
+use hb_token_jwt::kind::JwtTokenKind;
 
-use crate::v1::model::admin::{
-    DeleteOneAdminReqPath, FindOneAdminReqPath, UpdateOneAdminReqJson, UpdateOneAdminReqPath,
+use crate::{
+    context::ApiRestContext as Context,
+    v1::model::{
+        admin::{AdminResJson, DeleteOneAdminResJson, UpdateOneAdminReqJson},
+        Response, TokenReqHeader,
+    },
 };
 
 pub fn admin_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/admin")
-            .route("/{admin_id}", web::get().wrap(Logger::default()).to(find_one))
-            .route("/{admin_id}", web::patch().to(update_one))
-            .route("/{admin_id}", web::delete().to(delete_one)),
+            .route("", web::get().to(find_one))
+            .route("", web::patch().to(update_one))
+            .route("", web::delete().to(delete_one)),
     );
 }
 
-async fn find_one(path: web::Path<FindOneAdminReqPath>) -> impl Responder {
-    HttpResponse::Ok().body(format!("admin find_one {}", path.admin_id()))
+async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token.jwt.decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    if token_claim.kind() != &JwtTokenKind::Admin {
+        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    }
+
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
+
+    let admin_data = match AdminDao::select(&db, token_claim.id()).await {
+        Ok(data) => data,
+        Err(err) => {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+        }
+    };
+
+    Response::data(
+        StatusCode::OK,
+        None,
+        AdminResJson::new(
+            admin_data.id(),
+            admin_data.created_at(),
+            admin_data.updated_at(),
+            admin_data.email(),
+        ),
+    )
 }
 
 async fn update_one(
-    path: web::Path<UpdateOneAdminReqPath>,
-    admin: web::Json<UpdateOneAdminReqJson>,
-) -> impl Responder {
-    HttpResponse::Ok().body(format!(
-        "admin update_one {} {:?} {:?}",
-        path.admin_id(),
-        admin.email(),
-        admin.password()
-    ))
+    ctx: web::Data<Context>,
+    token: web::Header<TokenReqHeader>,
+    data: web::Json<UpdateOneAdminReqJson>,
+) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token.jwt.decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    if token_claim.kind() != &JwtTokenKind::Admin {
+        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    }
+
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
+
+    let mut admin_data = match AdminDao::select(&db, token_claim.id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    // if let Some(email) = data.email() {
+    //     admin_data.set_email(email);
+    // }
+
+    if let Some(password) = data.password() {
+        let password_hash = match ctx.hash.argon2.hash_password(password.as_bytes()) {
+            Ok(hash) => hash,
+            Err(err) => {
+                return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+            }
+        };
+
+        admin_data.set_password_hash(&password_hash.to_string());
+    }
+
+    // if data.email().is_some() || data.password().is_some() {
+    if data.password().is_some() {
+        if let Err(err) = admin_data.update(&db).await {
+            return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        }
+    }
+
+    Response::data(
+        StatusCode::OK,
+        None,
+        AdminResJson::new(
+            admin_data.id(),
+            admin_data.created_at(),
+            admin_data.updated_at(),
+            admin_data.email(),
+        ),
+    )
 }
 
-async fn delete_one(path: web::Path<DeleteOneAdminReqPath>) -> impl Responder {
-    HttpResponse::Ok().body(format!("admin delete_one {}", path.admin_id()))
+async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token.jwt.decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    if token_claim.kind() != &JwtTokenKind::Admin {
+        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    }
+
+    let db = Db::ScyllaDb(&ctx.db.scylladb);
+
+    if let Err(err) = AdminDao::delete(&db, token_claim.id()).await {
+        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+    }
+
+    Response::data(
+        StatusCode::OK,
+        None,
+        DeleteOneAdminResJson::new(token_claim.id()),
+    )
 }

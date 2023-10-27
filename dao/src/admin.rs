@@ -49,6 +49,10 @@ impl AdminDao {
         &self.password_hash
     }
 
+    pub fn set_email(&mut self, email: &str) {
+        self.email = email.to_string()
+    }
+
     pub fn set_password_hash(&mut self, password_hash: &str) {
         self.password_hash = password_hash.to_string();
     }
@@ -83,6 +87,12 @@ impl AdminDao {
                 self.updated_at = Utc::now();
                 Self::scylladb_update(&self, db).await
             }
+        }
+    }
+
+    pub async fn delete(db: &Db<'_>, id: &Uuid) -> Result<()> {
+        match *db {
+            Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
 }
@@ -126,6 +136,12 @@ impl AdminDao {
             ),
         )
         .await?;
+        Ok(())
+    }
+
+    async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
+        db.execute(db.prepared_statement().admin().delete(), [id].as_ref())
+            .await?;
         Ok(())
     }
 

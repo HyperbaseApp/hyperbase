@@ -51,7 +51,7 @@ async fn main() {
             db: DbCtx {
                 scylladb: scylla_db,
             },
-            verify_code_ttl: *config.db().scylla().temporary_ttl(),
+            verification_code_ttl: *config.db().scylla().temporary_ttl(),
         },
     );
 

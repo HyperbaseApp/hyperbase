@@ -1,53 +1,56 @@
-use serde::Deserialize;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-#[derive(Deserialize)]
-pub struct FindOneAdminReqPath {
-    admin_id: Uuid,
-}
-
-impl FindOneAdminReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
-    }
-}
-
-#[derive(Deserialize)]
-pub struct UpdateOneAdminReqPath {
-    admin_id: Uuid,
-}
-
-impl UpdateOneAdminReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
-    }
-}
-
 #[derive(Deserialize, Validate)]
 pub struct UpdateOneAdminReqJson {
-    #[validate(email)]
-    email: Option<String>,
+    // #[validate(email)]
+    // email: Option<String>,
     password: Option<String>,
 }
 
 impl UpdateOneAdminReqJson {
-    pub fn email(&self) -> &Option<String> {
-        &self.email
-    }
+    // pub fn email(&self) -> &Option<String> {
+    //     &self.email
+    // }
 
     pub fn password(&self) -> &Option<String> {
         &self.password
     }
 }
 
-#[derive(Deserialize)]
-pub struct DeleteOneAdminReqPath {
-    admin_id: Uuid,
+#[derive(Serialize)]
+pub struct AdminResJson {
+    id: Uuid,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    email: String,
 }
 
-impl DeleteOneAdminReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
+impl AdminResJson {
+    pub fn new(
+        id: &Uuid,
+        created_at: &DateTime<Utc>,
+        updated_at: &DateTime<Utc>,
+        email: &str,
+    ) -> Self {
+        Self {
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            email: email.to_string(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct DeleteOneAdminResJson {
+    id: Uuid,
+}
+
+impl DeleteOneAdminResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
     }
 }

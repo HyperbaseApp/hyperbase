@@ -10,7 +10,7 @@ pub struct ApiRestContext {
     pub token: TokenCtx,
     pub mailer: MailerCtx,
     pub db: DbCtx,
-    pub verify_code_ttl: i64,
+    pub verification_code_ttl: i64,
 }
 
 pub struct HashCtx {
