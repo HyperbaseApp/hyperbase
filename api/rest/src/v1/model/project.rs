@@ -1,16 +1,6 @@
-use serde::Deserialize;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-#[derive(Deserialize)]
-pub struct InsertOneProjectReqPath {
-    admin_id: Uuid,
-}
-
-impl InsertOneProjectReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
-    }
-}
 
 #[derive(Deserialize)]
 pub struct InsertOneProjectReqJson {
@@ -25,15 +15,10 @@ impl InsertOneProjectReqJson {
 
 #[derive(Deserialize)]
 pub struct FindOneProjectReqPath {
-    admin_id: Uuid,
     project_id: Uuid,
 }
 
 impl FindOneProjectReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
-    }
-
     pub fn project_id(&self) -> &Uuid {
         &self.project_id
     }
@@ -41,15 +26,10 @@ impl FindOneProjectReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneProjectReqPath {
-    admin_id: Uuid,
     project_id: Uuid,
 }
 
 impl UpdateOneProjectReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
-    }
-
     pub fn project_id(&self) -> &Uuid {
         &self.project_id
     }
@@ -68,27 +48,49 @@ impl UpdateOneProjectReqJson {
 
 #[derive(Deserialize)]
 pub struct DeleteOneProjectReqPath {
-    admin_id: Uuid,
     project_id: Uuid,
 }
 
 impl DeleteOneProjectReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
-    }
-
     pub fn project_id(&self) -> &Uuid {
         &self.project_id
     }
 }
 
-#[derive(Deserialize)]
-pub struct FindManyProjectReqPath {
+#[derive(Serialize)]
+pub struct ProjectResJson {
+    id: Uuid,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
     admin_id: Uuid,
+    name: String,
 }
 
-impl FindManyProjectReqPath {
-    pub fn admin_id(&self) -> &Uuid {
-        &self.admin_id
+impl ProjectResJson {
+    pub fn new(
+        id: &Uuid,
+        created_at: &DateTime<Utc>,
+        updated_at: &DateTime<Utc>,
+        admin_id: &Uuid,
+        name: &str,
+    ) -> Self {
+        Self {
+            id: *id,
+            created_at: *created_at,
+            updated_at: *updated_at,
+            admin_id: *admin_id,
+            name: name.to_string(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct DeleteProjectResJson {
+    id: Uuid,
+}
+
+impl DeleteProjectResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
     }
 }

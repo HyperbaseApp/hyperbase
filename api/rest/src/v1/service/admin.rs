@@ -5,7 +5,7 @@ use hb_token_jwt::kind::JwtTokenKind;
 use crate::{
     context::ApiRestContext as Context,
     v1::model::{
-        admin::{AdminResJson, DeleteOneAdminResJson, UpdateOneAdminReqJson},
+        admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
         Response, TokenReqHeader,
     },
 };
@@ -139,6 +139,6 @@ async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>)
     Response::data(
         StatusCode::OK,
         None,
-        DeleteOneAdminResJson::new(token_claim.id()),
+        DeleteAdminResJson::new(token_claim.id()),
     )
 }

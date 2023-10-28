@@ -20,7 +20,7 @@ pub fn collection_api(cfg: &mut web::ServiceConfig) {
 async fn insert_one(
     path: web::Path<InsertOneCollectionReqPath>,
     data: web::Json<InsertOneCollectionReqJson>,
-) -> impl Responder {
+) -> HttpResponse {
     HttpResponse::Ok().body(format!(
         "collection insert_one {} {} {}",
         path.admin_id(),
@@ -29,14 +29,14 @@ async fn insert_one(
     ))
 }
 
-async fn find_one(path: web::Path<FindOneCollectionReqPath>) -> impl Responder {
+async fn find_one(path: web::Path<FindOneCollectionReqPath>) -> HttpResponse {
     HttpResponse::Ok().body(format!("collection find_one: {}", path.collection_id()))
 }
 
 async fn update_one(
     path: web::Path<UpdateOneCollectionReqPath>,
     data: web::Json<InsertOneCollectionReqJson>,
-) -> impl Responder {
+) -> HttpResponse {
     HttpResponse::Ok().body(format!(
         "collection update_one: {}, {}",
         path.collection_id(),
@@ -44,10 +44,10 @@ async fn update_one(
     ))
 }
 
-async fn delete_one(path: web::Path<DeleteOneCollectionReqPath>) -> impl Responder {
+async fn delete_one(path: web::Path<DeleteOneCollectionReqPath>) -> HttpResponse {
     HttpResponse::Ok().body(format!("collection delete_one: {}", path.collection_id()))
 }
 
-async fn find_many() -> impl Responder {
+async fn find_many() -> HttpResponse {
     HttpResponse::Ok().body("collection find_many")
 }

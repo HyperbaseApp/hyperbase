@@ -45,11 +45,11 @@ impl AdminResJson {
 }
 
 #[derive(Serialize)]
-pub struct DeleteOneAdminResJson {
+pub struct DeleteAdminResJson {
     id: Uuid,
 }
 
-impl DeleteOneAdminResJson {
+impl DeleteAdminResJson {
     pub fn new(id: &Uuid) -> Self {
         Self { id: *id }
     }

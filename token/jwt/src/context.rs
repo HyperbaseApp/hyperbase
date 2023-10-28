@@ -1,7 +1,7 @@
 use std::time;
 
 use anyhow::Result;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use uuid::Uuid;
 
 use crate::{claim::Claim, kind::JwtTokenKind};
