@@ -3,6 +3,7 @@ use scylla::{prepared_statement::PreparedStatement, Session};
 pub struct ProjectPreparedStatement {
     insert: PreparedStatement,
     select: PreparedStatement,
+    select_many_by_admin_id: PreparedStatement,
     update: PreparedStatement,
     delete: PreparedStatement,
 }
@@ -12,6 +13,7 @@ impl ProjectPreparedStatement {
         Self{
             insert: session.prepare(format!("INSERT INTO {} (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)", Self::table_name())).await.unwrap(),
             select: session.prepare(format!("SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM {} WHERE \"id\" = ?", Self::table_name())).await.unwrap(),
+            select_many_by_admin_id :  session.prepare(format!("SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM {} WHERE \"admin_id\" = ?", Self::table_name())).await.unwrap(),
             update: session.prepare(format!("UPDATE {} SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?", Self::table_name())).await.unwrap(),
             delete: session.prepare(format!("DELETE FROM {} WHERE \"id\" = ?", Self::table_name())).await.unwrap(),
         }
@@ -27,6 +29,10 @@ impl ProjectPreparedStatement {
 
     pub fn select(&self) -> &PreparedStatement {
         &self.select
+    }
+
+    pub fn select_many_by_admin_id(&self) -> &PreparedStatement {
+        &self.select_many_by_admin_id
     }
 
     pub fn update(&self) -> &PreparedStatement {

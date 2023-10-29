@@ -811,6 +811,7 @@ dependencies = [
  "hb_db_scylladb",
  "rand",
  "scylla",
+ "strum 0.25.0",
  "uuid",
  "validator",
 ]

@@ -10,5 +10,6 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 rand = { workspace = true }
 scylla = { workspace = true }
+strum = { workspace = true, features = ["std", "derive"] }
 uuid = { workspace = true }
 validator = { workspace = true, features = ["derive"] }

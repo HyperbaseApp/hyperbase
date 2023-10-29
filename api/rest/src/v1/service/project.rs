@@ -10,7 +10,7 @@ use crate::{
             InsertOneProjectReqJson, ProjectResJson, UpdateOneProjectReqJson,
             UpdateOneProjectReqPath,
         },
-        Response, TokenReqHeader,
+        PaginationRes, Response, TokenReqHeader,
     },
 };
 
@@ -221,5 +221,30 @@ async fn find_many(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) 
 
     let db = Db::ScyllaDb(&ctx.db.scylladb);
 
-    HttpResponse::Ok().body(format!("project find_many"))
+    let projects_data = match ProjectDao::select_many_by_admin_id(&db, token_claim.id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    Response::data(
+        StatusCode::OK,
+        Some(PaginationRes::new(
+            &0,
+            &(projects_data.len() as i64),
+            &1,
+            &(projects_data.len() as i64),
+        )),
+        projects_data
+            .iter()
+            .map(|data| {
+                ProjectResJson::new(
+                    data.id(),
+                    data.created_at(),
+                    data.updated_at(),
+                    data.admin_id(),
+                    data.name(),
+                )
+            })
+            .collect::<Vec<_>>(),
+    )
 }

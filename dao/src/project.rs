@@ -1,7 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{db::ScyllaDb, model::project::ProjectScyllaModel};
-use scylla::frame::value::Timestamp;
+use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use uuid::Uuid;
 
 use crate::{
@@ -69,6 +69,23 @@ impl ProjectDao {
         }
     }
 
+    pub async fn select_many_by_admin_id(db: &Db<'_>, admin_id: &Uuid) -> Result<Vec<Self>> {
+        match *db {
+            Db::ScyllaDb(db) => {
+                let mut projects_data = Vec::new();
+                let projects = Self::scylladb_select_many_by_admin_id(db, admin_id).await?;
+                for project in projects {
+                    if let Ok(model) = &project {
+                        projects_data.push(Self::from_scylladb_model(model)?)
+                    } else if let Err(err) = project {
+                        return Err(err.into());
+                    }
+                }
+                Ok(projects_data)
+            }
+        }
+    }
+
     pub async fn update(&self, db: &Db<'_>) -> Result<()> {
         match *db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
@@ -97,6 +114,19 @@ impl ProjectDao {
             .execute(db.prepared_statement().project().select(), [id].as_ref())
             .await?
             .first_row_typed::<ProjectScyllaModel>()?)
+    }
+
+    async fn scylladb_select_many_by_admin_id<'a>(
+        db: &'a ScyllaDb,
+        admin_id: &'a Uuid,
+    ) -> Result<TypedRowIter<ProjectScyllaModel>> {
+        Ok(db
+            .execute(
+                db.prepared_statement().project().select_many_by_admin_id(),
+                [admin_id].as_ref(),
+            )
+            .await?
+            .rows_typed::<ProjectScyllaModel>()?)
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {

@@ -5,6 +5,7 @@ use hb_db_scylladb::{
     model::collection::{CollectionScyllaModel, SchemaScyllaFieldKind, SchemaScyllaFieldModel},
 };
 use scylla::frame::value::Timestamp;
+use strum::{Display, EnumString};
 use uuid::Uuid;
 
 use crate::{
@@ -145,6 +146,28 @@ pub struct SchemaFieldModel {
 }
 
 impl SchemaFieldModel {
+    pub fn new(name: &str, kind: &SchemaFieldKind, required: &bool) -> Self {
+        Self {
+            name: name.to_string(),
+            kind: *kind,
+            required: *required,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn kind(&self) -> &SchemaFieldKind {
+        &self.kind
+    }
+
+    pub fn required(&self) -> &bool {
+        &self.required
+    }
+}
+
+impl SchemaFieldModel {
     fn from_scylladb_model(model: &SchemaScyllaFieldModel) -> Self {
         Self {
             name: model.name().to_string(),
@@ -158,7 +181,7 @@ impl SchemaFieldModel {
     }
 }
 
-#[derive(Clone)]
+#[derive(EnumString, Display, Clone, Copy)]
 pub enum SchemaFieldKind {
     Boolean,      // boolean
     TinyInteger,  // 8-bit signed int

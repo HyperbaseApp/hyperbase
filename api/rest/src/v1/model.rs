@@ -7,7 +7,6 @@ pub mod auth;
 pub mod collection;
 pub mod project;
 pub mod record;
-pub mod schema_field;
 
 #[actix_header("Authorization")]
 #[derive(Debug)]
@@ -83,4 +82,15 @@ pub struct PaginationRes {
     count: i64,
     page: i64,
     total: i64,
+}
+
+impl PaginationRes {
+    pub fn new(limit: &i64, count: &i64, page: &i64, total: &i64) -> Self {
+        Self {
+            limit: *limit,
+            count: *count,
+            page: *page,
+            total: *total,
+        }
+    }
 }
