@@ -55,7 +55,7 @@ async fn main() {
         },
     );
 
-    tokio::join!(mailer.run(), api_rest_server.run());
+    tokio::try_join!(mailer.run(), api_rest_server.run()).unwrap();
 
     println!("Hello, world!");
 }

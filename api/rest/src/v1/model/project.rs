@@ -46,6 +46,12 @@ impl UpdateOneProjectReqJson {
     }
 }
 
+impl UpdateOneProjectReqJson {
+    pub fn is_all_none(&self) -> bool {
+        self.name.is_none()
+    }
+}
+
 #[derive(Deserialize)]
 pub struct DeleteOneProjectReqPath {
     project_id: Uuid,

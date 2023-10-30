@@ -55,8 +55,10 @@ impl ScyllaDb {
         session.query(format!("CREATE INDEX IF NOT EXISTS ON {}(\"token\")", TokenPreparedStatement::table_name()), &[]).await.unwrap();
         // projects
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"name\" text, PRIMARY KEY (\"id\"))", ProjectPreparedStatement::table_name()), &[]).await.unwrap();
+        session.query(format!("CREATE INDEX IF NOT EXISTS ON {}(\"admin_id\")", ProjectPreparedStatement::table_name()), &[]).await.unwrap();
         // collections
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" list<frozen<schema_field>>, \"indexes\" list<text>, PRIMARY KEY (\"id\"))", CollectionPreparedStatement::table_name()), &[]).await.unwrap();
+        session.query(format!("CREATE INDEX IF NOT EXISTS ON {}(\"project_id\")", CollectionPreparedStatement::table_name()), &[]).await.unwrap();
         // registrations
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", RegistrationPreparedStatement::table_name(), temporary_ttl ), &[]).await.unwrap();
         // admin_password_resets

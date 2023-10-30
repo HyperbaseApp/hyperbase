@@ -89,6 +89,12 @@ impl UpdateOneCollectionReqJson {
     }
 }
 
+impl UpdateOneCollectionReqJson {
+    pub fn is_all_none(&self) -> bool {
+        self.name.is_none() && self.schema_fields.is_none() && self.indexes.is_none()
+    }
+}
+
 #[derive(Deserialize)]
 pub struct DeleteOneCollectionReqPath {
     project_id: Uuid,
@@ -135,6 +141,17 @@ impl CollectionResJson {
             schema_fields: schema_fields.to_vec(),
             indexes: indexes.to_vec(),
         }
+    }
+}
+
+#[derive(Serialize)]
+pub struct DeleteCollectionResJson {
+    id: Uuid,
+}
+
+impl DeleteCollectionResJson {
+    pub fn new(id: &Uuid) -> Self {
+        Self { id: *id }
     }
 }
 

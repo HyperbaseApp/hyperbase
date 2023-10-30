@@ -144,7 +144,7 @@ async fn update_one(
         project_data.set_name(name);
     }
 
-    if data.name().is_some() {
+    if !data.is_all_none() {
         if let Err(err) = project_data.update(&db).await {
             return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
         }
@@ -229,7 +229,7 @@ async fn find_many(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) 
     Response::data(
         StatusCode::OK,
         Some(PaginationRes::new(
-            &0,
+            &(projects_data.len() as i64),
             &(projects_data.len() as i64),
             &1,
             &(projects_data.len() as i64),

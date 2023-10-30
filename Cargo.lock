@@ -782,7 +782,9 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "actix_header",
+ "anyhow",
  "chrono",
+ "futures",
  "hb_dao",
  "hb_db_scylladb",
  "hb_hash_argon2",
@@ -790,6 +792,7 @@ dependencies = [
  "hb_token_jwt",
  "serde",
  "serde_json",
+ "tokio",
  "uuid",
  "validator",
 ]

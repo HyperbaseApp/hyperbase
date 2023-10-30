@@ -52,8 +52,8 @@ impl Mailer {
         Ok(())
     }
 
-    pub async fn run(self) {
-        tokio::spawn((|| async {
+    pub async fn run(self) -> Result<()> {
+        Ok(tokio::spawn((|| async {
             let channel_receiver = self.channel_receiver;
             let message_builder = self.message_builder;
             let smtp_transport = self.smtp_transport;
@@ -92,8 +92,7 @@ impl Mailer {
                 }
             }
         })())
-        .await
-        .unwrap();
+        .await?)
     }
 }
 

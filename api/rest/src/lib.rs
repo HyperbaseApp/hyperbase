@@ -1,4 +1,5 @@
 use actix_web::{web, App, HttpServer};
+use anyhow::Result;
 use context::ApiRestContext as Context;
 use v1::v1_api;
 
@@ -18,8 +19,8 @@ impl ApiRestServer {
         Self { address, context }
     }
 
-    pub async fn run(self) {
-        HttpServer::new(move || {
+    pub async fn run(self) -> Result<()> {
+        Ok(HttpServer::new(move || {
             App::new()
                 .app_data(self.context.clone())
                 .service(web::scope("/api/rest/v1").configure(v1_api))
@@ -27,7 +28,6 @@ impl ApiRestServer {
         .bind(self.address)
         .unwrap()
         .run()
-        .await
-        .unwrap();
+        .await?)
     }
 }

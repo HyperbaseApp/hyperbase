@@ -20,6 +20,12 @@ impl UpdateOneAdminReqJson {
     }
 }
 
+impl UpdateOneAdminReqJson {
+    pub fn is_all_none(&self) -> bool {
+        self.password.is_none()
+    }
+}
+
 #[derive(Serialize)]
 pub struct AdminResJson {
     id: Uuid,

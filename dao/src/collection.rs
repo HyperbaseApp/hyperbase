@@ -4,7 +4,7 @@ use hb_db_scylladb::{
     db::ScyllaDb,
     model::collection::{CollectionScyllaModel, SchemaScyllaFieldKind, SchemaScyllaFieldModel},
 };
-use scylla::frame::value::Timestamp;
+use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use strum::{Display, EnumString};
 use uuid::Uuid;
 
@@ -69,6 +69,18 @@ impl CollectionDao {
     pub fn indexes(&self) -> &Vec<String> {
         &self.indexes
     }
+
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+
+    pub fn set_schema_fields(&mut self, schema_fields: &Vec<SchemaFieldModel>) {
+        self.schema_fields = schema_fields.to_vec();
+    }
+
+    pub fn set_indexes(&mut self, indexes: &Vec<String>) {
+        self.indexes = indexes.to_vec();
+    }
 }
 
 impl CollectionDao {
@@ -83,6 +95,36 @@ impl CollectionDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
+        }
+    }
+
+    pub async fn select_by_project_id(db: &Db<'_>, project_id: &Uuid) -> Result<Vec<Self>> {
+        match *db {
+            Db::ScyllaDb(db) => {
+                let mut collections_data = Vec::new();
+                let collections = Self::scylladb_select_many_by_project_id(db, project_id).await?;
+                for collection in collections {
+                    if let Ok(model) = &collection {
+                        collections_data.push(Self::from_scylladb_model(model)?)
+                    } else if let Err(err) = collection {
+                        return Err(err.into());
+                    }
+                }
+                Ok(collections_data)
+            }
+        }
+    }
+
+    pub async fn update(&mut self, db: &Db<'_>) -> Result<()> {
+        self.updated_at = Utc::now();
+        match *db {
+            Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
+        }
+    }
+
+    pub async fn delete(db: &Db<'_>, id: &Uuid) -> Result<()> {
+        match *db {
+            Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
 }
@@ -102,6 +144,47 @@ impl CollectionDao {
             .execute(db.prepared_statement().collection().select(), [id].as_ref())
             .await?
             .first_row_typed::<CollectionScyllaModel>()?)
+    }
+
+    async fn scylladb_select_many_by_project_id(
+        db: &ScyllaDb,
+        project_id: &Uuid,
+    ) -> Result<TypedRowIter<CollectionScyllaModel>> {
+        Ok(db
+            .execute(
+                db.prepared_statement()
+                    .collection()
+                    .select_many_by_project_id(),
+                [project_id].as_ref(),
+            )
+            .await?
+            .rows_typed::<CollectionScyllaModel>()?)
+    }
+
+    async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
+        db.execute(
+            db.prepared_statement().collection().update(),
+            (
+                &self.updated_at,
+                &self.name,
+                &self
+                    .schema_fields
+                    .clone()
+                    .into_iter()
+                    .map(|schema_field| schema_field.to_scylladb_model())
+                    .collect::<Vec<_>>(),
+                &self.indexes,
+                &self.id,
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
+        db.execute(db.prepared_statement().collection().delete(), [id].as_ref())
+            .await?;
+        Ok(())
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {

@@ -76,7 +76,7 @@ impl ProjectDao {
                 let projects = Self::scylladb_select_many_by_admin_id(db, admin_id).await?;
                 for project in projects {
                     if let Ok(model) = &project {
-                        projects_data.push(Self::from_scylladb_model(model)?)
+                        projects_data.push(Self::from_scylladb_model(model)?);
                     } else if let Err(err) = project {
                         return Err(err.into());
                     }
@@ -86,7 +86,8 @@ impl ProjectDao {
         }
     }
 
-    pub async fn update(&self, db: &Db<'_>) -> Result<()> {
+    pub async fn update(&mut self, db: &Db<'_>) -> Result<()> {
+        self.updated_at = Utc::now();
         match *db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
@@ -116,9 +117,9 @@ impl ProjectDao {
             .first_row_typed::<ProjectScyllaModel>()?)
     }
 
-    async fn scylladb_select_many_by_admin_id<'a>(
-        db: &'a ScyllaDb,
-        admin_id: &'a Uuid,
+    async fn scylladb_select_many_by_admin_id(
+        db: &ScyllaDb,
+        admin_id: &Uuid,
     ) -> Result<TypedRowIter<ProjectScyllaModel>> {
         Ok(db
             .execute(
@@ -132,7 +133,7 @@ impl ProjectDao {
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             db.prepared_statement().project().update(),
-            self.to_scylladb_model(),
+            (&self.updated_at, &self.name, &self.id),
         )
         .await?;
         Ok(())

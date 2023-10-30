@@ -96,8 +96,7 @@ async fn update_one(
         admin_data.set_password_hash(&password_hash.to_string());
     }
 
-    // if data.email().is_some() || data.password().is_some() {
-    if data.password().is_some() {
+    if !data.is_all_none() {
         if let Err(err) = admin_data.update(&db).await {
             return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
         }
