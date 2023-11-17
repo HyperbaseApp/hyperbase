@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Config {
+    log: LogConfig,
     hash: HashConfig,
     token: TokenConfig,
     mailer: MailerConfig,
@@ -12,6 +13,10 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn log(&self) -> &LogConfig {
+        &self.log
+    }
+
     pub fn hash(&self) -> &HashConfig {
         &self.hash
     }
@@ -30,6 +35,22 @@ impl Config {
 
     pub fn api(&self) -> &ApiConfig {
         &self.api
+    }
+}
+
+#[derive(Deserialize)]
+pub struct LogConfig {
+    display_level: bool,
+    level_filter: String,
+}
+
+impl LogConfig {
+    pub fn display_level(&self) -> &bool {
+        &self.display_level
+    }
+
+    pub fn level_filter(&self) -> &str {
+        &self.level_filter
     }
 }
 
@@ -188,7 +209,6 @@ impl ApiRestConfig {
 }
 
 pub fn new(path: &str) -> Config {
-    let file = File::open(path)
-        .expect("Failed to parse the configuration file in the CONFIG_PATH environment variable");
+    let file = File::open(path).expect("");
     serde_yaml::from_reader::<_, Config>(file).unwrap()
 }

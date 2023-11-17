@@ -2,8 +2,12 @@
 name = "hb_db_scylladb"
 version = "0.1.0"
 edition = "2021"
+authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 [dependencies]
 scylla = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }
+
+[lints]
+workspace = true

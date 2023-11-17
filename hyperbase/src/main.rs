@@ -7,11 +7,16 @@ use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::Mailer;
 use hb_token_jwt::context::JwtToken;
 
+mod config_path;
+
 #[tokio::main]
 async fn main() {
-    let config_path =
-        std::env::var("CONFIG_PATH").expect("CONFIG_PATH environment variable is required");
+    let config_path = config_path::get();
     let config = hb_config::new(&config_path);
+
+    hb_log::init(config.log().display_level(), config.log().level_filter());
+
+    hb_log::info(Some("🚀"), "Starting Hyperbase");
 
     let argon2_hash = Argon2Hash::new(
         config.hash().argon2().algorithm(),
@@ -57,5 +62,5 @@ async fn main() {
 
     tokio::try_join!(mailer.run(), api_rest_server.run()).unwrap();
 
-    println!("Hello, world!");
+    hb_log::info(Some("👋"), "Hyperbase is turned off");
 }

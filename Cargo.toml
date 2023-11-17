@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "hyperbase",
+    "log",
     "config",
     "hash/argon2",
     "db/scylladb",
@@ -17,6 +18,7 @@ hb_config = { path = "./config" }
 hb_dao = { path = "./dao" }
 hb_db_scylladb = { path = "./db/scylladb" }
 hb_hash_argon2 = { path = "./hash/argon2" }
+hb_log = { path = "./log" }
 hb_mailer = { path = "./mailer" }
 hb_token_jwt = { path = "./token/jwt" }
 
@@ -41,5 +43,13 @@ serde_json = { version = "1", default-features = false }
 serde_yaml = "0.9"
 strum = { version = "0.25", default-features = false }
 tokio = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
 uuid = { version = "1", default-features = false }
 validator = "0.16"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+enum_glob_use = "deny"

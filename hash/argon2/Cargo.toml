@@ -2,6 +2,10 @@
 name = "hb_hash_argon2"
 version = "0.1.0"
 edition = "2021"
+authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 [dependencies]
 argon2 = { workspace = true }
+
+[lints]
+workspace = true

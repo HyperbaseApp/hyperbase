@@ -1,0 +1,33 @@
+log:
+  display_level: true
+  level_filter: "info"
+
+hash:
+  argon2:
+    algorithm: "Argon2id"
+    version: "V0x13"
+    salt: "cGSkx2yuzi6aHcHPyRQD2Tfi8CupDKu6HqKaMdT47nBBWaY2KS9tiLXKi4zEiwxd"
+
+token:
+  jwt:
+    secret: "cGSkx2yuzi6aHcHPyRQD2Tfi8CupDKu6HqKaMdT47nBBWaY2KS9tiLXKi4zEiwxd7E4xBw2VKuMYRVd45bQHJ6TdWi27CiMEjQ4dsFPnn2hLA2UpenKBZEjppSe4A9Jy"
+    expiry_duration: 604800
+
+mailer:
+  smtp_host: "smtp.gmail.com"
+  smtp_username: "smtp_username"
+  smtp_password: "smtp_password"
+  sender_name: "sender_name"
+  sender_email: "sender_email"
+
+db:
+  scylla:
+    host: "10.42.28.104"
+    port: "19042"
+    replication_factor: 3
+    temporary_ttl: 600
+
+api:
+  rest:
+    host: "0.0.0.0"
+    port: "8080"
