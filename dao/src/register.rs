@@ -6,6 +6,7 @@ use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
 use crate::{
+    admin::AdminRole,
     util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
     Db,
 };
@@ -17,10 +18,11 @@ pub struct RegistrationDao {
     email: String,
     password_hash: String,
     code: String,
+    role: AdminRole,
 }
 
 impl RegistrationDao {
-    pub fn new(email: &str, password_hash: &str) -> Self {
+    pub fn new(email: &str, password_hash: &str, role: &AdminRole) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
@@ -29,6 +31,7 @@ impl RegistrationDao {
             email: email.to_string(),
             password_hash: password_hash.to_string(),
             code: rand::thread_rng().gen_range(100000..=999999).to_string(),
+            role: *role,
         }
     }
 
@@ -55,25 +58,29 @@ impl RegistrationDao {
     pub fn code(&self) -> &str {
         &self.code
     }
+
+    pub fn role(&self) -> &AdminRole {
+        &self.role
+    }
 }
 
 impl RegistrationDao {
-    pub async fn insert(&self, db: &Db<'_>) -> Result<()> {
-        match *db {
+    pub async fn insert(&self, db: &Db) -> Result<()> {
+        match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
         }
     }
 
-    pub async fn select(db: &Db<'_>, id: &Uuid) -> Result<Self> {
-        match *db {
+    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+        match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
         }
     }
 
-    pub async fn delete(&self, db: &Db<'_>) -> Result<()> {
-        match *db {
+    pub async fn delete(&self, db: &Db) -> Result<()> {
+        match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(self, db).await,
         }
     }
@@ -116,6 +123,7 @@ impl RegistrationDao {
             email: model.email().to_string(),
             password_hash: model.password_hash().to_string(),
             code: model.code().to_string(),
+            role: AdminRole::from_scylladb_model(model.role()),
         })
     }
 
@@ -127,6 +135,7 @@ impl RegistrationDao {
             &self.email,
             &self.password_hash,
             &self.code,
+            &self.role.to_scylladb_model(),
         )
     }
 }

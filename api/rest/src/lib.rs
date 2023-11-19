@@ -1,6 +1,6 @@
 use actix_web::{web, App, HttpServer};
 use anyhow::Result;
-use context::ApiRestContext as Context;
+use context::Context;
 use v1::v1_api;
 
 pub mod context;

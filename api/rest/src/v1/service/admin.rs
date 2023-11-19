@@ -1,9 +1,9 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::{admin::AdminDao, Db};
+use hb_dao::admin::AdminDao;
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
-    context::ApiRestContext as Context,
+    context::Context,
     v1::model::{
         admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
         Response, TokenReqHeader,
@@ -34,9 +34,7 @@ async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let admin_data = match AdminDao::select(&db, token_claim.id()).await {
+    let admin_data = match AdminDao::select(&ctx.dao.db, token_claim.id()).await {
         Ok(data) => data,
         Err(err) => {
             return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
@@ -74,16 +72,10 @@ async fn update_one(
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let mut admin_data = match AdminDao::select(&db, token_claim.id()).await {
+    let mut admin_data = match AdminDao::select(&ctx.dao.db, token_claim.id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
-
-    // if let Some(email) = data.email() {
-    //     admin_data.set_email(email);
-    // }
 
     if let Some(password) = data.password() {
         let password_hash = match ctx.hash.argon2.hash_password(password.as_bytes()) {
@@ -97,7 +89,7 @@ async fn update_one(
     }
 
     if !data.is_all_none() {
-        if let Err(err) = admin_data.update(&db).await {
+        if let Err(err) = admin_data.update(&ctx.dao.db).await {
             return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
         }
     }
@@ -129,9 +121,7 @@ async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>)
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    if let Err(err) = AdminDao::delete(&db, token_claim.id()).await {
+    if let Err(err) = AdminDao::delete(&ctx.dao.db, token_claim.id()).await {
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 

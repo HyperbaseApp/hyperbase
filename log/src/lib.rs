@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Debug, str::FromStr};
 
 use tracing::{debug, error, info, level_filters::LevelFilter, warn};
 
@@ -14,30 +14,30 @@ pub fn init(display_level: &bool, level_filter: &str) {
         .init();
 }
 
-pub fn debug(prefix: Option<&str>, msg: &str) {
+pub fn debug<T: Debug>(prefix: Option<&str>, msg: &T) {
     match prefix {
-        Some(prefix) => debug!("{prefix} {msg}"),
-        None => debug!("🐞 {msg}"),
+        Some(prefix) => debug!("{prefix} {msg:#?}"),
+        None => debug!("🐞 {msg:#?}"),
     };
 }
 
-pub fn error(prefix: Option<&str>, msg: &str) {
+pub fn error<T: Debug>(prefix: Option<&str>, msg: &T) {
     match prefix {
-        Some(prefix) => error!("{prefix} {msg}"),
-        None => error!("🚨 {msg}"),
+        Some(prefix) => error!("{prefix} {msg:#?}"),
+        None => error!("🚨 {msg:#?}"),
     };
 }
 
-pub fn info(prefix: Option<&str>, msg: &str) {
+pub fn info<T: Debug>(prefix: Option<&str>, msg: &T) {
     match prefix {
-        Some(prefix) => info!("{prefix} {msg}"),
-        None => info!("📢 {msg}"),
+        Some(prefix) => info!("{prefix} {msg:#?}"),
+        None => info!("📢 {msg:#?}"),
     };
 }
 
-pub fn warn(prefix: Option<&str>, msg: &str) {
+pub fn warn<T: Debug>(prefix: Option<&str>, msg: &T) {
     match prefix {
-        Some(prefix) => warn!("{prefix} {msg}"),
-        None => warn!("⚠️ {msg}"),
+        Some(prefix) => warn!("{prefix} {msg:#?}"),
+        None => warn!("⚠️ {msg:#?}"),
     };
 }

@@ -50,6 +50,7 @@ validator = "0.16"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+unused_crate_dependencies = "forbid"
 
 [workspace.lints.clippy]
 enum_glob_use = "deny"

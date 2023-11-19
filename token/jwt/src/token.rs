@@ -40,4 +40,20 @@ impl JwtToken {
     pub fn decode(&self, token: &str) -> Result<Claim> {
         Ok(decode::<Claim>(token, &self.decoding_key, &Validation::default())?.claims)
     }
+
+    pub fn need_renew(&self, claim: &Claim) -> Result<bool> {
+        if (*claim.exp() as u64) - (self.expiry_duration / 2)
+            < time::SystemTime::now()
+                .duration_since(time::UNIX_EPOCH)?
+                .as_secs()
+        {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn renew(&self, claim: &Claim) -> Result<String> {
+        self.encode(claim.id(), claim.kind())
+    }
 }

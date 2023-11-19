@@ -1,7 +1,11 @@
+use std::str::FromStr;
+
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
-    admin::AdminDao, admin_password_reset::AdminPasswordResetDao, register::RegistrationDao,
-    token::TokenDao, Db,
+    admin::{AdminDao, AdminRole},
+    admin_password_reset::AdminPasswordResetDao,
+    register::RegistrationDao,
+    token::TokenDao,
 };
 use hb_mailer::MailPayload;
 use hb_token_jwt::kind::JwtTokenKind;
@@ -11,11 +15,11 @@ use crate::{
     v1::model::{
         auth::{
             ConfirmPasswordResetReqJson, ConfirmPasswordResetResJson, PasswordBasedReqJson,
-            PasswordBasedResJson, RegisterReqJson, RegisterResJson, RequestPasswordResetReqJson,
-            RequestPasswordResetResJson, TokenBasedReqJson, TokenBasedResJson,
+            RegisterReqJson, RegisterResJson, RequestPasswordResetReqJson,
+            RequestPasswordResetResJson, TokenBasedReqJson, TokenResJson,
             VerifyRegistrationReqJson, VerifyRegistrationResJson,
         },
-        Response,
+        Response, TokenReqHeader,
     },
     Context,
 };
@@ -23,6 +27,7 @@ use crate::{
 pub fn auth_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/auth")
+            .route("/token", web::get().to(token))
             .route("/register", web::post().to(register))
             .route("/verify-registration", web::post().to(verify_registration))
             .route("/password-based", web::post().to(password_based))
@@ -38,14 +43,47 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
     );
 }
 
+async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token.jwt.decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    let token = match ctx.token.jwt.need_renew(&token_claim) {
+        Ok(need) => {
+            if need {
+                match ctx.token.jwt.renew(&token_claim) {
+                    Ok(token) => token,
+                    Err(err) => {
+                        return Response::error(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            err.to_string().as_str(),
+                        )
+                    }
+                }
+            } else {
+                token.to_string()
+            }
+        }
+        Err(err) => {
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+        }
+    };
+
+    Response::data(StatusCode::OK, None, TokenResJson::new(&token))
+}
+
 async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> HttpResponse {
     if let Err(err) = data.validate() {
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    if let Ok(_) = AdminDao::select_by_email(&db, data.email()).await {
+    if let Ok(_) = AdminDao::select_by_email(&ctx.dao.db, data.email()).await {
         return Response::error(StatusCode::BAD_REQUEST, "Account has been registered");
     };
 
@@ -56,9 +94,16 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
         }
     };
 
-    let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
+    let registration_data = RegistrationDao::new(
+        data.email(),
+        &password_hash.to_string(),
+        &match AdminRole::from_str(data.role()) {
+            Ok(role) => role,
+            Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        },
+    );
 
-    if let Err(err) = registration_data.insert(&db).await {
+    if let Err(err) = registration_data.insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -85,9 +130,7 @@ async fn verify_registration(
     ctx: web::Data<Context>,
     data: web::Json<VerifyRegistrationReqJson>,
 ) -> HttpResponse {
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let registration_data = match RegistrationDao::select(&db, data.id()).await {
+    let registration_data = match RegistrationDao::select(&ctx.dao.db, data.id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -96,13 +139,17 @@ async fn verify_registration(
         return Response::error(StatusCode::BAD_REQUEST, "Wrong code");
     }
 
-    let admin_data = AdminDao::new(registration_data.email(), registration_data.password_hash());
+    let admin_data = AdminDao::new(
+        registration_data.email(),
+        registration_data.password_hash(),
+        registration_data.role(),
+    );
 
-    if let Err(err) = admin_data.insert(&db).await {
+    if let Err(err) = admin_data.insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
-    if let Err(err) = registration_data.delete(&db).await {
+    if let Err(err) = registration_data.delete(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -121,9 +168,7 @@ async fn password_based(
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let admin_data = match AdminDao::select_by_email(&db, data.email()).await {
+    let admin_data = match AdminDao::select_by_email(&ctx.dao.db, data.email()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -143,13 +188,11 @@ async fn password_based(
         }
     };
 
-    Response::data(StatusCode::OK, None, PasswordBasedResJson::new(&token))
+    Response::data(StatusCode::OK, None, TokenResJson::new(&token))
 }
 
 async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>) -> HttpResponse {
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let token_data = match TokenDao::select_by_token(&db, data.token()).await {
+    let token_data = match TokenDao::select_by_token(&ctx.dao.db, data.token()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -161,7 +204,7 @@ async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>
         }
     };
 
-    Response::data(StatusCode::OK, None, TokenBasedResJson::new(&token))
+    Response::data(StatusCode::OK, None, TokenResJson::new(&token))
 }
 
 async fn request_password_reset(
@@ -172,16 +215,14 @@ async fn request_password_reset(
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     };
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let admin_data = match AdminDao::select_by_email(&db, data.email()).await {
+    let admin_data = match AdminDao::select_by_email(&ctx.dao.db, data.email()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
 
     let password_reset_data = AdminPasswordResetDao::new(admin_data.id());
 
-    if let Err(err) = password_reset_data.insert(&db).await {
+    if let Err(err) = password_reset_data.insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -211,9 +252,7 @@ async fn confirm_password_reset(
     ctx: web::Data<Context>,
     data: web::Json<ConfirmPasswordResetReqJson>,
 ) -> HttpResponse {
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let password_reset_data = match AdminPasswordResetDao::select(&db, data.id()).await {
+    let password_reset_data = match AdminPasswordResetDao::select(&ctx.dao.db, data.id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -222,7 +261,7 @@ async fn confirm_password_reset(
         return Response::error(StatusCode::BAD_REQUEST, "Wrong code");
     }
 
-    let mut admin_data = match AdminDao::select(&db, password_reset_data.admin_id()).await {
+    let mut admin_data = match AdminDao::select(&ctx.dao.db, password_reset_data.admin_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -236,7 +275,7 @@ async fn confirm_password_reset(
 
     admin_data.set_password_hash(&password_hash.to_string());
 
-    if let Err(err) = admin_data.update(&db).await {
+    if let Err(err) = admin_data.update(&ctx.dao.db).await {
         return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
     }
 

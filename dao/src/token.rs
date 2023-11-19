@@ -57,22 +57,22 @@ impl TokenDao {
 }
 
 impl TokenDao {
-    pub async fn insert(&self, db: &Db<'_>) -> Result<()> {
-        match *db {
+    pub async fn insert(&self, db: &Db) -> Result<()> {
+        match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db<'_>, id: &Uuid) -> Result<Self> {
-        match *db {
+    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+        match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
         }
     }
 
-    pub async fn select_by_token(db: &Db<'_>, token: &str) -> Result<Self> {
-        match *db {
+    pub async fn select_by_token(db: &Db, token: &str) -> Result<Self> {
+        match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select_by_token(db, token).await?,
             )?),

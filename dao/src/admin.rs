@@ -1,7 +1,11 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_db_scylladb::{db::ScyllaDb, model::admin::AdminScyllaModel};
+use hb_db_scylladb::{
+    db::ScyllaDb,
+    model::admin::{AdminScyllaModel, AdminScyllaRole},
+};
 use scylla::frame::value::Timestamp;
+use strum::EnumString;
 use uuid::Uuid;
 
 use crate::{
@@ -15,10 +19,11 @@ pub struct AdminDao {
     updated_at: DateTime<Utc>,
     email: String,
     password_hash: String,
+    role: AdminRole,
 }
 
 impl AdminDao {
-    pub fn new(email: &str, password_hash: &str) -> Self {
+    pub fn new(email: &str, password_hash: &str, role: &AdminRole) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
@@ -26,6 +31,7 @@ impl AdminDao {
             updated_at: now,
             email: email.to_string(),
             password_hash: password_hash.to_string(),
+            role: *role,
         }
     }
 
@@ -59,13 +65,13 @@ impl AdminDao {
 }
 
 impl AdminDao {
-    pub async fn insert(&self, db: &Db<'_>) -> Result<()> {
+    pub async fn insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db<'_>, id: &Uuid) -> Result<Self> {
+    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
@@ -73,7 +79,7 @@ impl AdminDao {
         }
     }
 
-    pub async fn select_by_email(db: &Db<'_>, email: &str) -> Result<Self> {
+    pub async fn select_by_email(db: &Db, email: &str) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select_by_email(db, email).await?,
@@ -81,14 +87,14 @@ impl AdminDao {
         }
     }
 
-    pub async fn update(&mut self, db: &Db<'_>) -> Result<()> {
+    pub async fn update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
     }
 
-    pub async fn delete(db: &Db<'_>, id: &Uuid) -> Result<()> {
+    pub async fn delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
@@ -144,6 +150,7 @@ impl AdminDao {
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
             email: model.email().to_string(),
             password_hash: model.password_hash().to_string(),
+            role: AdminRole::from_scylladb_model(model.role()),
         })
     }
 
@@ -154,6 +161,29 @@ impl AdminDao {
             &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
             &self.email,
             &self.password_hash,
+            &self.role.to_scylladb_model(),
         )
+    }
+}
+
+#[derive(EnumString, Clone, Copy)]
+pub enum AdminRole {
+    SuperUser,
+    User,
+}
+
+impl AdminRole {
+    pub fn from_scylladb_model(model: &AdminScyllaRole) -> Self {
+        match model {
+            AdminScyllaRole::SuperUser => Self::SuperUser,
+            AdminScyllaRole::User => Self::User,
+        }
+    }
+
+    pub fn to_scylladb_model(&self) -> AdminScyllaRole {
+        match self {
+            AdminRole::SuperUser => AdminScyllaRole::SuperUser,
+            AdminRole::User => AdminScyllaRole::User,
+        }
     }
 }

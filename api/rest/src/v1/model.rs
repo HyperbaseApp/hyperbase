@@ -32,8 +32,11 @@ impl From<TokenReqHeader> for String {
 
 #[derive(Serialize)]
 pub struct Response {
+    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<ErrorRes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pagination: Option<PaginationRes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<serde_json::Value>,
 }
 

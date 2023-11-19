@@ -8,7 +8,7 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 anyhow = { workspace = true }
 jsonwebtoken = { workspace = true }
 serde = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
 
 [lints]
 workspace = true

@@ -1,15 +1,15 @@
 use std::sync::mpsc::Sender;
 
-use hb_db_scylladb::db::ScyllaDb;
+use hb_dao::Db;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::MailPayload;
-use hb_token_jwt::context::JwtToken;
+use hb_token_jwt::token::JwtToken;
 
-pub struct ApiRestContext {
+pub struct Context {
     pub hash: HashCtx,
     pub token: TokenCtx,
     pub mailer: MailerCtx,
-    pub db: DbCtx,
+    pub dao: DaoCtx,
     pub verification_code_ttl: i64,
 }
 
@@ -25,6 +25,6 @@ pub struct MailerCtx {
     pub sender: Sender<MailPayload>,
 }
 
-pub struct DbCtx {
-    pub scylladb: ScyllaDb,
+pub struct DaoCtx {
+    pub db: Db,
 }

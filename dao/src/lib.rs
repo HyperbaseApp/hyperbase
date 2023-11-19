@@ -8,6 +8,6 @@ pub mod register;
 pub mod token;
 mod util;
 
-pub enum Db<'a> {
-    ScyllaDb(&'a ScyllaDb),
+pub enum Db {
+    ScyllaDb(ScyllaDb),
 }

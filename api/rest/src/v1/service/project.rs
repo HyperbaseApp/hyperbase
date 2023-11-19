@@ -1,9 +1,9 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::{project::ProjectDao, Db};
+use hb_dao::project::ProjectDao;
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
-    context::ApiRestContext as Context,
+    context::Context,
     v1::model::{
         project::{
             DeleteOneProjectReqPath, DeleteProjectResJson, FindOneProjectReqPath,
@@ -45,11 +45,9 @@ async fn insert_one(
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
     let project_data = ProjectDao::new(token_claim.id(), data.name());
 
-    if let Err(err) = project_data.insert(&db).await {
+    if let Err(err) = project_data.insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -85,9 +83,7 @@ async fn find_one(
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let project_data = match ProjectDao::select(&db, path.project_id()).await {
+    let project_data = match ProjectDao::select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -129,9 +125,7 @@ async fn update_one(
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let mut project_data = match ProjectDao::select(&db, path.project_id()).await {
+    let mut project_data = match ProjectDao::select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -145,7 +139,7 @@ async fn update_one(
     }
 
     if !data.is_all_none() {
-        if let Err(err) = project_data.update(&db).await {
+        if let Err(err) = project_data.update(&ctx.dao.db).await {
             return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
         }
     }
@@ -182,9 +176,7 @@ async fn delete_one(
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let project_data = match ProjectDao::select(&db, path.project_id()).await {
+    let project_data = match ProjectDao::select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
     };
@@ -193,7 +185,7 @@ async fn delete_one(
         return Response::error(StatusCode::FORBIDDEN, "This project does not belong to you");
     }
 
-    if let Err(err) = ProjectDao::delete(&db, path.project_id()).await {
+    if let Err(err) = ProjectDao::delete(&ctx.dao.db, path.project_id()).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -219,12 +211,11 @@ async fn find_many(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) 
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let db = Db::ScyllaDb(&ctx.db.scylladb);
-
-    let projects_data = match ProjectDao::select_many_by_admin_id(&db, token_claim.id()).await {
-        Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
-    };
+    let projects_data =
+        match ProjectDao::select_many_by_admin_id(&ctx.dao.db, token_claim.id()).await {
+            Ok(data) => data,
+            Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        };
 
     Response::data(
         StatusCode::OK,

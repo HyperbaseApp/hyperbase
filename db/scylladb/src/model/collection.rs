@@ -18,7 +18,7 @@ pub struct CollectionScyllaModel {
     updated_at: Timestamp,
     project_id: Uuid,
     name: String,
-    schema_fields: Vec<SchemaScyllaFieldModel>,
+    schema_fields: Vec<SchemaFieldScyllaModel>,
     indexes: Vec<String>,
 }
 
@@ -29,7 +29,7 @@ impl CollectionScyllaModel {
         updated_at: &Timestamp,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &Vec<SchemaScyllaFieldModel>,
+        schema_fields: &Vec<SchemaFieldScyllaModel>,
         indexes: &Vec<String>,
     ) -> Self {
         Self {
@@ -63,7 +63,7 @@ impl CollectionScyllaModel {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Vec<SchemaScyllaFieldModel> {
+    pub fn schema_fields(&self) -> &Vec<SchemaFieldScyllaModel> {
         &self.schema_fields
     }
 
@@ -73,14 +73,14 @@ impl CollectionScyllaModel {
 }
 
 #[derive(IntoUserType, FromUserType, Clone)]
-pub struct SchemaScyllaFieldModel {
+pub struct SchemaFieldScyllaModel {
     name: String,
-    kind: SchemaScyllaFieldKind,
+    kind: SchemaFieldScyllaKind,
     required: bool,
 }
 
-impl SchemaScyllaFieldModel {
-    pub fn new(name: &str, kind: &SchemaScyllaFieldKind, required: &bool) -> Self {
+impl SchemaFieldScyllaModel {
+    pub fn new(name: &str, kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
         Self {
             name: name.to_string(),
             kind: *kind,
@@ -92,7 +92,7 @@ impl SchemaScyllaFieldModel {
         &self.name
     }
 
-    pub fn kind(&self) -> &SchemaScyllaFieldKind {
+    pub fn kind(&self) -> &SchemaFieldScyllaKind {
         &self.kind
     }
 
@@ -102,7 +102,7 @@ impl SchemaScyllaFieldModel {
 }
 
 #[derive(Display, EnumString, Clone, Copy)]
-pub enum SchemaScyllaFieldKind {
+pub enum SchemaFieldScyllaKind {
     Boolean,
     Tinyint,
     Smallint,
@@ -129,7 +129,7 @@ pub enum SchemaScyllaFieldKind {
     Tuple,
 }
 
-impl Value for SchemaScyllaFieldKind {
+impl Value for SchemaFieldScyllaKind {
     fn serialize(&self, buf: &mut Vec<u8>) -> Result<(), ValueTooBig> {
         let kind = self.to_string();
         let str_bytes: &[u8] = kind.as_bytes();
@@ -142,7 +142,7 @@ impl Value for SchemaScyllaFieldKind {
     }
 }
 
-impl FromCqlVal<CqlValue> for SchemaScyllaFieldKind {
+impl FromCqlVal<CqlValue> for SchemaFieldScyllaKind {
     fn from_cql(cql_val: CqlValue) -> Result<Self, FromCqlValError> {
         Ok(Self::from_str(&cql_val.as_text().unwrap()).unwrap())
     }

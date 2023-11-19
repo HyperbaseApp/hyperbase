@@ -7,7 +7,7 @@ use crate::v1::model::record::{
 
 pub fn record_api(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/collection/{collection_id}/record")
+        web::scope("/project/{project_id}/collection/{collection_id}/record")
             .route("", web::post().to(insert_one))
             .route("/{record_id}", web::get().to(find_one))
             .route("/{record_id}", web::patch().to(update_one))
@@ -23,12 +23,17 @@ async fn insert_one(
     for (key, value) in &data {
         println!("{} {:?}", key, value);
     }
-    HttpResponse::Ok().body(format!("record insert_one {}", path.collection_id()))
+    HttpResponse::Ok().body(format!(
+        "record insert_one {} {}",
+        path.project_id(),
+        path.collection_id()
+    ))
 }
 
 async fn find_one(path: web::Path<FindOneRecordReqPath>) -> HttpResponse {
     HttpResponse::Ok().body(format!(
-        "record find_one {} {}",
+        "record find_one {} {} {}",
+        path.project_id(),
         path.collection_id(),
         path.record_id()
     ))
@@ -43,7 +48,8 @@ async fn update_one(
         println!("{} {:?}", key, value);
     }
     HttpResponse::Ok().body(format!(
-        "record update_one {} {}",
+        "record update_one {} {} {}",
+        path.project_id(),
         path.collection_id(),
         path.record_id()
     ))
@@ -51,7 +57,8 @@ async fn update_one(
 
 async fn delete_one(path: web::Path<DeleteOneRecordReqPath>) -> HttpResponse {
     HttpResponse::Ok().body(format!(
-        "record delete_one {} {}",
+        "record delete_one {} {} {}",
+        path.project_id(),
         path.collection_id(),
         path.record_id()
     ))

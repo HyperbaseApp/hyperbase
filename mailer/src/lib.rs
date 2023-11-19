@@ -2,8 +2,9 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 
 use anyhow::Result;
 use lettre::{
-    message::MessageBuilder, transport::smtp::authentication::Credentials, Message, SmtpTransport,
-    Transport,
+    message::{Mailbox, MessageBuilder},
+    transport::smtp::authentication::Credentials,
+    Message, SmtpTransport, Transport,
 };
 use tokio::sync::Mutex;
 
@@ -61,32 +62,34 @@ impl Mailer {
             loop {
                 match channel_receiver.lock().await.recv() {
                     Ok(payload) => {
-                        let mailbox = payload.to.parse();
-                        if let Err(err) = mailbox {
-                            eprintln!("{err}");
-                            continue;
-                        }
-                        let mailbox = mailbox.unwrap();
+                        let mailbox = match payload.to.parse::<Mailbox>() {
+                            Ok(mailbox) => mailbox,
+                            Err(err) => {
+                                hb_log::error(None, &err);
+                                continue;
+                            }
+                        };
 
-                        let message = message_builder
+                        let message = match message_builder
                             .to_owned()
                             .to(mailbox)
                             .subject(payload.subject)
-                            .body(payload.body);
-                        if let Err(err) = message {
-                            eprintln!("{err}");
-                            continue;
-                        }
-                        let message = message.unwrap();
+                            .body(payload.body)
+                        {
+                            Ok(message) => message,
+                            Err(err) => {
+                                hb_log::error(None, &err);
+                                continue;
+                            }
+                        };
 
-                        let res = smtp_transport.send(&message);
-                        if let Err(err) = res {
-                            eprintln!("{err}");
+                        if let Err(err) = smtp_transport.send(&message) {
+                            hb_log::error(None, &err);
                             continue;
                         }
                     }
                     Err(err) => {
-                        eprintln!("{err}");
+                        hb_log::error(None, &err);
                         break;
                     }
                 }

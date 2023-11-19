@@ -26,4 +26,8 @@ impl Claim {
     pub fn kind(&self) -> &JwtTokenKind {
         &self.kind
     }
+
+    pub fn exp(&self) -> &usize {
+        &self.exp
+    }
 }

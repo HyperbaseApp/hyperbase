@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::collection::{CollectionScyllaModel, SchemaScyllaFieldKind, SchemaScyllaFieldModel},
+    model::collection::{CollectionScyllaModel, SchemaFieldScyllaKind, SchemaFieldScyllaModel},
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use strum::{Display, EnumString};
@@ -84,22 +84,22 @@ impl CollectionDao {
 }
 
 impl CollectionDao {
-    pub async fn insert(&self, db: &Db<'_>) -> Result<()> {
-        match *db {
+    pub async fn insert(&self, db: &Db) -> Result<()> {
+        match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db<'_>, id: &Uuid) -> Result<Self> {
-        match *db {
+    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+        match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
         }
     }
 
-    pub async fn select_by_project_id(db: &Db<'_>, project_id: &Uuid) -> Result<Vec<Self>> {
-        match *db {
+    pub async fn select_by_project_id(db: &Db, project_id: &Uuid) -> Result<Vec<Self>> {
+        match db {
             Db::ScyllaDb(db) => {
                 let mut collections_data = Vec::new();
                 let collections = Self::scylladb_select_many_by_project_id(db, project_id).await?;
@@ -115,15 +115,15 @@ impl CollectionDao {
         }
     }
 
-    pub async fn update(&mut self, db: &Db<'_>) -> Result<()> {
+    pub async fn update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
-        match *db {
+        match db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
     }
 
-    pub async fn delete(db: &Db<'_>, id: &Uuid) -> Result<()> {
-        match *db {
+    pub async fn delete(db: &Db, id: &Uuid) -> Result<()> {
+        match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
@@ -251,7 +251,7 @@ impl SchemaFieldModel {
 }
 
 impl SchemaFieldModel {
-    fn from_scylladb_model(model: &SchemaScyllaFieldModel) -> Self {
+    fn from_scylladb_model(model: &SchemaFieldScyllaModel) -> Self {
         Self {
             name: model.name().to_string(),
             kind: SchemaFieldKind::from_scylladb_model(model.kind()),
@@ -259,8 +259,8 @@ impl SchemaFieldModel {
         }
     }
 
-    fn to_scylladb_model(self) -> SchemaScyllaFieldModel {
-        SchemaScyllaFieldModel::new(&self.name, &self.kind.to_scylladb_model(), &self.required)
+    fn to_scylladb_model(self) -> SchemaFieldScyllaModel {
+        SchemaFieldScyllaModel::new(&self.name, &self.kind.to_scylladb_model(), &self.required)
     }
 }
 
@@ -284,47 +284,47 @@ pub enum SchemaFieldKind {
 }
 
 impl SchemaFieldKind {
-    fn from_scylladb_model(model: &SchemaScyllaFieldKind) -> Self {
+    fn from_scylladb_model(model: &SchemaFieldScyllaKind) -> Self {
         match model {
-            SchemaScyllaFieldKind::Boolean => Self::Boolean,
-            SchemaScyllaFieldKind::Tinyint => Self::TinyInteger,
-            SchemaScyllaFieldKind::Smallint => Self::SmallInteger,
-            SchemaScyllaFieldKind::Int => Self::Integer,
-            SchemaScyllaFieldKind::Bigint | SchemaScyllaFieldKind::Varint => Self::BigInteger,
-            SchemaScyllaFieldKind::Float => Self::Float,
-            SchemaScyllaFieldKind::Double | SchemaScyllaFieldKind::Decimal => Self::Double,
-            SchemaScyllaFieldKind::Ascii
-            | SchemaScyllaFieldKind::Text
-            | SchemaScyllaFieldKind::Inet
-            | SchemaScyllaFieldKind::Varchar => Self::String,
-            SchemaScyllaFieldKind::Blob => Self::Byte,
-            SchemaScyllaFieldKind::Uuid => Self::Uuid,
-            SchemaScyllaFieldKind::Timeuuid => Self::Uuid,
-            SchemaScyllaFieldKind::Date => Self::Date,
-            SchemaScyllaFieldKind::Time => Self::Time,
-            SchemaScyllaFieldKind::Timestamp | SchemaScyllaFieldKind::Duration => Self::Timestamp,
-            SchemaScyllaFieldKind::List
-            | SchemaScyllaFieldKind::Set
-            | SchemaScyllaFieldKind::Map
-            | SchemaScyllaFieldKind::Tuple => Self::Byte,
+            SchemaFieldScyllaKind::Boolean => Self::Boolean,
+            SchemaFieldScyllaKind::Tinyint => Self::TinyInteger,
+            SchemaFieldScyllaKind::Smallint => Self::SmallInteger,
+            SchemaFieldScyllaKind::Int => Self::Integer,
+            SchemaFieldScyllaKind::Bigint | SchemaFieldScyllaKind::Varint => Self::BigInteger,
+            SchemaFieldScyllaKind::Float => Self::Float,
+            SchemaFieldScyllaKind::Double | SchemaFieldScyllaKind::Decimal => Self::Double,
+            SchemaFieldScyllaKind::Ascii
+            | SchemaFieldScyllaKind::Text
+            | SchemaFieldScyllaKind::Inet
+            | SchemaFieldScyllaKind::Varchar => Self::String,
+            SchemaFieldScyllaKind::Blob => Self::Byte,
+            SchemaFieldScyllaKind::Uuid => Self::Uuid,
+            SchemaFieldScyllaKind::Timeuuid => Self::Uuid,
+            SchemaFieldScyllaKind::Date => Self::Date,
+            SchemaFieldScyllaKind::Time => Self::Time,
+            SchemaFieldScyllaKind::Timestamp | SchemaFieldScyllaKind::Duration => Self::Timestamp,
+            SchemaFieldScyllaKind::List
+            | SchemaFieldScyllaKind::Set
+            | SchemaFieldScyllaKind::Map
+            | SchemaFieldScyllaKind::Tuple => Self::Byte,
         }
     }
 
-    fn to_scylladb_model(&self) -> SchemaScyllaFieldKind {
+    fn to_scylladb_model(&self) -> SchemaFieldScyllaKind {
         match self {
-            Self::Boolean => SchemaScyllaFieldKind::Boolean,
-            Self::TinyInteger => SchemaScyllaFieldKind::Tinyint,
-            Self::SmallInteger => SchemaScyllaFieldKind::Smallint,
-            Self::Integer => SchemaScyllaFieldKind::Int,
-            Self::BigInteger => SchemaScyllaFieldKind::Bigint,
-            Self::Float => SchemaScyllaFieldKind::Float,
-            Self::Double => SchemaScyllaFieldKind::Double,
-            Self::String => SchemaScyllaFieldKind::Text,
-            Self::Byte | Self::Json => SchemaScyllaFieldKind::Blob,
-            Self::Uuid => SchemaScyllaFieldKind::Uuid,
-            Self::Date => SchemaScyllaFieldKind::Date,
-            Self::Time => SchemaScyllaFieldKind::Time,
-            Self::DateTime | Self::Timestamp => SchemaScyllaFieldKind::Timestamp,
+            Self::Boolean => SchemaFieldScyllaKind::Boolean,
+            Self::TinyInteger => SchemaFieldScyllaKind::Tinyint,
+            Self::SmallInteger => SchemaFieldScyllaKind::Smallint,
+            Self::Integer => SchemaFieldScyllaKind::Int,
+            Self::BigInteger => SchemaFieldScyllaKind::Bigint,
+            Self::Float => SchemaFieldScyllaKind::Float,
+            Self::Double => SchemaFieldScyllaKind::Double,
+            Self::String => SchemaFieldScyllaKind::Text,
+            Self::Byte | Self::Json => SchemaFieldScyllaKind::Blob,
+            Self::Uuid => SchemaFieldScyllaKind::Uuid,
+            Self::Date => SchemaFieldScyllaKind::Date,
+            Self::Time => SchemaFieldScyllaKind::Time,
+            Self::DateTime | Self::Timestamp => SchemaFieldScyllaKind::Timestamp,
         }
     }
 }

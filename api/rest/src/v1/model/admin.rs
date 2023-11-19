@@ -5,16 +5,10 @@ use validator::Validate;
 
 #[derive(Deserialize, Validate)]
 pub struct UpdateOneAdminReqJson {
-    // #[validate(email)]
-    // email: Option<String>,
     password: Option<String>,
 }
 
 impl UpdateOneAdminReqJson {
-    // pub fn email(&self) -> &Option<String> {
-    //     &self.email
-    // }
-
     pub fn password(&self) -> &Option<String> {
         &self.password
     }
