@@ -778,7 +778,6 @@ dependencies = [
  "actix_header",
  "anyhow",
  "chrono",
- "futures",
  "hb_dao",
  "hb_hash_argon2",
  "hb_mailer",
@@ -807,6 +806,7 @@ dependencies = [
  "hb_db_scylladb",
  "rand",
  "scylla",
+ "serde_json",
  "strum 0.25.0",
  "uuid",
 ]

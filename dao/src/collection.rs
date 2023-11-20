@@ -81,16 +81,14 @@ impl CollectionDao {
     pub fn set_indexes(&mut self, indexes: &Vec<String>) {
         self.indexes = indexes.to_vec();
     }
-}
 
-impl CollectionDao {
-    pub async fn insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
@@ -98,7 +96,7 @@ impl CollectionDao {
         }
     }
 
-    pub async fn select_by_project_id(db: &Db, project_id: &Uuid) -> Result<Vec<Self>> {
+    pub async fn db_select_by_project_id(db: &Db, project_id: &Uuid) -> Result<Vec<Self>> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut collections_data = Vec::new();
@@ -115,21 +113,19 @@ impl CollectionDao {
         }
     }
 
-    pub async fn update(&mut self, db: &Db) -> Result<()> {
+    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
     }
 
-    pub async fn delete(db: &Db, id: &Uuid) -> Result<()> {
+    pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
-}
 
-impl CollectionDao {
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             db.prepared_statement().collection().insert(),
@@ -248,9 +244,7 @@ impl SchemaFieldModel {
     pub fn required(&self) -> &bool {
         &self.required
     }
-}
 
-impl SchemaFieldModel {
     fn from_scylladb_model(model: &SchemaFieldScyllaModel) -> Self {
         Self {
             name: model.name().to_string(),

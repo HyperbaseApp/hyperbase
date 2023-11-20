@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use actix_web::{http::StatusCode, web, HttpResponse};
-use futures::future;
 use hb_dao::{
     collection::{CollectionDao, SchemaFieldKind, SchemaFieldModel},
     project::ProjectDao,
@@ -75,7 +74,7 @@ async fn insert_one(
         data.indexes(),
     );
 
-    if let Err(err) = collection_data.insert(&ctx.dao.db).await {
+    if let Err(err) = collection_data.db_insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -125,8 +124,8 @@ async fn find_one(
     }
 
     let (project_data, collection_data) = match tokio::try_join!(
-        ProjectDao::select(&ctx.dao.db, path.project_id()),
-        CollectionDao::select(&ctx.dao.db, path.collection_id()),
+        ProjectDao::db_select(&ctx.dao.db, path.project_id()),
+        CollectionDao::db_select(&ctx.dao.db, path.collection_id()),
     ) {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
@@ -183,8 +182,8 @@ async fn update_one(
     }
 
     let (project_data, mut collection_data) = match tokio::try_join!(
-        ProjectDao::select(&ctx.dao.db, path.project_id()),
-        CollectionDao::select(&ctx.dao.db, path.collection_id()),
+        ProjectDao::db_select(&ctx.dao.db, path.project_id()),
+        CollectionDao::db_select(&ctx.dao.db, path.collection_id()),
     ) {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
@@ -223,7 +222,7 @@ async fn update_one(
     }
 
     if !data.is_all_none() {
-        if let Err(err) = collection_data.update(&ctx.dao.db).await {
+        if let Err(err) = collection_data.db_update(&ctx.dao.db).await {
             return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
         }
     }
@@ -274,8 +273,8 @@ async fn delete_one(
     }
 
     let (project_data, collection_data) = match tokio::try_join!(
-        ProjectDao::select(&ctx.dao.db, path.project_id()),
-        CollectionDao::select(&ctx.dao.db, path.collection_id()),
+        ProjectDao::db_select(&ctx.dao.db, path.project_id()),
+        CollectionDao::db_select(&ctx.dao.db, path.collection_id()),
     ) {
         Ok(data) => data,
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
@@ -285,7 +284,7 @@ async fn delete_one(
         return Response::error(StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if let Err(err) = CollectionDao::delete(&ctx.dao.db, path.collection_id()).await {
+    if let Err(err) = CollectionDao::db_delete(&ctx.dao.db, path.collection_id()).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
     }
 
@@ -315,36 +314,20 @@ async fn find_many(
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
+    let project_data = match ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error(StatusCode::FORBIDDEN, "This project does not belong to you");
+    }
+
     let collections_data =
-        match CollectionDao::select_by_project_id(&ctx.dao.db, path.project_id()).await {
+        match CollectionDao::db_select_by_project_id(&ctx.dao.db, path.project_id()).await {
             Ok(data) => data,
             Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
         };
-
-    if let Err(err) = future::try_join_all(collections_data.iter().map(|collection| async {
-        let project_data = match ProjectDao::select(&ctx.dao.db, collection.project_id()).await {
-            Ok(data) => data,
-            Err(err) => {
-                return Err(Response::error(
-                    StatusCode::BAD_REQUEST,
-                    err.to_string().as_str(),
-                ))
-            }
-        };
-
-        if project_data.admin_id() != token_claim.id() {
-            return Err(Response::error(
-                StatusCode::FORBIDDEN,
-                "Some collections do not belong to you",
-            ));
-        }
-
-        Ok(())
-    }))
-    .await
-    {
-        return err;
-    }
 
     Response::data(
         StatusCode::OK,

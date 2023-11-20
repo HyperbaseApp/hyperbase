@@ -49,25 +49,21 @@ impl AdminPasswordResetDao {
     pub fn code(&self) -> &str {
         &self.code
     }
-}
 
-impl AdminPasswordResetDao {
-    pub async fn insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
         }
     }
-}
 
-impl AdminPasswordResetDao {
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             db.prepared_statement().admin_password_reset().insert(),

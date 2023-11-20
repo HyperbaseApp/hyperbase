@@ -62,16 +62,14 @@ impl AdminDao {
     pub fn set_password_hash(&mut self, password_hash: &str) {
         self.password_hash = password_hash.to_string();
     }
-}
 
-impl AdminDao {
-    pub async fn insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
@@ -79,7 +77,7 @@ impl AdminDao {
         }
     }
 
-    pub async fn select_by_email(db: &Db, email: &str) -> Result<Self> {
+    pub async fn db_select_by_email(db: &Db, email: &str) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select_by_email(db, email).await?,
@@ -87,21 +85,19 @@ impl AdminDao {
         }
     }
 
-    pub async fn update(&mut self, db: &Db) -> Result<()> {
+    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
     }
 
-    pub async fn delete(db: &Db, id: &Uuid) -> Result<()> {
+    pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
-}
 
-impl AdminDao {
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             db.prepared_statement().admin().insert(),

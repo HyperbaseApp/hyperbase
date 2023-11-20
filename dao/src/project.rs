@@ -52,16 +52,14 @@ impl ProjectDao {
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_string();
     }
-}
 
-impl ProjectDao {
-    pub async fn insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
         }
     }
 
-    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
@@ -69,7 +67,7 @@ impl ProjectDao {
         }
     }
 
-    pub async fn select_many_by_admin_id(db: &Db, admin_id: &Uuid) -> Result<Vec<Self>> {
+    pub async fn db_select_many_by_admin_id(db: &Db, admin_id: &Uuid) -> Result<Vec<Self>> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut projects_data = Vec::new();
@@ -86,21 +84,19 @@ impl ProjectDao {
         }
     }
 
-    pub async fn update(&mut self, db: &Db) -> Result<()> {
+    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
         }
     }
 
-    pub async fn delete(db: &Db, id: &Uuid) -> Result<()> {
+    pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
-}
 
-impl ProjectDao {
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             db.prepared_statement().project().insert(),

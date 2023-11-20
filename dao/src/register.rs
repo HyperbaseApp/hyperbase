@@ -62,16 +62,14 @@ impl RegistrationDao {
     pub fn role(&self) -> &AdminRole {
         &self.role
     }
-}
 
-impl RegistrationDao {
-    pub async fn insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
         }
     }
 
-    pub async fn select(db: &Db, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
@@ -79,14 +77,12 @@ impl RegistrationDao {
         }
     }
 
-    pub async fn delete(&self, db: &Db) -> Result<()> {
+    pub async fn db_delete(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(self, db).await,
         }
     }
-}
 
-impl RegistrationDao {
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             db.prepared_statement().registration().insert(),
