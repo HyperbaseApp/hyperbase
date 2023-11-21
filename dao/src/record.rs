@@ -74,31 +74,94 @@ impl Value {
                 SchemaFieldKind::Timestamp => Ok(Self::Timestamp(None)),
                 SchemaFieldKind::Json => Ok(Self::Json(None)),
             },
-            serde_json::Value::Bool(value) => Ok(Self::Boolean(Some(*value))),
+            serde_json::Value::Bool(value) => match kind {
+                SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(*value))),
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(vec![*value as u8]))),
+                _ => return Err(Error::msg("wrong value type")),
+            },
             serde_json::Value::Number(value) => match kind {
                 SchemaFieldKind::TinyInteger => match value.as_i64() {
                     Some(value) => match i8::try_from(value) {
                         Ok(value) => Ok(Self::TinyInteger(Some(value))),
                         Err(err) => Err(err.into()),
                     },
-                    None => match value.as_u64() {
-                        Some(value) => match i8::try_from(value) {
-                            Ok(value) => Ok(Self::TinyInteger(Some(value))),
-                            Err(err) => Err(err.into()),
-                        },
-                        None => Err(Error::msg("wrong value type")),
-                    },
+                    None => Err(Error::msg("wrong value type")),
                 },
-                SchemaFieldKind::SmallInteger => todo!(),
-                SchemaFieldKind::Integer => todo!(),
-                SchemaFieldKind::BigInteger => todo!(),
-                SchemaFieldKind::Float => todo!(),
-                SchemaFieldKind::Double => todo!(),
+                SchemaFieldKind::SmallInteger => match value.as_i64() {
+                    Some(value) => match i16::try_from(value) {
+                        Ok(value) => Ok(Self::SmallInteger(Some(value))),
+                        Err(err) => Err(err.into()),
+                    },
+                    None => Err(Error::msg("wrong value type")),
+                },
+                SchemaFieldKind::Integer => match value.as_i64() {
+                    Some(value) => match i32::try_from(value) {
+                        Ok(value) => Ok(Self::Integer(Some(value))),
+                        Err(err) => Err(err.into()),
+                    },
+                    None => Err(Error::msg("wrong value type")),
+                },
+                SchemaFieldKind::BigInteger => match value.as_i64() {
+                    Some(value) => Ok(Self::BigInteger(Some(value))),
+                    None => Err(Error::msg("wrong value type")),
+                },
+                SchemaFieldKind::Float => match value.as_f64() {
+                    Some(value) => {
+                        let value = value as f32;
+                        if value.is_finite() {
+                            Ok(Self::Float(Some(value)))
+                        } else {
+                            Err(Error::msg("wrong value type"))
+                        }
+                    }
+                    None => Err(Error::msg("wrong value type")),
+                },
+                SchemaFieldKind::Double => match value.as_f64() {
+                    Some(value) => Ok(Self::Double(Some(value))),
+                    None => Err(Error::msg("wrong value type")),
+                },
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_string().into_bytes()))),
                 _ => return Err(Error::msg("wrong value type")),
             },
-            serde_json::Value::String(_) => todo!(),
-            serde_json::Value::Array(_) => todo!(),
-            serde_json::Value::Object(_) => todo!(),
+            serde_json::Value::String(value) => match kind {
+                SchemaFieldKind::String => Ok(Self::String(Some(value.to_string()))),
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
+                _ => return Err(Error::msg("wrong value type")),
+            },
+            serde_json::Value::Array(value) => match kind {
+                SchemaFieldKind::Byte => {
+                    let mut bytes = Vec::with_capacity(value.len());
+                    for value in value.iter() {
+                        match value.as_str() {
+                            Some(value) => bytes.append(&mut value.as_bytes().to_vec()),
+                            None => return Err(Error::msg("wrong value type")),
+                        }
+                    }
+                    Ok(Self::Byte(Some(bytes)))
+                }
+                SchemaFieldKind::Json => {
+                    let mut bytes: Vec<u8> = Vec::with_capacity(value.len());
+                    for value in value.iter() {
+                        match value.as_str() {
+                            Some(value) => bytes.append(&mut value.as_bytes().to_vec()),
+                            None => return Err(Error::msg("wrong value type")),
+                        }
+                    }
+                    Ok(Self::Json(Some(bytes)))
+                }
+                _ => return Err(Error::msg("wrong value type")),
+            },
+            serde_json::Value::Object(value) => match kind {
+                SchemaFieldKind::Byte => match serde_json::json!(value).as_str() {
+                    Some(value) => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
+                    None => return Err(Error::msg("wrong value type")),
+                },
+                SchemaFieldKind::Json => match serde_json::json!(value).as_str() {
+                    Some(value) => Ok(Self::Json(Some(value.as_bytes().to_vec()))),
+                    None => return Err(Error::msg("wrong value type")),
+                },
+                _ => return Err(Error::msg("wrong value type")),
+            },
         }
     }
 }
