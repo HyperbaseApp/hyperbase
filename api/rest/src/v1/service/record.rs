@@ -1,5 +1,10 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::{collection::CollectionDao, project::ProjectDao, record::RecordDao, token::TokenDao};
+use hb_dao::{
+    collection::CollectionDao,
+    project::ProjectDao,
+    record::{RecordDao, Value},
+    token::TokenDao,
+};
 
 use crate::{
     context::Context,
@@ -35,7 +40,7 @@ async fn insert_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (token_data, project_data) = match tokio::try_join!(
@@ -43,7 +48,7 @@ async fn insert_one(
         ProjectDao::db_select(&ctx.dao.db, path.project_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_data.admin_id() != project_data.admin_id() {
@@ -52,20 +57,28 @@ async fn insert_one(
 
     let collection_data = match CollectionDao::db_select(&ctx.dao.db, path.collection_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    let record_data = RecordDao::new(Some(&data.capacity()));
+    let mut record_data = RecordDao::new(Some(&data.len()));
     for (key, value) in data.iter() {
-        let mut field_exist = false;
-        for field in collection_data.schema_fields().iter() {
-            if field.name() == key {
-                field_exist = true;
-                todo!()
+        match collection_data.schema_fields().get(key) {
+            Some(kind) => record_data.insert(
+                &key,
+                &match Value::from_serde_json(kind.kind(), value) {
+                    Ok(value) => value,
+                    Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
+                },
+            ),
+            None => {
+                return Response::error(
+                    StatusCode::BAD_REQUEST,
+                    &format!("{key} is not defined in collection"),
+                )
             }
         }
     }

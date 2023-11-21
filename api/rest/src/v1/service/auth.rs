@@ -51,7 +51,7 @@ async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> H
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let token = match ctx.token.jwt.need_renew(&token_claim) {
@@ -62,7 +62,7 @@ async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> H
                     Err(err) => {
                         return Response::error(
                             StatusCode::INTERNAL_SERVER_ERROR,
-                            err.to_string().as_str(),
+                            &err.to_string(),
                         )
                     }
                 }
@@ -71,7 +71,7 @@ async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> H
             }
         }
         Err(err) => {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
         }
     };
 
@@ -80,7 +80,7 @@ async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> H
 
 async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> HttpResponse {
     if let Err(err) = data.validate() {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if let Ok(_) = AdminDao::db_select_by_email(&ctx.dao.db, data.email()).await {
@@ -90,7 +90,7 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
     let password_hash = match ctx.hash.argon2.hash_password(data.password().as_bytes()) {
         Ok(hash) => hash,
         Err(err) => {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
         }
     };
 
@@ -99,12 +99,12 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
         &password_hash.to_string(),
         &match AdminRole::from_str(data.role()) {
             Ok(role) => role,
-            Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+            Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
         },
     );
 
     if let Err(err) = registration_data.db_insert(&ctx.dao.db).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     if let Err(err) = ctx.mailer.sender.send(MailPayload::new(
@@ -116,7 +116,7 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
             ctx.verification_code_ttl
         ),
     )) {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -132,7 +132,7 @@ async fn verify_registration(
 ) -> HttpResponse {
     let registration_data = match RegistrationDao::db_select(&ctx.dao.db, data.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if data.code() != registration_data.code() {
@@ -146,11 +146,11 @@ async fn verify_registration(
     );
 
     if let Err(err) = admin_data.db_insert(&ctx.dao.db).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     if let Err(err) = registration_data.db_delete(&ctx.dao.db).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -165,12 +165,12 @@ async fn password_based(
     data: web::Json<PasswordBasedReqJson>,
 ) -> HttpResponse {
     if let Err(err) = data.validate() {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let admin_data = match AdminDao::db_select_by_email(&ctx.dao.db, data.email()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if let Err(err) = ctx
@@ -178,13 +178,13 @@ async fn password_based(
         .argon2
         .verify_password(data.password(), admin_data.password_hash())
     {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let token = match ctx.token.jwt.encode(admin_data.id(), &JwtTokenKind::Admin) {
         Ok(token) => token,
         Err(err) => {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
         }
     };
 
@@ -194,13 +194,13 @@ async fn password_based(
 async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>) -> HttpResponse {
     let token_data = match TokenDao::db_select_by_token(&ctx.dao.db, data.token()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let token = match ctx.token.jwt.encode(token_data.id(), &JwtTokenKind::Token) {
         Ok(token) => token,
         Err(err) => {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
         }
     };
 
@@ -212,18 +212,18 @@ async fn request_password_reset(
     data: web::Json<RequestPasswordResetReqJson>,
 ) -> HttpResponse {
     if let Err(err) = data.validate() {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     };
 
     let admin_data = match AdminDao::db_select_by_email(&ctx.dao.db, data.email()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let password_reset_data = AdminPasswordResetDao::new(admin_data.id());
 
     if let Err(err) = password_reset_data.db_insert(&ctx.dao.db).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     if let Err(err)= ctx.mailer
@@ -237,7 +237,7 @@ async fn request_password_reset(
                 ctx.verification_code_ttl
             ),
         )) {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
 
         }
 
@@ -254,7 +254,7 @@ async fn confirm_password_reset(
 ) -> HttpResponse {
     let password_reset_data = match AdminPasswordResetDao::db_select(&ctx.dao.db, data.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if data.code() != password_reset_data.code() {
@@ -264,20 +264,20 @@ async fn confirm_password_reset(
     let mut admin_data =
         match AdminDao::db_select(&ctx.dao.db, password_reset_data.admin_id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+            Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
     let password_hash = match ctx.hash.argon2.hash_password(data.password().as_bytes()) {
         Ok(hash) => hash,
         Err(err) => {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
         }
     };
 
     admin_data.set_password_hash(&password_hash.to_string());
 
     if let Err(err) = admin_data.db_update(&ctx.dao.db).await {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if let Err(err) = ctx.mailer.sender.send(MailPayload::new(
@@ -285,7 +285,7 @@ async fn confirm_password_reset(
         "Your Password Has Been Reset Successfully",
         "Your account password has been successfully changed",
     )) {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(

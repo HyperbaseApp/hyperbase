@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
@@ -19,7 +21,7 @@ pub struct CollectionDao {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
-    schema_fields: Vec<SchemaFieldModel>,
+    schema_fields: HashMap<String, SchemaFieldModel>,
     indexes: Vec<String>,
 }
 
@@ -27,7 +29,7 @@ impl CollectionDao {
     pub fn new(
         project_id: &Uuid,
         name: &str,
-        schema_fields: &Vec<SchemaFieldModel>,
+        schema_fields: &HashMap<String, SchemaFieldModel>,
         indexes: &Vec<String>,
     ) -> Self {
         let now = Utc::now();
@@ -37,7 +39,7 @@ impl CollectionDao {
             updated_at: now,
             project_id: *project_id,
             name: name.to_string(),
-            schema_fields: schema_fields.to_vec(),
+            schema_fields: schema_fields.to_owned(),
             indexes: indexes.to_vec(),
         }
     }
@@ -62,7 +64,7 @@ impl CollectionDao {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Vec<SchemaFieldModel> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldModel> {
         &self.schema_fields
     }
 
@@ -74,8 +76,8 @@ impl CollectionDao {
         self.name = name.to_string();
     }
 
-    pub fn set_schema_fields(&mut self, schema_fields: &Vec<SchemaFieldModel>) {
-        self.schema_fields = schema_fields.to_vec();
+    pub fn set_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldModel>) {
+        self.schema_fields = schema_fields.to_owned();
     }
 
     pub fn set_indexes(&mut self, indexes: &Vec<String>) {
@@ -165,10 +167,9 @@ impl CollectionDao {
                 &self.name,
                 &self
                     .schema_fields
-                    .clone()
-                    .into_iter()
-                    .map(|schema_field| schema_field.to_scylladb_model())
-                    .collect::<Vec<_>>(),
+                    .iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_scylladb_model().to_owned()))
+                    .collect::<HashMap<_, _>>(),
                 &self.indexes,
                 &self.id,
             ),
@@ -193,7 +194,7 @@ impl CollectionDao {
             schema_fields: model
                 .schema_fields()
                 .iter()
-                .map(|field| SchemaFieldModel::from_scylladb_model(field))
+                .map(|(key, value)| (key.to_owned(), SchemaFieldModel::from_scylladb_model(value)))
                 .collect(),
             indexes: model.indexes().to_vec(),
         })
@@ -208,33 +209,26 @@ impl CollectionDao {
             &self.name,
             &self
                 .schema_fields
-                .clone()
-                .into_iter()
-                .map(|schema_field| schema_field.to_scylladb_model())
+                .iter()
+                .map(|(key, value)| (key.to_owned(), value.to_scylladb_model().to_owned()))
                 .collect(),
             &self.indexes,
         )
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct SchemaFieldModel {
-    name: String,
     kind: SchemaFieldKind,
     required: bool,
 }
 
 impl SchemaFieldModel {
-    pub fn new(name: &str, kind: &SchemaFieldKind, required: &bool) -> Self {
+    pub fn new(kind: &SchemaFieldKind, required: &bool) -> Self {
         Self {
-            name: name.to_string(),
             kind: *kind,
             required: *required,
         }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn kind(&self) -> &SchemaFieldKind {
@@ -247,14 +241,13 @@ impl SchemaFieldModel {
 
     fn from_scylladb_model(model: &SchemaFieldScyllaModel) -> Self {
         Self {
-            name: model.name().to_string(),
             kind: SchemaFieldKind::from_scylladb_model(model.kind()),
             required: *model.required(),
         }
     }
 
     fn to_scylladb_model(self) -> SchemaFieldScyllaModel {
-        SchemaFieldScyllaModel::new(&self.name, &self.kind.to_scylladb_model(), &self.required)
+        SchemaFieldScyllaModel::new(&self.kind.to_scylladb_model(), &self.required)
     }
 }
 

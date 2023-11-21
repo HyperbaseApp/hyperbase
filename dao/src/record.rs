@@ -27,7 +27,7 @@ impl RecordDao {
     }
 
     pub fn insert(&mut self, key: &str, value: &Value) {
-        self.data.insert(key.to_string(), value.clone());
+        self.data.insert(key.to_string(), value.to_owned());
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {

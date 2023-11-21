@@ -46,19 +46,22 @@ impl Response {
         pagination: Option<PaginationRes>,
         data: T,
     ) -> HttpResponse {
-        let data = serde_json::to_value(data);
-
-        match data {
+        match serde_json::to_value(data) {
             Ok(data) => HttpResponseBuilder::new(status_code).json(Self {
                 error: None,
                 pagination,
                 data: Some(data),
             }),
-            Err(err) => Self::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str()),
+            Err(err) => {
+                hb_log::error(None, &err);
+                Self::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
         }
     }
 
     pub fn error(status_code: StatusCode, message: &str) -> HttpResponse {
+        hb_log::error(None, message);
+
         HttpResponseBuilder::new(status_code).json(Self {
             error: Some(ErrorRes {
                 status: match status_code.canonical_reason() {

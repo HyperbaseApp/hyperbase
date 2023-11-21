@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use scylla::{
     cql_to_rust::{FromCqlVal, FromCqlValError},
@@ -18,7 +18,7 @@ pub struct CollectionScyllaModel {
     updated_at: Timestamp,
     project_id: Uuid,
     name: String,
-    schema_fields: Vec<SchemaFieldScyllaModel>,
+    schema_fields: HashMap<String, SchemaFieldScyllaModel>,
     indexes: Vec<String>,
 }
 
@@ -29,7 +29,7 @@ impl CollectionScyllaModel {
         updated_at: &Timestamp,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &Vec<SchemaFieldScyllaModel>,
+        schema_fields: &HashMap<String, SchemaFieldScyllaModel>,
         indexes: &Vec<String>,
     ) -> Self {
         Self {
@@ -38,7 +38,7 @@ impl CollectionScyllaModel {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_string(),
-            schema_fields: schema_fields.to_vec(),
+            schema_fields: schema_fields.to_owned(),
             indexes: indexes.to_vec(),
         }
     }
@@ -63,7 +63,7 @@ impl CollectionScyllaModel {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Vec<SchemaFieldScyllaModel> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldScyllaModel> {
         &self.schema_fields
     }
 
@@ -74,22 +74,16 @@ impl CollectionScyllaModel {
 
 #[derive(IntoUserType, FromUserType, Clone)]
 pub struct SchemaFieldScyllaModel {
-    name: String,
     kind: SchemaFieldScyllaKind,
     required: bool,
 }
 
 impl SchemaFieldScyllaModel {
-    pub fn new(name: &str, kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
+    pub fn new(kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
         Self {
-            name: name.to_string(),
             kind: *kind,
             required: *required,
         }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn kind(&self) -> &SchemaFieldScyllaKind {

@@ -10,6 +10,8 @@ pub struct Argon2Hash {
 
 impl Argon2Hash {
     pub fn new(algorithm: &str, version: &str, salt: &str) -> Self {
+        hb_log::info(Some("⚡"), "Creating component: Argon2Hash");
+
         let algorithm = match algorithm {
             "Argon2d" => Algorithm::Argon2d,
             "Argon2i" => Algorithm::Argon2i,

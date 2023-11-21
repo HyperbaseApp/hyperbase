@@ -27,7 +27,7 @@ async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -36,9 +36,7 @@ async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -
 
     let admin_data = match AdminDao::db_select(&ctx.dao.db, token_claim.id()).await {
         Ok(data) => data,
-        Err(err) => {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
-        }
+        Err(err) => return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     };
 
     Response::data(
@@ -65,7 +63,7 @@ async fn update_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -74,7 +72,7 @@ async fn update_one(
 
     let mut admin_data = match AdminDao::db_select(&ctx.dao.db, token_claim.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if data.is_all_none() {
@@ -85,7 +83,7 @@ async fn update_one(
         let password_hash = match ctx.hash.argon2.hash_password(password.as_bytes()) {
             Ok(hash) => hash,
             Err(err) => {
-                return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str())
+                return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
             }
         };
 
@@ -93,7 +91,7 @@ async fn update_one(
     }
 
     if let Err(err) = admin_data.db_update(&ctx.dao.db).await {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -116,7 +114,7 @@ async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>)
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -124,7 +122,7 @@ async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>)
     }
 
     if let Err(err) = AdminDao::db_delete(&ctx.dao.db, token_claim.id()).await {
-        return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str());
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(

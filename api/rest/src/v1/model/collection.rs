@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -17,7 +19,7 @@ impl InsertOneCollectionReqPath {
 pub struct InsertOneCollectionReqJson {
     name: String,
     #[serde(rename = "schemaFields")]
-    schema_fields: Vec<SchemaFieldModelJson>,
+    schema_fields: HashMap<String, SchemaFieldModelJson>,
     indexes: Vec<String>,
 }
 
@@ -26,7 +28,7 @@ impl InsertOneCollectionReqJson {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Vec<SchemaFieldModelJson> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldModelJson> {
         &self.schema_fields
     }
 
@@ -71,7 +73,7 @@ impl UpdateOneCollectionReqPath {
 pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
     #[serde(rename = "schemaFields")]
-    schema_fields: Option<Vec<SchemaFieldModelJson>>,
+    schema_fields: Option<HashMap<String, SchemaFieldModelJson>>,
     indexes: Option<Vec<String>>,
 }
 
@@ -80,7 +82,7 @@ impl UpdateOneCollectionReqJson {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Option<Vec<SchemaFieldModelJson>> {
+    pub fn schema_fields(&self) -> &Option<HashMap<String, SchemaFieldModelJson>> {
         &self.schema_fields
     }
 
@@ -118,7 +120,7 @@ pub struct CollectionResJson {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
-    schema_fields: Vec<SchemaFieldModelJson>,
+    schema_fields: HashMap<String, SchemaFieldModelJson>,
     indexes: Vec<String>,
 }
 
@@ -129,7 +131,7 @@ impl CollectionResJson {
         updated_at: &DateTime<Utc>,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &Vec<SchemaFieldModelJson>,
+        schema_fields: &HashMap<String, SchemaFieldModelJson>,
         indexes: &Vec<String>,
     ) -> Self {
         Self {
@@ -138,7 +140,7 @@ impl CollectionResJson {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_string(),
-            schema_fields: schema_fields.to_vec(),
+            schema_fields: schema_fields.to_owned(),
             indexes: indexes.to_vec(),
         }
     }
@@ -157,22 +159,16 @@ impl DeleteCollectionResJson {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SchemaFieldModelJson {
-    name: String,
     kind: String,
     required: bool,
 }
 
 impl SchemaFieldModelJson {
-    pub fn new(name: &str, kind: &str, required: &bool) -> Self {
+    pub fn new(kind: &str, required: &bool) -> Self {
         Self {
-            name: name.to_string(),
             kind: kind.to_string(),
             required: *required,
         }
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     pub fn kind(&self) -> &str {

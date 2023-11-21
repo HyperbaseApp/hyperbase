@@ -5,6 +5,8 @@ edition = "2021"
 authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 [dependencies]
+hb_log = { workspace = true }
+
 anyhow = { workspace = true }
 jsonwebtoken = { workspace = true }
 serde = { workspace = true }

@@ -5,7 +5,7 @@ use self::service::{
     record::record_api,
 };
 
-mod model;
+pub mod model;
 mod service;
 
 pub fn v1_api(cfg: &mut web::ServiceConfig) {

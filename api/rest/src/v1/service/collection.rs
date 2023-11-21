@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
@@ -46,36 +46,36 @@ async fn insert_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
         return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
     }
 
-    let mut schema_fields = Vec::new();
-    for field in data.schema_fields().iter() {
-        schema_fields.push(SchemaFieldModel::new(
-            field.name(),
-            &match SchemaFieldKind::from_str(field.kind()) {
-                Ok(kind) => kind,
-                Err(err) => {
-                    return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str())
-                }
-            },
-            field.required(),
-        ))
+    let mut schema_fields = HashMap::with_capacity(data.schema_fields().len());
+    for (key, value) in data.schema_fields().iter() {
+        schema_fields.insert(
+            key.to_owned(),
+            SchemaFieldModel::new(
+                &match SchemaFieldKind::from_str(value.kind()) {
+                    Ok(kind) => kind,
+                    Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
+                },
+                value.required(),
+            ),
+        );
     }
 
     let collection_data = CollectionDao::new(
         path.project_id(),
         data.name(),
-        schema_fields.as_ref(),
+        &schema_fields,
         data.indexes(),
     );
 
     if let Err(err) = collection_data.db_insert(&ctx.dao.db).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -87,18 +87,16 @@ async fn insert_one(
             collection_data.updated_at(),
             collection_data.project_id(),
             collection_data.name(),
-            collection_data
+            &collection_data
                 .schema_fields()
                 .iter()
-                .map(|field| {
-                    SchemaFieldModelJson::new(
-                        field.name(),
-                        field.kind().to_string().as_str(),
-                        field.required(),
+                .map(|(key, value)| {
+                    (
+                        key.to_owned(),
+                        SchemaFieldModelJson::new(&value.kind().to_string(), value.required()),
                     )
                 })
-                .collect::<Vec<_>>()
-                .as_ref(),
+                .collect(),
             collection_data.indexes(),
         ),
     )
@@ -116,7 +114,7 @@ async fn find_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -128,7 +126,7 @@ async fn find_one(
         CollectionDao::db_select(&ctx.dao.db, path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.id() != collection_data.project_id() {
@@ -144,18 +142,16 @@ async fn find_one(
             collection_data.updated_at(),
             collection_data.project_id(),
             collection_data.name(),
-            collection_data
+            &collection_data
                 .schema_fields()
                 .iter()
-                .map(|field| {
-                    SchemaFieldModelJson::new(
-                        field.name(),
-                        field.kind().to_string().as_str(),
-                        field.required(),
+                .map(|(key, value)| {
+                    (
+                        key.to_owned(),
+                        SchemaFieldModelJson::new(&value.kind().to_string(), value.required()),
                     )
                 })
-                .collect::<Vec<_>>()
-                .as_ref(),
+                .collect(),
             collection_data.indexes(),
         ),
     )
@@ -174,7 +170,7 @@ async fn update_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -186,7 +182,7 @@ async fn update_one(
         CollectionDao::db_select(&ctx.dao.db, path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.id() != collection_data.project_id() {
@@ -198,21 +194,23 @@ async fn update_one(
     }
 
     if let Some(schema_field) = data.schema_fields() {
-        let mut schema_fields = Vec::new();
-        for field in schema_field.iter() {
-            schema_fields.push(SchemaFieldModel::new(
-                field.name(),
-                match &SchemaFieldKind::from_str(field.kind()) {
-                    Ok(kind) => kind,
-                    Err(err) => {
-                        return Response::error(
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            err.to_string().as_str(),
-                        )
-                    }
-                },
-                field.required(),
-            ));
+        let mut schema_fields = HashMap::with_capacity(schema_field.len());
+        for (key, value) in schema_field.iter() {
+            schema_fields.insert(
+                key.to_owned(),
+                SchemaFieldModel::new(
+                    match &SchemaFieldKind::from_str(value.kind()) {
+                        Ok(kind) => kind,
+                        Err(err) => {
+                            return Response::error(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                &err.to_string(),
+                            )
+                        }
+                    },
+                    value.required(),
+                ),
+            );
         }
         collection_data.set_schema_fields(&schema_fields);
     }
@@ -223,7 +221,7 @@ async fn update_one(
 
     if !data.is_all_none() {
         if let Err(err) = collection_data.db_update(&ctx.dao.db).await {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
     }
 
@@ -236,18 +234,16 @@ async fn update_one(
             collection_data.updated_at(),
             collection_data.project_id(),
             collection_data.name(),
-            collection_data
+            &collection_data
                 .schema_fields()
                 .iter()
-                .map(|field| {
-                    SchemaFieldModelJson::new(
-                        field.name(),
-                        field.kind().to_string().as_str(),
-                        field.required(),
+                .map(|(key, value)| {
+                    (
+                        key.to_owned(),
+                        SchemaFieldModelJson::new(&value.kind().to_string(), value.required()),
                     )
                 })
-                .collect::<Vec<_>>()
-                .as_ref(),
+                .collect(),
             collection_data.indexes(),
         ),
     )
@@ -265,7 +261,7 @@ async fn delete_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -277,7 +273,7 @@ async fn delete_one(
         CollectionDao::db_select(&ctx.dao.db, path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.id() != collection_data.project_id() {
@@ -285,7 +281,7 @@ async fn delete_one(
     }
 
     if let Err(err) = CollectionDao::db_delete(&ctx.dao.db, path.collection_id()).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -307,7 +303,7 @@ async fn find_many(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -316,7 +312,7 @@ async fn find_many(
 
     let project_data = match ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
@@ -326,7 +322,7 @@ async fn find_many(
     let collections_data =
         match CollectionDao::db_select_by_project_id(&ctx.dao.db, path.project_id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+            Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
     Response::data(
@@ -346,17 +342,19 @@ async fn find_many(
                     data.updated_at(),
                     data.project_id(),
                     data.name(),
-                    data.schema_fields()
+                    &data
+                        .schema_fields()
                         .iter()
-                        .map(|field| {
-                            SchemaFieldModelJson::new(
-                                field.name(),
-                                field.kind().to_string().as_str(),
-                                field.required(),
+                        .map(|(key, value)| {
+                            (
+                                key.to_owned(),
+                                SchemaFieldModelJson::new(
+                                    &value.kind().to_string(),
+                                    value.required(),
+                                ),
                             )
                         })
-                        .collect::<Vec<_>>()
-                        .as_ref(),
+                        .collect(),
                     data.indexes(),
                 )
             })

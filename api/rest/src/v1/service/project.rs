@@ -38,7 +38,7 @@ async fn insert_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -48,7 +48,7 @@ async fn insert_one(
     let project_data = ProjectDao::new(token_claim.id(), data.name());
 
     if let Err(err) = project_data.db_insert(&ctx.dao.db).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -76,7 +76,7 @@ async fn find_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -85,7 +85,7 @@ async fn find_one(
 
     let project_data = match ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
@@ -118,7 +118,7 @@ async fn update_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -127,7 +127,7 @@ async fn update_one(
 
     let mut project_data = match ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
@@ -140,7 +140,7 @@ async fn update_one(
 
     if !data.is_all_none() {
         if let Err(err) = project_data.db_update(&ctx.dao.db).await {
-            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+            return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
     }
 
@@ -169,7 +169,7 @@ async fn delete_one(
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -178,7 +178,7 @@ async fn delete_one(
 
     let project_data = match ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
@@ -186,7 +186,7 @@ async fn delete_one(
     }
 
     if let Err(err) = ProjectDao::db_delete(&ctx.dao.db, path.project_id()).await {
-        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string().as_str());
+        return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -204,7 +204,7 @@ async fn find_many(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) 
 
     let token_claim = match ctx.token.jwt.decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::Admin {
@@ -214,7 +214,7 @@ async fn find_many(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) 
     let projects_data =
         match ProjectDao::db_select_many_by_admin_id(&ctx.dao.db, token_claim.id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(StatusCode::BAD_REQUEST, err.to_string().as_str()),
+            Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
     Response::data(

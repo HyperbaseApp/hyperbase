@@ -778,8 +778,10 @@ dependencies = [
  "actix_header",
  "anyhow",
  "chrono",
+ "futures",
  "hb_dao",
  "hb_hash_argon2",
+ "hb_log",
  "hb_mailer",
  "hb_token_jwt",
  "serde",
@@ -815,6 +817,7 @@ dependencies = [
 name = "hb_db_scylladb"
 version = "0.1.0"
 dependencies = [
+ "hb_log",
  "scylla",
  "strum 0.25.0",
  "uuid",
@@ -825,12 +828,14 @@ name = "hb_hash_argon2"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "hb_log",
 ]
 
 [[package]]
 name = "hb_log"
 version = "0.1.0"
 dependencies = [
+ "backtrace",
  "tracing",
  "tracing-subscriber",
 ]
@@ -850,6 +855,7 @@ name = "hb_token_jwt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hb_log",
  "jsonwebtoken",
  "serde",
  "uuid",
