@@ -3,13 +3,17 @@ use actix_web::{
     web, App, HttpServer,
 };
 use anyhow::Result;
+use config::config;
 use context::Context;
 use error_handler::default_error_handler;
-use v1::v1_api;
+use logger::logger_format;
 
+mod config;
 pub mod context;
 mod error_handler;
-mod v1;
+mod logger;
+mod model;
+mod service;
 
 pub struct ApiRestServer {
     address: String,
@@ -18,7 +22,7 @@ pub struct ApiRestServer {
 
 impl ApiRestServer {
     pub fn new(host: &str, port: &str, ctx: Context) -> Self {
-        hb_log::info(Some("⚡"), "Creating component: ApiRestServer");
+        hb_log::info(Some("⚡"), "ApiRestServer: Creating component");
 
         let address = format!("{}:{}", host, port);
         let context = web::Data::new(ctx);
@@ -27,14 +31,14 @@ impl ApiRestServer {
     }
 
     pub async fn run(self) -> Result<()> {
-        hb_log::info(Some("💫"), "Running component: ApiRestServer");
+        hb_log::info(Some("💫"), "ApiRestServer: Running component");
 
         Ok(HttpServer::new(move || {
             App::new()
-                .wrap(Logger::default())
+                .wrap(Logger::new(logger_format()))
                 .wrap(ErrorHandlers::new().default_handler(default_error_handler))
                 .app_data(self.context.clone())
-                .service(web::scope("/api/rest/v1").configure(v1_api))
+                .service(web::scope("/api/rest").configure(config))
         })
         .bind(self.address)
         .unwrap()

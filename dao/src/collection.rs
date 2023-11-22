@@ -4,7 +4,9 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::collection::{CollectionScyllaModel, SchemaFieldScyllaKind, SchemaFieldScyllaModel},
+    model::collection::{
+        CollectionScyllaModel, SchemaFieldPropsScyllaModel, SchemaFieldScyllaKind,
+    },
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use strum::{Display, EnumString};
@@ -81,7 +83,7 @@ impl CollectionDao {
     }
 
     pub fn set_indexes(&mut self, indexes: &Vec<String>) {
-        self.indexes = indexes.to_vec();
+        self.indexes = indexes.to_owned();
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -196,7 +198,10 @@ impl CollectionDao {
                 .iter()
                 .map(|(key, value)| (key.to_owned(), SchemaFieldModel::from_scylladb_model(value)))
                 .collect(),
-            indexes: model.indexes().to_vec(),
+            indexes: match model.indexes() {
+                Some(indexes) => indexes.to_owned(),
+                None => Vec::new(),
+            },
         })
     }
 
@@ -212,7 +217,11 @@ impl CollectionDao {
                 .iter()
                 .map(|(key, value)| (key.to_owned(), value.to_scylladb_model().to_owned()))
                 .collect(),
-            &self.indexes,
+            &if self.indexes.len() > 0 {
+                Some(self.indexes.clone())
+            } else {
+                None
+            },
         )
     }
 }
@@ -239,19 +248,19 @@ impl SchemaFieldModel {
         &self.required
     }
 
-    fn from_scylladb_model(model: &SchemaFieldScyllaModel) -> Self {
+    fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Self {
         Self {
             kind: SchemaFieldKind::from_scylladb_model(model.kind()),
             required: *model.required(),
         }
     }
 
-    fn to_scylladb_model(self) -> SchemaFieldScyllaModel {
-        SchemaFieldScyllaModel::new(&self.kind.to_scylladb_model(), &self.required)
+    fn to_scylladb_model(self) -> SchemaFieldPropsScyllaModel {
+        SchemaFieldPropsScyllaModel::new(&self.kind.to_scylladb_model(), &self.required)
     }
 }
 
-#[derive(EnumString, Display, Clone, Copy)]
+#[derive(Display, EnumString, Clone, Copy)]
 pub enum SchemaFieldKind {
     Boolean,      // boolean
     TinyInteger,  // 8-bit signed int

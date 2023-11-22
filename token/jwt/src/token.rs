@@ -15,7 +15,7 @@ pub struct JwtToken {
 
 impl JwtToken {
     pub fn new(secret: &str, expiry_duration: &u64) -> Self {
-        hb_log::info(Some("⚡"), "Creating component: JwtToken");
+        hb_log::info(Some("⚡"), "JwtToken: Creating component");
 
         let secret = secret.as_bytes();
         Self {
@@ -26,7 +26,7 @@ impl JwtToken {
         }
     }
 
-    pub fn encode(&self, id: &Uuid, kind: &JwtTokenKind) -> Result<String> {
+    pub fn encode(&self, id: &Uuid, role: &Option<String>, kind: &JwtTokenKind) -> Result<String> {
         let expiration_time = time::SystemTime::now()
             .duration_since(time::UNIX_EPOCH)?
             .as_secs()
@@ -34,7 +34,7 @@ impl JwtToken {
 
         Ok(encode(
             &self.header,
-            &Claim::new(id, kind, &(expiration_time as usize)),
+            &Claim::new(id, role, kind, &(expiration_time as usize)),
             &self.encoding_key,
         )?)
     }
@@ -56,6 +56,6 @@ impl JwtToken {
     }
 
     pub fn renew(&self, claim: &Claim) -> Result<String> {
-        self.encode(claim.id(), claim.kind())
+        self.encode(claim.id(), claim.role(), claim.kind())
     }
 }

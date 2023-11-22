@@ -17,8 +17,8 @@ pub struct RegistrationDao {
     updated_at: DateTime<Utc>,
     email: String,
     password_hash: String,
-    code: String,
     role: AdminRole,
+    code: String,
 }
 
 impl RegistrationDao {
@@ -30,8 +30,8 @@ impl RegistrationDao {
             updated_at: now,
             email: email.to_string(),
             password_hash: password_hash.to_string(),
-            code: rand::thread_rng().gen_range(100000..=999999).to_string(),
             role: *role,
+            code: rand::thread_rng().gen_range(100000..=999999).to_string(),
         }
     }
 
@@ -55,12 +55,12 @@ impl RegistrationDao {
         &self.password_hash
     }
 
-    pub fn code(&self) -> &str {
-        &self.code
-    }
-
     pub fn role(&self) -> &AdminRole {
         &self.role
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -130,8 +130,8 @@ impl RegistrationDao {
             &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
             &self.email,
             &self.password_hash,
-            &self.code,
             &self.role.to_scylladb_model(),
+            &self.code,
         )
     }
 }

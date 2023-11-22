@@ -22,7 +22,7 @@ impl Mailer {
         sender_name: &str,
         sender_email: &str,
     ) -> (Self, Sender<MailPayload>) {
-        hb_log::info(Some("⚡"), "Creating component: Mailer");
+        hb_log::info(Some("⚡"), "Mailer: Creating component");
 
         let (sender, receiver) = channel::<MailPayload>();
 
@@ -57,7 +57,7 @@ impl Mailer {
 
     pub async fn run(self) -> Result<()> {
         Ok(tokio::spawn((|| async {
-            hb_log::info(Some("💫"), "Running component: Mailer");
+            hb_log::info(Some("💫"), "Mailer: Running component");
 
             let channel_receiver = self.channel_receiver;
             let message_builder = self.message_builder;

@@ -9,27 +9,37 @@ use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
     context::Context,
-    v1::model::{
+    model::{
         collection::{
             CollectionResJson, DeleteCollectionResJson, DeleteOneCollectionReqPath,
-            FindOneCollectionReqPath, InsertOneCollectionReqJson, InsertOneCollectionReqPath,
-            SchemaFieldModelJson, UpdateOneCollectionReqJson, UpdateOneCollectionReqPath,
+            FindManyCollectionReqPath, FindOneCollectionReqPath, InsertOneCollectionReqJson,
+            InsertOneCollectionReqPath, SchemaFieldModelJson, UpdateOneCollectionReqJson,
+            UpdateOneCollectionReqPath,
         },
         PaginationRes, Response, TokenReqHeader,
     },
 };
 
 pub fn collection_api(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/project/{project_id}/collection")
-            .route("", web::post().to(insert_one))
-            .route("/{collection_id}", web::get().to(find_one))
-            .route("/{collection_id}", web::patch().to(update_one))
-            .route("/{collection_id}", web::patch().to(delete_one)),
-    );
-
-    cfg.service(
-        web::scope("/project/{project_id}/collections").route("", web::get().to(find_many)),
+    cfg.route(
+        "/project/{project_id}/collection",
+        web::post().to(insert_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}",
+        web::get().to(find_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}",
+        web::patch().to(update_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}",
+        web::delete().to(delete_one),
+    )
+    .route(
+        "/project/{project_id}/collections",
+        web::get().to(find_many),
     );
 }
 
@@ -49,9 +59,16 @@ async fn insert_one(
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
+
+    if let Err(err) = ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {
+        return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
+    };
 
     let mut schema_fields = HashMap::with_capacity(data.schema_fields().len());
     for (key, value) in data.schema_fields().iter() {
@@ -71,9 +88,11 @@ async fn insert_one(
         path.project_id(),
         data.name(),
         &schema_fields,
-        data.indexes(),
+        &match data.indexes() {
+            Some(indexes) => indexes.to_vec(),
+            None => Vec::new(),
+        },
     );
-
     if let Err(err) = collection_data.db_insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
@@ -117,8 +136,11 @@ async fn find_one(
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     let (project_data, collection_data) = match tokio::try_join!(
@@ -173,8 +195,11 @@ async fn update_one(
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     let (project_data, mut collection_data) = match tokio::try_join!(
@@ -264,8 +289,11 @@ async fn delete_one(
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     let (project_data, collection_data) = match tokio::try_join!(
@@ -294,7 +322,7 @@ async fn delete_one(
 async fn find_many(
     ctx: web::Data<Context>,
     token: web::Header<TokenReqHeader>,
-    path: web::Path<DeleteOneCollectionReqPath>,
+    path: web::Path<FindManyCollectionReqPath>,
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
@@ -306,8 +334,11 @@ async fn find_many(
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     let project_data = match ProjectDao::db_select(&ctx.dao.db, path.project_id()).await {

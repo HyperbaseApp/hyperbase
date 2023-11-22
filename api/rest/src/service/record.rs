@@ -8,7 +8,7 @@ use hb_dao::{
 
 use crate::{
     context::Context,
-    v1::model::{
+    model::{
         record::{
             DeleteOneRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson,
             InsertOneRecordReqPath, UpdateOneRecordReqJson, UpdateOneRecordReqPath,
@@ -18,12 +18,21 @@ use crate::{
 };
 
 pub fn record_api(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/project/{project_id}/collection/{collection_id}/record")
-            .route("", web::post().to(insert_one))
-            .route("/{record_id}", web::get().to(find_one))
-            .route("/{record_id}", web::patch().to(update_one))
-            .route("/{delete_one}", web::delete().to(delete_one)),
+    cfg.route(
+        "/project/{project_id}/collection/{collection_id}/record",
+        web::post().to(insert_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}/record/{record_id}",
+        web::get().to(find_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}/record/{record_id}",
+        web::patch().to(update_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}/record/{delete_one}",
+        web::delete().to(delete_one),
     );
 }
 

@@ -10,8 +10,8 @@ pub struct RegistrationScyllaModel {
     updated_at: Timestamp,
     email: String,
     password_hash: String,
-    code: String,
     role: AdminScyllaRole,
+    code: String,
 }
 
 impl RegistrationScyllaModel {
@@ -21,8 +21,8 @@ impl RegistrationScyllaModel {
         updated_at: &Timestamp,
         email: &str,
         password_hash: &str,
-        code: &str,
         role: &AdminScyllaRole,
+        code: &str,
     ) -> Self {
         Self {
             id: *id,
@@ -30,8 +30,8 @@ impl RegistrationScyllaModel {
             updated_at: *updated_at,
             email: email.to_string(),
             password_hash: password_hash.to_string(),
-            code: code.to_string(),
             role: *role,
+            code: code.to_string(),
         }
     }
 
@@ -59,11 +59,11 @@ impl RegistrationScyllaModel {
         &self.password_hash
     }
 
-    pub fn code(&self) -> &str {
-        &self.code
-    }
-
     pub fn role(&self) -> &AdminScyllaRole {
         &self.role
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
     }
 }

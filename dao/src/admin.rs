@@ -5,7 +5,7 @@ use hb_db_scylladb::{
     model::admin::{AdminScyllaModel, AdminScyllaRole},
 };
 use scylla::frame::value::Timestamp;
-use strum::EnumString;
+use strum::{Display, EnumString};
 use uuid::Uuid;
 
 use crate::{
@@ -55,12 +55,20 @@ impl AdminDao {
         &self.password_hash
     }
 
+    pub fn role(&self) -> &AdminRole {
+        &self.role
+    }
+
     pub fn set_email(&mut self, email: &str) {
         self.email = email.to_string()
     }
 
     pub fn set_password_hash(&mut self, password_hash: &str) {
         self.password_hash = password_hash.to_string();
+    }
+
+    pub fn set_role(&mut self, role: &AdminRole) {
+        self.role = *role
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -162,7 +170,7 @@ impl AdminDao {
     }
 }
 
-#[derive(EnumString, Clone, Copy)]
+#[derive(Display, EnumString, Clone, Copy)]
 pub enum AdminRole {
     SuperUser,
     User,

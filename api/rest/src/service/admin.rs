@@ -1,22 +1,21 @@
+use std::str::FromStr;
+
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::admin::AdminDao;
+use hb_dao::admin::{AdminDao, AdminRole};
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
     context::Context,
-    v1::model::{
+    model::{
         admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
         Response, TokenReqHeader,
     },
 };
 
 pub fn admin_api(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/admin")
-            .route("", web::get().to(find_one))
-            .route("", web::patch().to(update_one))
-            .route("", web::delete().to(delete_one)),
-    );
+    cfg.route("/admin", web::get().to(find_one))
+        .route("/admin", web::patch().to(update_one))
+        .route("/admin", web::delete().to(delete_one));
 }
 
 async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
@@ -30,8 +29,11 @@ async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     let admin_data = match AdminDao::db_select(&ctx.dao.db, token_claim.id()).await {
@@ -66,8 +68,11 @@ async fn update_one(
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     let mut admin_data = match AdminDao::db_select(&ctx.dao.db, token_claim.id()).await {
@@ -88,6 +93,25 @@ async fn update_one(
         };
 
         admin_data.set_password_hash(&password_hash.to_string());
+    }
+    if let Some(role) = data.role() {
+        if let Some(token_role) = token_claim.role() {
+            if token_role == &AdminRole::SuperUser.to_string() {
+                let role = match AdminRole::from_str(role) {
+                    Ok(role) => role,
+                    Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
+                };
+
+                admin_data.set_role(&role);
+            } else {
+                return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as SuperUser");
+            }
+        } else {
+            return Response::error(
+                StatusCode::BAD_REQUEST,
+                "Must be logged in as SuperUser using password-based login",
+            );
+        }
     }
 
     if let Err(err) = admin_data.db_update(&ctx.dao.db).await {
@@ -117,8 +141,11 @@ async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>)
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as admin");
+    if token_claim.kind() != &JwtTokenKind::User {
+        return Response::error(
+            StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
     }
 
     if let Err(err) = AdminDao::db_delete(&ctx.dao.db, token_claim.id()).await {

@@ -21,7 +21,7 @@ impl ScyllaDb {
         replication_factor: &i64,
         temporary_ttl: &i64,
     ) -> Self {
-        hb_log::info(Some("⚡"), "Creating component: ScyllaDb");
+        hb_log::info(Some("⚡"), "ScyllaDb: Creating component");
 
         let uri = format!("{}:{}", host, port);
         let session = SessionBuilder::new().known_node(uri).build().await.unwrap();
@@ -43,14 +43,17 @@ impl ScyllaDb {
 
     async fn init(session: &Session, replication_factor: &i64, temporary_ttl: &i64) {
         // Create keyspace
+        hb_log::info(Some("🔧"), "ScyllaDb: Init Db - Creating keyspace");
         session.query(format!("CREATE KEYSPACE IF NOT EXISTS ks WITH REPLICATION = {{'class' : 'NetworkTopologyStrategy', 'replication_factor' :{}}}", replication_factor), &[]).await.unwrap();
 
         // Create types
-        session.query("CREATE TYPE IF NOT EXISTS ks.schema_field (\"name\" text, \"kind\" text, \"required\" boolean)", &[]).await.unwrap();
+        hb_log::info(Some("🔧"), "ScyllaDb: Init Db - Creating types");
+        session.query("CREATE TYPE IF NOT EXISTS ks.schema_field_props (\"kind\" text, \"required\" boolean)", &[]).await.unwrap();
 
         // Create tables
+        hb_log::info(Some("🔧"), "ScyllaDb: Init Db - Creating tables");
         // admins
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))", AdminPreparedStatement::table_name()),&[]).await.unwrap();
+        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"role\" text, PRIMARY KEY (\"id\"))", AdminPreparedStatement::table_name()),&[]).await.unwrap();
         session
             .query(
                 format!(
@@ -86,7 +89,7 @@ impl ScyllaDb {
             .await
             .unwrap();
         // collections
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" list<frozen<schema_field>>, \"indexes\" list<text>, PRIMARY KEY (\"id\"))", CollectionPreparedStatement::table_name()), &[]).await.unwrap();
+        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" frozen<map<text, schema_field_props>>, \"indexes\" list<text>, PRIMARY KEY (\"id\"))", CollectionPreparedStatement::table_name()), &[]).await.unwrap();
         session
             .query(
                 format!(
@@ -98,7 +101,7 @@ impl ScyllaDb {
             .await
             .unwrap();
         // registrations
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", RegistrationPreparedStatement::table_name(), temporary_ttl ), &[]).await.unwrap();
+        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"role\" text, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", RegistrationPreparedStatement::table_name(), temporary_ttl ), &[]).await.unwrap();
         // admin_password_resets
         session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", AdminPasswordResetPreparedStatement::table_name(), temporary_ttl), &[]).await.unwrap();
     }

@@ -18,8 +18,8 @@ pub struct CollectionScyllaModel {
     updated_at: Timestamp,
     project_id: Uuid,
     name: String,
-    schema_fields: HashMap<String, SchemaFieldScyllaModel>,
-    indexes: Vec<String>,
+    schema_fields: HashMap<String, SchemaFieldPropsScyllaModel>,
+    indexes: Option<Vec<String>>,
 }
 
 impl CollectionScyllaModel {
@@ -29,8 +29,8 @@ impl CollectionScyllaModel {
         updated_at: &Timestamp,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &HashMap<String, SchemaFieldScyllaModel>,
-        indexes: &Vec<String>,
+        schema_fields: &HashMap<String, SchemaFieldPropsScyllaModel>,
+        indexes: &Option<Vec<String>>,
     ) -> Self {
         Self {
             id: *id,
@@ -39,7 +39,7 @@ impl CollectionScyllaModel {
             project_id: *project_id,
             name: name.to_string(),
             schema_fields: schema_fields.to_owned(),
-            indexes: indexes.to_vec(),
+            indexes: indexes.to_owned(),
         }
     }
 
@@ -63,22 +63,22 @@ impl CollectionScyllaModel {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldScyllaModel> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsScyllaModel> {
         &self.schema_fields
     }
 
-    pub fn indexes(&self) -> &Vec<String> {
+    pub fn indexes(&self) -> &Option<Vec<String>> {
         &self.indexes
     }
 }
 
 #[derive(IntoUserType, FromUserType, Clone)]
-pub struct SchemaFieldScyllaModel {
+pub struct SchemaFieldPropsScyllaModel {
     kind: SchemaFieldScyllaKind,
     required: bool,
 }
 
-impl SchemaFieldScyllaModel {
+impl SchemaFieldPropsScyllaModel {
     pub fn new(kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
         Self {
             kind: *kind,

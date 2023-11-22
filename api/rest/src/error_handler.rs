@@ -7,7 +7,7 @@ use actix_web::{
 };
 use futures::executor;
 
-use crate::v1::model::Response;
+use crate::model::Response;
 
 pub fn default_error_handler<B: MessageBody>(
     svc_res: ServiceResponse<B>,

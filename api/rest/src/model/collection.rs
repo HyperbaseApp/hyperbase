@@ -18,9 +18,8 @@ impl InsertOneCollectionReqPath {
 #[derive(Deserialize)]
 pub struct InsertOneCollectionReqJson {
     name: String,
-    #[serde(rename = "schemaFields")]
     schema_fields: HashMap<String, SchemaFieldModelJson>,
-    indexes: Vec<String>,
+    indexes: Option<Vec<String>>,
 }
 
 impl InsertOneCollectionReqJson {
@@ -32,7 +31,7 @@ impl InsertOneCollectionReqJson {
         &self.schema_fields
     }
 
-    pub fn indexes(&self) -> &Vec<String> {
+    pub fn indexes(&self) -> &Option<Vec<String>> {
         &self.indexes
     }
 }
@@ -72,7 +71,6 @@ impl UpdateOneCollectionReqPath {
 #[derive(Deserialize)]
 pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
-    #[serde(rename = "schemaFields")]
     schema_fields: Option<HashMap<String, SchemaFieldModelJson>>,
     indexes: Option<Vec<String>>,
 }
@@ -110,6 +108,17 @@ impl DeleteOneCollectionReqPath {
 
     pub fn collection_id(&self) -> &Uuid {
         &self.collection_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct FindManyCollectionReqPath {
+    project_id: Uuid,
+}
+
+impl FindManyCollectionReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
     }
 }
 
