@@ -13,10 +13,6 @@ impl UpdateOneAdminReqJson {
     pub fn password(&self) -> &Option<String> {
         &self.password
     }
-
-    pub fn role(&self) -> &Option<String> {
-        &self.role
-    }
 }
 
 impl UpdateOneAdminReqJson {
@@ -44,7 +40,7 @@ impl AdminResJson {
             id: *id,
             created_at: *created_at,
             updated_at: *updated_at,
-            email: email.to_string(),
+            email: email.to_owned(),
         }
     }
 }

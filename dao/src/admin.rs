@@ -1,11 +1,7 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_db_scylladb::{
-    db::ScyllaDb,
-    model::admin::{AdminScyllaModel, AdminScyllaRole},
-};
+use hb_db_scylladb::{db::ScyllaDb, model::admin::AdminScyllaModel};
 use scylla::frame::value::Timestamp;
-use strum::{Display, EnumString};
 use uuid::Uuid;
 
 use crate::{
@@ -19,19 +15,17 @@ pub struct AdminDao {
     updated_at: DateTime<Utc>,
     email: String,
     password_hash: String,
-    role: AdminRole,
 }
 
 impl AdminDao {
-    pub fn new(email: &str, password_hash: &str, role: &AdminRole) -> Self {
+    pub fn new(email: &str, password_hash: &str) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             created_at: now,
             updated_at: now,
-            email: email.to_string(),
-            password_hash: password_hash.to_string(),
-            role: *role,
+            email: email.to_owned(),
+            password_hash: password_hash.to_owned(),
         }
     }
 
@@ -55,20 +49,12 @@ impl AdminDao {
         &self.password_hash
     }
 
-    pub fn role(&self) -> &AdminRole {
-        &self.role
-    }
-
     pub fn set_email(&mut self, email: &str) {
-        self.email = email.to_string()
+        self.email = email.to_owned()
     }
 
     pub fn set_password_hash(&mut self, password_hash: &str) {
-        self.password_hash = password_hash.to_string();
-    }
-
-    pub fn set_role(&mut self, role: &AdminRole) {
-        self.role = *role
+        self.password_hash = password_hash.to_owned();
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -152,9 +138,8 @@ impl AdminDao {
             id: *model.id(),
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
-            email: model.email().to_string(),
-            password_hash: model.password_hash().to_string(),
-            role: AdminRole::from_scylladb_model(model.role()),
+            email: model.email().to_owned(),
+            password_hash: model.password_hash().to_owned(),
         })
     }
 
@@ -165,29 +150,6 @@ impl AdminDao {
             &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
             &self.email,
             &self.password_hash,
-            &self.role.to_scylladb_model(),
         )
-    }
-}
-
-#[derive(Display, EnumString, Clone, Copy)]
-pub enum AdminRole {
-    SuperUser,
-    User,
-}
-
-impl AdminRole {
-    pub fn from_scylladb_model(model: &AdminScyllaRole) -> Self {
-        match model {
-            AdminScyllaRole::SuperUser => Self::SuperUser,
-            AdminScyllaRole::User => Self::User,
-        }
-    }
-
-    pub fn to_scylladb_model(&self) -> AdminScyllaRole {
-        match self {
-            AdminRole::SuperUser => AdminScyllaRole::SuperUser,
-            AdminRole::User => AdminScyllaRole::User,
-        }
     }
 }

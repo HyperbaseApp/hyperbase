@@ -89,7 +89,7 @@ impl AdminPasswordResetDao {
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
             admin_id: *model.admin_id(),
-            code: model.code().to_string(),
+            code: model.code().to_owned(),
         })
     }
 

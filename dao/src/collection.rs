@@ -23,7 +23,7 @@ pub struct CollectionDao {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
-    schema_fields: HashMap<String, SchemaFieldModel>,
+    schema_fields: HashMap<String, SchemaFieldPropsModel>,
     indexes: Vec<String>,
 }
 
@@ -31,7 +31,7 @@ impl CollectionDao {
     pub fn new(
         project_id: &Uuid,
         name: &str,
-        schema_fields: &HashMap<String, SchemaFieldModel>,
+        schema_fields: &HashMap<String, SchemaFieldPropsModel>,
         indexes: &Vec<String>,
     ) -> Self {
         let now = Utc::now();
@@ -40,7 +40,7 @@ impl CollectionDao {
             created_at: now,
             updated_at: now,
             project_id: *project_id,
-            name: name.to_string(),
+            name: name.to_owned(),
             schema_fields: schema_fields.to_owned(),
             indexes: indexes.to_vec(),
         }
@@ -66,7 +66,7 @@ impl CollectionDao {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldModel> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsModel> {
         &self.schema_fields
     }
 
@@ -75,10 +75,10 @@ impl CollectionDao {
     }
 
     pub fn set_name(&mut self, name: &str) {
-        self.name = name.to_string();
+        self.name = name.to_owned();
     }
 
-    pub fn set_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldModel>) {
+    pub fn set_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldPropsModel>) {
         self.schema_fields = schema_fields.to_owned();
     }
 
@@ -192,11 +192,16 @@ impl CollectionDao {
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
             project_id: *model.project_id(),
-            name: model.name().to_string(),
+            name: model.name().to_owned(),
             schema_fields: model
                 .schema_fields()
                 .iter()
-                .map(|(key, value)| (key.to_owned(), SchemaFieldModel::from_scylladb_model(value)))
+                .map(|(key, value)| {
+                    (
+                        key.to_owned(),
+                        SchemaFieldPropsModel::from_scylladb_model(value),
+                    )
+                })
                 .collect(),
             indexes: match model.indexes() {
                 Some(indexes) => indexes.to_owned(),
@@ -227,12 +232,12 @@ impl CollectionDao {
 }
 
 #[derive(Clone, Copy)]
-pub struct SchemaFieldModel {
+pub struct SchemaFieldPropsModel {
     kind: SchemaFieldKind,
     required: bool,
 }
 
-impl SchemaFieldModel {
+impl SchemaFieldPropsModel {
     pub fn new(kind: &SchemaFieldKind, required: &bool) -> Self {
         Self {
             kind: *kind,

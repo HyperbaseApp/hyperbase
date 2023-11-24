@@ -6,7 +6,6 @@ use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
 use crate::{
-    admin::AdminRole,
     util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
     Db,
 };
@@ -17,20 +16,18 @@ pub struct RegistrationDao {
     updated_at: DateTime<Utc>,
     email: String,
     password_hash: String,
-    role: AdminRole,
     code: String,
 }
 
 impl RegistrationDao {
-    pub fn new(email: &str, password_hash: &str, role: &AdminRole) -> Self {
+    pub fn new(email: &str, password_hash: &str) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             created_at: now,
             updated_at: now,
-            email: email.to_string(),
-            password_hash: password_hash.to_string(),
-            role: *role,
+            email: email.to_owned(),
+            password_hash: password_hash.to_owned(),
             code: rand::thread_rng().gen_range(100000..=999999).to_string(),
         }
     }
@@ -53,10 +50,6 @@ impl RegistrationDao {
 
     pub fn password_hash(&self) -> &str {
         &self.password_hash
-    }
-
-    pub fn role(&self) -> &AdminRole {
-        &self.role
     }
 
     pub fn code(&self) -> &str {
@@ -116,10 +109,9 @@ impl RegistrationDao {
             id: *model.id(),
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
-            email: model.email().to_string(),
-            password_hash: model.password_hash().to_string(),
-            code: model.code().to_string(),
-            role: AdminRole::from_scylladb_model(model.role()),
+            email: model.email().to_owned(),
+            password_hash: model.password_hash().to_owned(),
+            code: model.code().to_owned(),
         })
     }
 
@@ -130,7 +122,6 @@ impl RegistrationDao {
             &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
             &self.email,
             &self.password_hash,
-            &self.role.to_scylladb_model(),
             &self.code,
         )
     }

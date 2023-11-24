@@ -25,7 +25,7 @@ impl TokenScyllaModel {
             created_at: *created_at,
             updated_at: *updated_at,
             admin_id: *admin_id,
-            token: token.to_string(),
+            token: token.to_owned(),
             expired_at: *expired_at,
         }
     }

@@ -26,7 +26,7 @@ impl TokenDao {
             created_at: now,
             updated_at: now,
             admin_id: *admin_id,
-            token: token.to_string(),
+            token: token.to_owned(),
             expired_at: *expired_at,
         }
     }
@@ -109,7 +109,7 @@ impl TokenDao {
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
             admin_id: *model.admin_id(),
-            token: model.token().to_string(),
+            token: model.token().to_owned(),
             expired_at: duration_since_epoch_to_datetime(model.expired_at().0)?,
         })
     }

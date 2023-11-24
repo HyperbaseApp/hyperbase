@@ -25,7 +25,7 @@ impl ProjectDao {
             created_at: now,
             updated_at: now,
             admin_id: *admin_id,
-            name: name.to_string(),
+            name: name.to_owned(),
         }
     }
 
@@ -50,7 +50,7 @@ impl ProjectDao {
     }
 
     pub fn set_name(&mut self, name: &str) {
-        self.name = name.to_string();
+        self.name = name.to_owned();
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -147,7 +147,7 @@ impl ProjectDao {
             created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
             admin_id: *model.admin_id(),
-            name: model.name().to_string(),
+            name: model.name().to_owned(),
         })
     }
 

@@ -1,8 +1,6 @@
 use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
-use super::admin::AdminScyllaRole;
-
 #[derive(ValueList, FromRow)]
 pub struct RegistrationScyllaModel {
     id: Uuid,
@@ -10,7 +8,6 @@ pub struct RegistrationScyllaModel {
     updated_at: Timestamp,
     email: String,
     password_hash: String,
-    role: AdminScyllaRole,
     code: String,
 }
 
@@ -21,17 +18,15 @@ impl RegistrationScyllaModel {
         updated_at: &Timestamp,
         email: &str,
         password_hash: &str,
-        role: &AdminScyllaRole,
         code: &str,
     ) -> Self {
         Self {
             id: *id,
             created_at: *created_at,
             updated_at: *updated_at,
-            email: email.to_string(),
-            password_hash: password_hash.to_string(),
-            role: *role,
-            code: code.to_string(),
+            email: email.to_owned(),
+            password_hash: password_hash.to_owned(),
+            code: code.to_owned(),
         }
     }
 
@@ -57,10 +52,6 @@ impl RegistrationScyllaModel {
 
     pub fn password_hash(&self) -> &str {
         &self.password_hash
-    }
-
-    pub fn role(&self) -> &AdminScyllaRole {
-        &self.role
     }
 
     pub fn code(&self) -> &str {

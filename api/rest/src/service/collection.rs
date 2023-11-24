@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
-    collection::{CollectionDao, SchemaFieldKind, SchemaFieldModel},
+    collection::{CollectionDao, SchemaFieldKind, SchemaFieldPropsModel},
     project::ProjectDao,
 };
 use hb_token_jwt::kind::JwtTokenKind;
@@ -13,7 +13,7 @@ use crate::{
         collection::{
             CollectionResJson, DeleteCollectionResJson, DeleteOneCollectionReqPath,
             FindManyCollectionReqPath, FindOneCollectionReqPath, InsertOneCollectionReqJson,
-            InsertOneCollectionReqPath, SchemaFieldModelJson, UpdateOneCollectionReqJson,
+            InsertOneCollectionReqPath, SchemaFieldPropsModelJson, UpdateOneCollectionReqJson,
             UpdateOneCollectionReqPath,
         },
         PaginationRes, Response, TokenReqHeader,
@@ -74,7 +74,7 @@ async fn insert_one(
     for (key, value) in data.schema_fields().iter() {
         schema_fields.insert(
             key.to_owned(),
-            SchemaFieldModel::new(
+            SchemaFieldPropsModel::new(
                 &match SchemaFieldKind::from_str(value.kind()) {
                     Ok(kind) => kind,
                     Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
@@ -112,7 +112,7 @@ async fn insert_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldModelJson::new(&value.kind().to_string(), value.required()),
+                        SchemaFieldPropsModelJson::new(&value.kind().to_string(), value.required()),
                     )
                 })
                 .collect(),
@@ -170,7 +170,7 @@ async fn find_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldModelJson::new(&value.kind().to_string(), value.required()),
+                        SchemaFieldPropsModelJson::new(&value.kind().to_string(), value.required()),
                     )
                 })
                 .collect(),
@@ -223,7 +223,7 @@ async fn update_one(
         for (key, value) in schema_field.iter() {
             schema_fields.insert(
                 key.to_owned(),
-                SchemaFieldModel::new(
+                SchemaFieldPropsModel::new(
                     match &SchemaFieldKind::from_str(value.kind()) {
                         Ok(kind) => kind,
                         Err(err) => {
@@ -265,7 +265,7 @@ async fn update_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldModelJson::new(&value.kind().to_string(), value.required()),
+                        SchemaFieldPropsModelJson::new(&value.kind().to_string(), value.required()),
                     )
                 })
                 .collect(),
@@ -379,7 +379,7 @@ async fn find_many(
                         .map(|(key, value)| {
                             (
                                 key.to_owned(),
-                                SchemaFieldModelJson::new(
+                                SchemaFieldPropsModelJson::new(
                                     &value.kind().to_string(),
                                     value.required(),
                                 ),

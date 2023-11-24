@@ -1,7 +1,5 @@
-use std::str::FromStr;
-
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::admin::{AdminDao, AdminRole};
+use hb_dao::admin::AdminDao;
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
@@ -93,25 +91,6 @@ async fn update_one(
         };
 
         admin_data.set_password_hash(&password_hash.to_string());
-    }
-    if let Some(role) = data.role() {
-        if let Some(token_role) = token_claim.role() {
-            if token_role == &AdminRole::SuperUser.to_string() {
-                let role = match AdminRole::from_str(role) {
-                    Ok(role) => role,
-                    Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
-                };
-
-                admin_data.set_role(&role);
-            } else {
-                return Response::error(StatusCode::BAD_REQUEST, "Must be logged in as SuperUser");
-            }
-        } else {
-            return Response::error(
-                StatusCode::BAD_REQUEST,
-                "Must be logged in as SuperUser using password-based login",
-            );
-        }
     }
 
     if let Err(err) = admin_data.db_update(&ctx.dao.db).await {

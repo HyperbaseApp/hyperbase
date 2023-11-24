@@ -23,7 +23,7 @@ impl ProjectScyllaModel {
             created_at: *created_at,
             updated_at: *updated_at,
             admin_id: *admin_id,
-            name: name.to_string(),
+            name: name.to_owned(),
         }
     }
 

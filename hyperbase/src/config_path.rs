@@ -3,7 +3,7 @@ use std::fs;
 pub fn get() -> String {
     let config_path = match std::env::var("HB_CONFIG_PATH") {
         Ok(path) => path,
-        Err(_) => "config.yml".to_string(),
+        Err(_) => "config.yml".to_owned(),
     };
 
     if let Err(_) = fs::metadata(&config_path) {

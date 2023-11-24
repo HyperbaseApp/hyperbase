@@ -65,10 +65,10 @@ impl Response {
         HttpResponseBuilder::new(status_code).json(Self {
             error: Some(ErrorRes {
                 status: match status_code.canonical_reason() {
-                    Some(status_code) => status_code.to_string(),
-                    None => "Unknown".to_string(),
+                    Some(status_code) => status_code.to_owned(),
+                    None => "Unknown".to_owned(),
                 },
-                message: message.to_string(),
+                message: message.to_owned(),
             }),
             pagination: None,
             data: None,

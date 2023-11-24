@@ -1,10 +1,6 @@
-use std::str::FromStr;
-
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
-    admin::{AdminDao, AdminRole},
-    admin_password_reset::AdminPasswordResetDao,
-    register::RegistrationDao,
+    admin::AdminDao, admin_password_reset::AdminPasswordResetDao, register::RegistrationDao,
     token::TokenDao,
 };
 use hb_mailer::MailPayload;
@@ -14,10 +10,10 @@ use validator::Validate;
 use crate::{
     model::{
         auth::{
-            ConfirmPasswordResetReqJson, ConfirmPasswordResetResJson, PasswordBasedReqJson,
-            RegisterReqJson, RegisterResJson, RequestPasswordResetReqJson,
-            RequestPasswordResetResJson, TokenBasedReqJson, TokenResJson,
-            VerifyRegistrationReqJson, VerifyRegistrationResJson,
+            AuthTokenResJson, ConfirmPasswordResetReqJson, ConfirmPasswordResetResJson,
+            PasswordBasedReqJson, RegisterReqJson, RegisterResJson, RequestPasswordResetReqJson,
+            RequestPasswordResetResJson, TokenBasedReqJson, VerifyRegistrationReqJson,
+            VerifyRegistrationResJson,
         },
         Response, TokenReqHeader,
     },
@@ -64,13 +60,13 @@ async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> H
                     }
                 }
             } else {
-                token.to_string()
+                token.to_owned()
             }
         }
         Err(err) => return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     };
 
-    Response::data(StatusCode::OK, None, TokenResJson::new(&token))
+    Response::data(StatusCode::OK, None, AuthTokenResJson::new(&token))
 }
 
 async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> HttpResponse {
@@ -87,14 +83,7 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
         Err(err) => return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     };
 
-    let registration_data = RegistrationDao::new(
-        data.email(),
-        &password_hash.to_string(),
-        &match AdminRole::from_str(data.role()) {
-            Ok(role) => role,
-            Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
-        },
-    );
+    let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
 
     if let Err(err) = registration_data.db_insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -132,11 +121,7 @@ async fn verify_registration(
         return Response::error(StatusCode::BAD_REQUEST, "Wrong code");
     }
 
-    let admin_data = AdminDao::new(
-        registration_data.email(),
-        registration_data.password_hash(),
-        registration_data.role(),
-    );
+    let admin_data = AdminDao::new(registration_data.email(), registration_data.password_hash());
 
     if let Err(err) = admin_data.db_insert(&ctx.dao.db).await {
         return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -174,16 +159,12 @@ async fn password_based(
         return Response::error(StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let token = match ctx.token.jwt.encode(
-        admin_data.id(),
-        &Some(admin_data.role().to_string()),
-        &JwtTokenKind::User,
-    ) {
+    let token = match ctx.token.jwt.encode(admin_data.id(), &JwtTokenKind::User) {
         Ok(token) => token,
         Err(err) => return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     };
 
-    Response::data(StatusCode::OK, None, TokenResJson::new(&token))
+    Response::data(StatusCode::OK, None, AuthTokenResJson::new(&token))
 }
 
 async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>) -> HttpResponse {
@@ -192,16 +173,12 @@ async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>
         Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let token = match ctx
-        .token
-        .jwt
-        .encode(token_data.id(), &None, &JwtTokenKind::Token)
-    {
+    let token = match ctx.token.jwt.encode(token_data.id(), &JwtTokenKind::Token) {
         Ok(token) => token,
         Err(err) => return Response::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     };
 
-    Response::data(StatusCode::OK, None, TokenResJson::new(&token))
+    Response::data(StatusCode::OK, None, AuthTokenResJson::new(&token))
 }
 
 async fn request_password_reset(

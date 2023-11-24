@@ -23,7 +23,7 @@ impl AdminPasswordResetScyllaModel {
             created_at: *created_at,
             updated_at: *updated_at,
             admin_id: *admin_id,
-            code: code.to_string(),
+            code: code.to_owned(),
         }
     }
 

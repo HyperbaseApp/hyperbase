@@ -7,7 +7,6 @@ pub struct RegisterReqJson {
     #[validate(email)]
     email: String,
     password: String,
-    role: String,
 }
 
 impl RegisterReqJson {
@@ -17,10 +16,6 @@ impl RegisterReqJson {
 
     pub fn password(&self) -> &str {
         &self.password
-    }
-
-    pub fn role(&self) -> &str {
-        &self.role
     }
 }
 
@@ -124,14 +119,14 @@ impl VerifyRegistrationResJson {
 }
 
 #[derive(Serialize)]
-pub struct TokenResJson {
+pub struct AuthTokenResJson {
     token: String,
 }
 
-impl TokenResJson {
+impl AuthTokenResJson {
     pub fn new(token: &str) -> Self {
         Self {
-            token: token.to_string(),
+            token: token.to_owned(),
         }
     }
 }

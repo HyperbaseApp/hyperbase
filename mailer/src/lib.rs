@@ -33,8 +33,8 @@ impl Mailer {
                 smtp_transport: SmtpTransport::relay(smtp_host)
                     .unwrap()
                     .credentials(Credentials::new(
-                        smtp_username.to_string(),
-                        smtp_password.to_string(),
+                        smtp_username.to_owned(),
+                        smtp_password.to_owned(),
                     ))
                     .build(),
                 channel_receiver: Mutex::new(receiver),
@@ -111,9 +111,9 @@ pub struct MailPayload {
 impl MailPayload {
     pub fn new(to: &str, subject: &str, body: &str) -> Self {
         Self {
-            to: to.to_string(),
-            subject: subject.to_string(),
-            body: body.to_string(),
+            to: to.to_owned(),
+            subject: subject.to_owned(),
+            body: body.to_owned(),
         }
     }
 }
