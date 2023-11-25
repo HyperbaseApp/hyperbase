@@ -2,6 +2,7 @@ use hb_api_rest::{
     context::{Context as ApiRestCtx, DaoCtx, HashCtx, MailerCtx, TokenCtx},
     ApiRestServer,
 };
+use hb_dao::Db;
 use hb_db_scylladb::db::ScyllaDb;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::Mailer;
@@ -38,26 +39,24 @@ async fn main() {
         config.db().scylla().host(),
         config.db().scylla().port(),
         config.db().scylla().replication_factor(),
-        config.db().scylla().temporary_ttl(),
+        config.db().scylla().prepared_statement_cache_size(),
+        config.db().scylla().table_properties().registration_ttl(),
+        config.db().scylla().table_properties().reset_password_ttl(),
     )
     .await;
 
     let api_rest_server = ApiRestServer::new(
         config.api().rest().host(),
         config.api().rest().port(),
-        ApiRestCtx {
-            hash: HashCtx {
-                argon2: argon2_hash,
-            },
-            token: TokenCtx { jwt: jwt_token },
-            mailer: MailerCtx {
-                sender: mailer_sender,
-            },
-            dao: DaoCtx {
-                db: hb_dao::Db::ScyllaDb(scylla_db),
-            },
-            verification_code_ttl: *config.db().scylla().temporary_ttl(),
-        },
+        ApiRestCtx::new(
+            HashCtx::new(argon2_hash),
+            TokenCtx::new(jwt_token),
+            MailerCtx::new(mailer_sender),
+            DaoCtx::new(Db::ScyllaDb(scylla_db)),
+            *config.db().scylla().table_properties().registration_ttl(),
+            *config.db().scylla().table_properties().reset_password_ttl(),
+            *config.auth().access_token_length(),
+        ),
     );
 
     tokio::try_join!(mailer.run(), api_rest_server.run()).unwrap();

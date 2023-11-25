@@ -10,6 +10,7 @@ pub struct Config {
     mailer: MailerConfig,
     db: DbConfig,
     api: ApiConfig,
+    auth: AuthConfig,
 }
 
 impl Config {
@@ -35,6 +36,10 @@ impl Config {
 
     pub fn api(&self) -> &ApiConfig {
         &self.api
+    }
+
+    pub fn auth(&self) -> &AuthConfig {
+        &self.auth
     }
 }
 
@@ -160,7 +165,8 @@ pub struct DbScyllaConfig {
     host: String,
     port: String,
     replication_factor: i64,
-    temporary_ttl: i64,
+    prepared_statement_cache_size: usize,
+    table_properties: DbScyllaConfigTableProperties,
 }
 
 impl DbScyllaConfig {
@@ -176,8 +182,28 @@ impl DbScyllaConfig {
         &self.replication_factor
     }
 
-    pub fn temporary_ttl(&self) -> &i64 {
-        &self.temporary_ttl
+    pub fn prepared_statement_cache_size(&self) -> &usize {
+        &self.prepared_statement_cache_size
+    }
+
+    pub fn table_properties(&self) -> &DbScyllaConfigTableProperties {
+        &self.table_properties
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DbScyllaConfigTableProperties {
+    registration_ttl: i64,
+    reset_password_ttl: i64,
+}
+
+impl DbScyllaConfigTableProperties {
+    pub fn registration_ttl(&self) -> &i64 {
+        &self.registration_ttl
+    }
+
+    pub fn reset_password_ttl(&self) -> &i64 {
+        &self.reset_password_ttl
     }
 }
 
@@ -192,7 +218,7 @@ impl ApiConfig {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct ApiRestConfig {
     host: String,
     port: String,
@@ -205,6 +231,17 @@ impl ApiRestConfig {
 
     pub fn port(&self) -> &str {
         &self.port
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AuthConfig {
+    access_token_length: usize,
+}
+
+impl AuthConfig {
+    pub fn access_token_length(&self) -> &usize {
+        &self.access_token_length
     }
 }
 

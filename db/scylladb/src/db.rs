@@ -1,17 +1,14 @@
 use scylla::{
-    frame::value::ValueList, prepared_statement::PreparedStatement, query::Query,
-    transport::errors::QueryError, QueryResult, Session, SessionBuilder,
+    frame::value::ValueList, transport::errors::QueryError, CachingSession, QueryResult,
+    SessionBuilder,
 };
 
-use crate::prepared_statement::{
-    admin::AdminPreparedStatement, admin_password_reset::AdminPasswordResetPreparedStatement,
-    collection::CollectionPreparedStatement, project::ProjectPreparedStatement,
-    registration::RegistrationPreparedStatement, token::TokenPreparedStatement,
+use crate::query::{
+    admin, admin_password_reset, collection, keyspace, project, registration, token,
 };
 
 pub struct ScyllaDb {
-    session: Session,
-    prepared_statement: ScyllaPreparedStatement,
+    cached_session: CachingSession,
 }
 
 impl ScyllaDb {
@@ -19,146 +16,52 @@ impl ScyllaDb {
         host: &str,
         port: &str,
         replication_factor: &i64,
-        temporary_ttl: &i64,
+        cache_size: &usize,
+        table_registration_ttl: &i64,
+        table_reset_password_ttl: &i64,
     ) -> Self {
-        hb_log::info(Some("⚡"), "ScyllaDb: Creating component");
+        hb_log::info(Some("⚡"), "ScyllaDb: Initializing component");
 
         let uri = format!("{}:{}", host, port);
-        let session = SessionBuilder::new().known_node(uri).build().await.unwrap();
+        let cached_session: CachingSession = CachingSession::from(
+            SessionBuilder::new().known_node(uri).build().await.unwrap(),
+            *cache_size,
+        );
 
-        ScyllaDb::init(&session, replication_factor, temporary_ttl).await;
+        ScyllaDb::init(
+            &cached_session,
+            replication_factor,
+            table_registration_ttl,
+            table_reset_password_ttl,
+        )
+        .await;
 
-        ScyllaDb {
-            prepared_statement: ScyllaPreparedStatement {
-                admin: AdminPreparedStatement::new(&session).await,
-                token: TokenPreparedStatement::new(&session).await,
-                project: ProjectPreparedStatement::new(&session).await,
-                collection: CollectionPreparedStatement::new(&session).await,
-                registration: RegistrationPreparedStatement::new(&session).await,
-                admin_password_reset: AdminPasswordResetPreparedStatement::new(&session).await,
-            },
-            session,
-        }
+        ScyllaDb { cached_session }
     }
 
-    async fn init(session: &Session, replication_factor: &i64, temporary_ttl: &i64) {
+    async fn init(
+        cached_session: &CachingSession,
+        replication_factor: &i64,
+        table_registration_ttl: &i64,
+        table_reset_password_ttl: &i64,
+    ) {
         // Create keyspace
-        hb_log::info(Some("🔧"), "ScyllaDb: Init Db - Creating keyspace");
-        session.query(format!("CREATE KEYSPACE IF NOT EXISTS ks WITH REPLICATION = {{'class' : 'NetworkTopologyStrategy', 'replication_factor' :{}}}", replication_factor), &[]).await.unwrap();
-
-        // Create types
-        hb_log::info(Some("🔧"), "ScyllaDb: Init Db - Creating types");
-        session.query("CREATE TYPE IF NOT EXISTS ks.schema_field_props (\"kind\" text, \"required\" boolean)", &[]).await.unwrap();
+        keyspace::init(cached_session, replication_factor).await;
 
         // Create tables
-        hb_log::info(Some("🔧"), "ScyllaDb: Init Db - Creating tables");
-        // admins
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))", AdminPreparedStatement::table_name()),&[]).await.unwrap();
-        session
-            .query(
-                format!(
-                    "CREATE INDEX IF NOT EXISTS ON {}(\"email\")",
-                    AdminPreparedStatement::table_name()
-                ),
-                &[],
-            )
-            .await
-            .unwrap();
-        // tokens
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"token\" text, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", TokenPreparedStatement::table_name()), &[]).await.unwrap();
-        session
-            .query(
-                format!(
-                    "CREATE INDEX IF NOT EXISTS ON {}(\"token\")",
-                    TokenPreparedStatement::table_name()
-                ),
-                &[],
-            )
-            .await
-            .unwrap();
-        // projects
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"name\" text, PRIMARY KEY (\"id\"))", ProjectPreparedStatement::table_name()), &[]).await.unwrap();
-        session
-            .query(
-                format!(
-                    "CREATE INDEX IF NOT EXISTS ON {}(\"admin_id\")",
-                    ProjectPreparedStatement::table_name()
-                ),
-                &[],
-            )
-            .await
-            .unwrap();
-        // collections
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" frozen<map<text, schema_field_props>>, \"indexes\" list<text>, PRIMARY KEY (\"id\"))", CollectionPreparedStatement::table_name()), &[]).await.unwrap();
-        session
-            .query(
-                format!(
-                    "CREATE INDEX IF NOT EXISTS ON {}(\"project_id\")",
-                    CollectionPreparedStatement::table_name()
-                ),
-                &[],
-            )
-            .await
-            .unwrap();
-        // registrations
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"role\" text, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", RegistrationPreparedStatement::table_name(), temporary_ttl ), &[]).await.unwrap();
-        // admin_password_resets
-        session.query(format!("CREATE TABLE IF NOT EXISTS {} (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"code\" text, PRIMARY KEY (\"id\")) WITH default_time_to_live = {}", AdminPasswordResetPreparedStatement::table_name(), temporary_ttl), &[]).await.unwrap();
-    }
-
-    pub fn prepared_statement(&self) -> &ScyllaPreparedStatement {
-        &self.prepared_statement
+        admin::init(cached_session).await;
+        token::init(cached_session).await;
+        project::init(cached_session).await;
+        collection::init(cached_session).await;
+        registration::init(cached_session, table_registration_ttl).await;
+        admin_password_reset::init(cached_session, table_reset_password_ttl).await;
     }
 
     pub async fn execute(
         &self,
-        prepared: &PreparedStatement,
+        query: &str,
         values: impl ValueList,
     ) -> Result<QueryResult, QueryError> {
-        self.session.execute(prepared, values).await
-    }
-
-    pub async fn query(
-        &self,
-        query: impl Into<Query>,
-        values: impl ValueList,
-    ) -> Result<QueryResult, QueryError> {
-        self.session.query(query, values).await
-    }
-}
-
-pub struct ScyllaPreparedStatement {
-    admin: AdminPreparedStatement,
-    token: TokenPreparedStatement,
-    project: ProjectPreparedStatement,
-    collection: CollectionPreparedStatement,
-
-    registration: RegistrationPreparedStatement,
-    admin_password_reset: AdminPasswordResetPreparedStatement,
-}
-
-impl ScyllaPreparedStatement {
-    pub fn admin(&self) -> &AdminPreparedStatement {
-        &self.admin
-    }
-
-    pub fn token(&self) -> &TokenPreparedStatement {
-        &self.token
-    }
-
-    pub fn project(&self) -> &ProjectPreparedStatement {
-        &self.project
-    }
-
-    pub fn collection(&self) -> &CollectionPreparedStatement {
-        &self.collection
-    }
-
-    pub fn registration(&self) -> &RegistrationPreparedStatement {
-        &self.registration
-    }
-
-    pub fn admin_password_reset(&self) -> &AdminPasswordResetPreparedStatement {
-        &self.admin_password_reset
+        self.cached_session.execute(query, values).await
     }
 }

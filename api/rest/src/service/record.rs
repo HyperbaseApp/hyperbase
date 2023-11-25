@@ -44,58 +44,72 @@ async fn insert_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
-    let token_claim = match ctx.token.jwt.decode(token) {
+    let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (token_data, project_data) = match tokio::try_join!(
-        TokenDao::db_select(&ctx.dao.db, token_claim.id()),
-        ProjectDao::db_select(&ctx.dao.db, path.project_id()),
+        TokenDao::db_select(ctx.dao().db(), token_claim.id()),
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_data.admin_id() != project_data.admin_id() {
-        return Response::error(StatusCode::FORBIDDEN, "This project does not belong to you");
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
     }
 
-    let collection_data = match CollectionDao::db_select(&ctx.dao.db, path.collection_id()).await {
+    let collection_data = match CollectionDao::db_select(ctx.dao().db(), path.collection_id()).await
+    {
         Ok(data) => data,
-        Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    let mut record_data = RecordDao::new(Some(&data.len()));
-    for (key, value) in data.iter() {
-        match collection_data.schema_fields().get(key) {
-            Some(kind) => record_data.insert(
-                &key,
-                &match Value::from_serde_json(kind.kind(), value) {
-                    Ok(value) => value,
-                    Err(err) => return Response::error(StatusCode::BAD_REQUEST, &err.to_string()),
-                },
-            ),
-            None => {
+    if collection_data.schema_fields().keys().len() != data.keys().len() {
+        for field_name in data.keys() {
+            if let None = collection_data.schema_fields().get(field_name) {
                 return Response::error(
-                    StatusCode::BAD_REQUEST,
-                    &format!("{key} is not defined in collection"),
-                )
+                    &StatusCode::BAD_REQUEST,
+                    &format!("{field_name} is not exist in the collection"),
+                );
             }
         }
     }
 
-    let data = data.into_inner();
-    for (key, value) in &data {
-        println!("{} {:?}", key, value);
+    let mut record_data = RecordDao::new(&Some(data.len()));
+    for (field_name, field_props) in collection_data.schema_fields().iter() {
+        match data.get(field_name) {
+            Some(value) => record_data.insert(
+                field_name,
+                &match Value::from_serde_json(field_props.kind(), value) {
+                    Ok(value) => value,
+                    Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+                },
+            ),
+            None => match field_props.required() {
+                true => {
+                    return Response::error(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("value for {field_name} is required"),
+                    )
+                }
+                false => record_data.insert(field_name, &Value::none(field_props.kind())),
+            },
+        }
     }
+
     HttpResponse::Ok().body(format!(
         "record insert_one {} {}",
         path.project_id(),

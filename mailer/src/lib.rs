@@ -22,7 +22,7 @@ impl Mailer {
         sender_name: &str,
         sender_email: &str,
     ) -> (Self, Sender<MailPayload>) {
-        hb_log::info(Some("⚡"), "Mailer: Creating component");
+        hb_log::info(Some("⚡"), "Mailer: Initializing component");
 
         let (sender, receiver) = channel::<MailPayload>();
 
@@ -43,14 +43,14 @@ impl Mailer {
         )
     }
 
-    pub fn send_mail(&self, payload: MailPayload) -> Result<()> {
+    pub fn send_mail(&self, payload: &MailPayload) -> Result<()> {
         self.smtp_transport.send(
             &self
                 .message_builder
                 .to_owned()
                 .to(payload.to.parse()?)
-                .subject(payload.subject)
-                .body(payload.body)?,
+                .subject(&payload.subject)
+                .body(payload.body.to_string())?,
         )?;
         Ok(())
     }

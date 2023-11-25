@@ -87,9 +87,7 @@ impl UpdateOneCollectionReqJson {
     pub fn indexes(&self) -> &Option<Vec<String>> {
         &self.indexes
     }
-}
 
-impl UpdateOneCollectionReqJson {
     pub fn is_all_none(&self) -> bool {
         self.name.is_none() && self.schema_fields.is_none() && self.indexes.is_none()
     }
@@ -149,7 +147,7 @@ impl CollectionResJson {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_owned(),
-            schema_fields: schema_fields.to_owned(),
+            schema_fields: schema_fields.clone(),
             indexes: indexes.to_vec(),
         }
     }

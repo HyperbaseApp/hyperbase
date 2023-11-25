@@ -1,7 +1,11 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_db_scylladb::{db::ScyllaDb, model::registration::RegistrationScyllaModel};
-use rand::Rng;
+use hb_db_scylladb::{
+    db::ScyllaDb,
+    model::registration::RegistrationScyllaModel,
+    query::registration::{DELETE, INSERT, SELECT},
+};
+use rand::{thread_rng, Rng};
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
@@ -28,7 +32,7 @@ impl RegistrationDao {
             updated_at: now,
             email: email.to_owned(),
             password_hash: password_hash.to_owned(),
-            code: rand::thread_rng().gen_range(100000..=999999).to_string(),
+            code: thread_rng().gen_range(100000..=999999).to_string(),
         }
     }
 
@@ -77,38 +81,27 @@ impl RegistrationDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(
-            db.prepared_statement().registration().insert(),
-            self.to_scylladb_model(),
-        )
-        .await?;
+        db.execute(INSERT, &self.to_scylladb_model()).await?;
         Ok(())
     }
 
     async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<RegistrationScyllaModel> {
         Ok(db
-            .execute(
-                db.prepared_statement().registration().select(),
-                [id].as_ref(),
-            )
+            .execute(SELECT, [id].as_ref())
             .await?
             .first_row_typed::<RegistrationScyllaModel>()?)
     }
 
     async fn scylladb_delete(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(
-            db.prepared_statement().registration().delete(),
-            [self.id()].as_ref(),
-        )
-        .await?;
+        db.execute(DELETE, [self.id()].as_ref()).await?;
         Ok(())
     }
 
     fn from_scylladb_model(model: &RegistrationScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
+            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
+            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
             email: model.email().to_owned(),
             password_hash: model.password_hash().to_owned(),
             code: model.code().to_owned(),
@@ -118,8 +111,8 @@ impl RegistrationDao {
     fn to_scylladb_model(&self) -> RegistrationScyllaModel {
         RegistrationScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
             &self.email,
             &self.password_hash,
             &self.code,

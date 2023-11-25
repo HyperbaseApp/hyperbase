@@ -33,7 +33,7 @@ pub fn default_error_handler<B: MessageBody>(
         }
     });
 
-    let res = Response::error(status_code, &body);
+    let res = Response::error(&status_code, &body);
 
     Ok(ErrorHandlerResponse::Response(
         ServiceResponse::new(req, res).map_into_right_body(),

@@ -6,25 +6,117 @@ use hb_mailer::MailPayload;
 use hb_token_jwt::token::JwtToken;
 
 pub struct Context {
-    pub hash: HashCtx,
-    pub token: TokenCtx,
-    pub mailer: MailerCtx,
-    pub dao: DaoCtx,
-    pub verification_code_ttl: i64,
+    hash: HashCtx,
+    token: TokenCtx,
+    mailer: MailerCtx,
+    dao: DaoCtx,
+    registration_ttl: i64,
+    reset_password_ttl: i64,
+    access_token_length: usize,
+}
+
+impl Context {
+    pub fn new(
+        hash: HashCtx,
+        token: TokenCtx,
+        mailer: MailerCtx,
+        dao: DaoCtx,
+        registration_ttl: i64,
+        reset_password_ttl: i64,
+        access_token_length: usize,
+    ) -> Self {
+        Self {
+            hash,
+            token,
+            mailer,
+            dao,
+            registration_ttl,
+            reset_password_ttl,
+            access_token_length,
+        }
+    }
+
+    pub fn hash(&self) -> &HashCtx {
+        &self.hash
+    }
+
+    pub fn token(&self) -> &TokenCtx {
+        &self.token
+    }
+
+    pub fn mailer(&self) -> &MailerCtx {
+        &self.mailer
+    }
+
+    pub fn dao(&self) -> &DaoCtx {
+        &self.dao
+    }
+
+    pub fn registration_ttl(&self) -> &i64 {
+        &self.registration_ttl
+    }
+
+    pub fn reset_password_ttl(&self) -> &i64 {
+        &self.reset_password_ttl
+    }
+
+    pub fn access_token_length(&self) -> &usize {
+        &self.access_token_length
+    }
 }
 
 pub struct HashCtx {
-    pub argon2: Argon2Hash,
+    argon2: Argon2Hash,
+}
+
+impl HashCtx {
+    pub fn new(argon2: Argon2Hash) -> Self {
+        Self { argon2 }
+    }
+
+    pub fn argon2(&self) -> &Argon2Hash {
+        &self.argon2
+    }
 }
 
 pub struct TokenCtx {
-    pub jwt: JwtToken,
+    jwt: JwtToken,
+}
+
+impl TokenCtx {
+    pub fn new(jwt: JwtToken) -> Self {
+        Self { jwt }
+    }
+
+    pub fn jwt(&self) -> &JwtToken {
+        &self.jwt
+    }
 }
 
 pub struct MailerCtx {
-    pub sender: Sender<MailPayload>,
+    sender: Sender<MailPayload>,
+}
+
+impl MailerCtx {
+    pub fn new(sender: Sender<MailPayload>) -> Self {
+        Self { sender }
+    }
+
+    pub fn sender(&self) -> &Sender<MailPayload> {
+        &self.sender
+    }
 }
 
 pub struct DaoCtx {
-    pub db: Db,
+    db: Db,
+}
+
+impl DaoCtx {
+    pub fn new(db: Db) -> Self {
+        Self { db }
+    }
+
+    pub fn db(&self) -> &Db {
+        &self.db
+    }
 }

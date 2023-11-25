@@ -1,37 +1,37 @@
-use std::collections::HashMap;
+use std::collections::{hash_map::Keys, HashMap};
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use uuid::Uuid;
 
-use crate::{collection::SchemaFieldKind, Db};
+use crate::collection::SchemaFieldKind;
 
 pub struct RecordDao {
-    data: HashMap<String, Value>,
+    base: HashMap<String, Value>,
 }
 
 impl RecordDao {
-    pub fn new(capacity: Option<&usize>) -> Self {
+    pub fn new(capacity: &Option<usize>) -> Self {
         match capacity {
             Some(capacity) => Self {
-                data: HashMap::with_capacity(*capacity),
+                base: HashMap::with_capacity(*capacity),
             },
             None => Self {
-                data: HashMap::new(),
+                base: HashMap::new(),
             },
         }
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {
-        self.data.get(key)
+        self.base.get(key)
+    }
+
+    pub fn keys(&self) -> Keys<'_, String, Value> {
+        self.base.keys()
     }
 
     pub fn insert(&mut self, key: &str, value: &Value) {
-        self.data.insert(key.to_owned(), value.to_owned());
-    }
-
-    pub async fn db_insert(&self, db: &Db) -> Result<()> {
-        Ok(())
+        self.base.insert(key.to_owned(), value.to_owned());
     }
 }
 
@@ -57,23 +57,7 @@ pub enum Value {
 impl Value {
     pub fn from_serde_json(kind: &SchemaFieldKind, value: &serde_json::Value) -> Result<Self> {
         match value {
-            serde_json::Value::Null => match kind {
-                SchemaFieldKind::Boolean => Ok(Self::Boolean(None)),
-                SchemaFieldKind::TinyInteger => Ok(Self::TinyInteger(None)),
-                SchemaFieldKind::SmallInteger => Ok(Self::SmallInteger(None)),
-                SchemaFieldKind::Integer => Ok(Self::Integer(None)),
-                SchemaFieldKind::BigInteger => Ok(Self::BigInteger(None)),
-                SchemaFieldKind::Float => Ok(Self::Float(None)),
-                SchemaFieldKind::Double => Ok(Self::Double(None)),
-                SchemaFieldKind::String => Ok(Self::String(None)),
-                SchemaFieldKind::Byte => Ok(Self::Byte(None)),
-                SchemaFieldKind::Uuid => Ok(Self::Uuid(None)),
-                SchemaFieldKind::Date => Ok(Self::Date(None)),
-                SchemaFieldKind::Time => Ok(Self::Time(None)),
-                SchemaFieldKind::DateTime => Ok(Self::DateTime(None)),
-                SchemaFieldKind::Timestamp => Ok(Self::Timestamp(None)),
-                SchemaFieldKind::Json => Ok(Self::Json(None)),
-            },
+            serde_json::Value::Null => Ok(Self::none(kind)),
             serde_json::Value::Bool(value) => match kind {
                 SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(*value))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(vec![*value as u8]))),
@@ -124,7 +108,7 @@ impl Value {
                 _ => return Err(Error::msg("wrong value type")),
             },
             serde_json::Value::String(value) => match kind {
-                SchemaFieldKind::String => Ok(Self::String(Some(value.to_string()))),
+                SchemaFieldKind::String => Ok(Self::String(Some(value.to_owned()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
                 _ => return Err(Error::msg("wrong value type")),
             },
@@ -162,6 +146,25 @@ impl Value {
                 },
                 _ => return Err(Error::msg("wrong value type")),
             },
+        }
+    }
+    pub fn none(kind: &SchemaFieldKind) -> Self {
+        match kind {
+            SchemaFieldKind::Boolean => Self::Boolean(None),
+            SchemaFieldKind::TinyInteger => Self::TinyInteger(None),
+            SchemaFieldKind::SmallInteger => Self::SmallInteger(None),
+            SchemaFieldKind::Integer => Self::Integer(None),
+            SchemaFieldKind::BigInteger => Self::BigInteger(None),
+            SchemaFieldKind::Float => Self::Float(None),
+            SchemaFieldKind::Double => Self::Double(None),
+            SchemaFieldKind::String => Self::String(None),
+            SchemaFieldKind::Byte => Self::Byte(None),
+            SchemaFieldKind::Uuid => Self::Uuid(None),
+            SchemaFieldKind::Date => Self::Date(None),
+            SchemaFieldKind::Time => Self::Time(None),
+            SchemaFieldKind::DateTime => Self::DateTime(None),
+            SchemaFieldKind::Timestamp => Self::Timestamp(None),
+            SchemaFieldKind::Json => Self::Json(None),
         }
     }
 }

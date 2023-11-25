@@ -7,6 +7,7 @@ pub mod auth;
 pub mod collection;
 pub mod project;
 pub mod record;
+pub mod token;
 
 #[actix_header("Authorization")]
 #[derive(Debug)]
@@ -42,27 +43,27 @@ pub struct Response {
 
 impl Response {
     pub fn data<T: Serialize>(
-        status_code: StatusCode,
-        pagination: Option<PaginationRes>,
+        status_code: &StatusCode,
+        pagination: &Option<PaginationRes>,
         data: T,
     ) -> HttpResponse {
         match serde_json::to_value(data) {
-            Ok(data) => HttpResponseBuilder::new(status_code).json(Self {
+            Ok(data) => HttpResponseBuilder::new(*status_code).json(Self {
                 error: None,
-                pagination,
+                pagination: *pagination,
                 data: Some(data),
             }),
             Err(err) => {
                 hb_log::error(None, &err);
-                Self::error(StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                Self::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
             }
         }
     }
 
-    pub fn error(status_code: StatusCode, message: &str) -> HttpResponse {
+    pub fn error(status_code: &StatusCode, message: &str) -> HttpResponse {
         hb_log::error(None, message);
 
-        HttpResponseBuilder::new(status_code).json(Self {
+        HttpResponseBuilder::new(*status_code).json(Self {
             error: Some(ErrorRes {
                 status: match status_code.canonical_reason() {
                     Some(status_code) => status_code.to_owned(),
@@ -82,16 +83,16 @@ pub struct ErrorRes {
     message: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Copy)]
 pub struct PaginationRes {
-    limit: i64,
-    count: i64,
-    page: i64,
-    total: i64,
+    limit: usize,
+    count: usize,
+    page: usize,
+    total: usize,
 }
 
 impl PaginationRes {
-    pub fn new(limit: &i64, count: &i64, page: &i64, total: &i64) -> Self {
+    pub fn new(limit: &usize, count: &usize, page: &usize, total: &usize) -> Self {
         Self {
             limit: *limit,
             count: *count,

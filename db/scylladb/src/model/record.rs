@@ -7,10 +7,10 @@ pub struct RecordScyllaModel<'a> {
 }
 
 impl RecordScyllaModel<'_> {
-    pub fn new(capacity: Option<usize>) -> Self {
+    pub fn new(capacity: &Option<usize>) -> Self {
         match capacity {
             Some(capacity) => Self {
-                data: HashMap::with_capacity(capacity),
+                data: HashMap::with_capacity(*capacity),
             },
             None => Self {
                 data: HashMap::new(),

@@ -15,7 +15,7 @@ pub struct JwtToken {
 
 impl JwtToken {
     pub fn new(secret: &str, expiry_duration: &u64) -> Self {
-        hb_log::info(Some("⚡"), "JwtToken: Creating component");
+        hb_log::info(Some("⚡"), "JwtToken: Initializing component");
 
         let secret = secret.as_bytes();
         Self {

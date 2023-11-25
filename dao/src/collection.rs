@@ -7,6 +7,7 @@ use hb_db_scylladb::{
     model::collection::{
         CollectionScyllaModel, SchemaFieldPropsScyllaModel, SchemaFieldScyllaKind,
     },
+    query::collection::{DELETE, INSERT, SELECT, SELECT_MANY_BY_PROJECT_ID, UPDATE},
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use strum::{Display, EnumString};
@@ -40,8 +41,8 @@ impl CollectionDao {
             created_at: now,
             updated_at: now,
             project_id: *project_id,
-            name: name.to_owned(),
-            schema_fields: schema_fields.to_owned(),
+            name: name.to_string(),
+            schema_fields: schema_fields.clone(),
             indexes: indexes.to_vec(),
         }
     }
@@ -79,7 +80,7 @@ impl CollectionDao {
     }
 
     pub fn set_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldPropsModel>) {
-        self.schema_fields = schema_fields.to_owned();
+        self.schema_fields = schema_fields.clone();
     }
 
     pub fn set_indexes(&mut self, indexes: &Vec<String>) {
@@ -88,7 +89,7 @@ impl CollectionDao {
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
+            Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
         }
     }
 
@@ -120,7 +121,7 @@ impl CollectionDao {
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_update(&self, db).await,
+            Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
         }
     }
 
@@ -131,17 +132,13 @@ impl CollectionDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(
-            db.prepared_statement().collection().insert(),
-            self.to_scylladb_model(),
-        )
-        .await?;
+        db.execute(INSERT, &self.to_scylladb_model()).await?;
         Ok(())
     }
 
     async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<CollectionScyllaModel> {
         Ok(db
-            .execute(db.prepared_statement().collection().select(), [id].as_ref())
+            .execute(SELECT, [id].as_ref())
             .await?
             .first_row_typed::<CollectionScyllaModel>()?)
     }
@@ -151,26 +148,21 @@ impl CollectionDao {
         project_id: &Uuid,
     ) -> Result<TypedRowIter<CollectionScyllaModel>> {
         Ok(db
-            .execute(
-                db.prepared_statement()
-                    .collection()
-                    .select_many_by_project_id(),
-                [project_id].as_ref(),
-            )
+            .execute(SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
             .await?
             .rows_typed::<CollectionScyllaModel>()?)
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
-            db.prepared_statement().collection().update(),
-            (
+            UPDATE,
+            &(
                 &self.updated_at,
                 &self.name,
                 &self
                     .schema_fields
                     .iter()
-                    .map(|(key, value)| (key.to_owned(), value.to_scylladb_model().to_owned()))
+                    .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
                     .collect::<HashMap<_, _>>(),
                 &self.indexes,
                 &self.id,
@@ -181,16 +173,15 @@ impl CollectionDao {
     }
 
     async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
-        db.execute(db.prepared_statement().collection().delete(), [id].as_ref())
-            .await?;
+        db.execute(DELETE, [id].as_ref()).await?;
         Ok(())
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
+            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
+            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields: model
@@ -213,17 +204,17 @@ impl CollectionDao {
     fn to_scylladb_model(&self) -> CollectionScyllaModel {
         CollectionScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
             &self.project_id,
             &self.name,
             &self
                 .schema_fields
                 .iter()
-                .map(|(key, value)| (key.to_owned(), value.to_scylladb_model().to_owned()))
+                .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
                 .collect(),
             &if self.indexes.len() > 0 {
-                Some(self.indexes.clone())
+                Some(self.indexes.to_vec())
             } else {
                 None
             },
@@ -231,7 +222,7 @@ impl CollectionDao {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct SchemaFieldPropsModel {
     kind: SchemaFieldKind,
     required: bool,
@@ -260,7 +251,7 @@ impl SchemaFieldPropsModel {
         }
     }
 
-    fn to_scylladb_model(self) -> SchemaFieldPropsScyllaModel {
+    fn to_scylladb_model(&self) -> SchemaFieldPropsScyllaModel {
         SchemaFieldPropsScyllaModel::new(&self.kind.to_scylladb_model(), &self.required)
     }
 }

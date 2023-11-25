@@ -22,7 +22,7 @@ pub struct ApiRestServer {
 
 impl ApiRestServer {
     pub fn new(host: &str, port: &str, ctx: Context) -> Self {
-        hb_log::info(Some("⚡"), "ApiRestServer: Creating component");
+        hb_log::info(Some("⚡"), "ApiRestServer: Initializing component");
 
         let address = format!("{}:{}", host, port);
         let context = web::Data::new(ctx);

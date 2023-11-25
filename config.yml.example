@@ -11,7 +11,7 @@ hash:
 token:
   jwt:
     secret: "cGSkx2yuzi6aHcHPyRQD2Tfi8CupDKu6HqKaMdT47nBBWaY2KS9tiLXKi4zEiwxd7E4xBw2VKuMYRVd45bQHJ6TdWi27CiMEjQ4dsFPnn2hLA2UpenKBZEjppSe4A9Jy"
-    expiry_duration: 604800
+    expiry_duration: 604800 # seconds
 
 mailer:
   smtp_host: "smtp.gmail.com"
@@ -25,9 +25,15 @@ db:
     host: "10.42.28.104"
     port: "19042"
     replication_factor: 3
-    temporary_ttl: 600
+    prepared_statement_cache_size: 15511
+    table_properties:
+      registration_ttl: 600 # seconds
+      reset_password_ttl: 600 # seconds
 
 api:
   rest:
     host: "0.0.0.0"
     port: "8080"
+
+auth:
+  access_token_length: 20

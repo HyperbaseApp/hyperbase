@@ -44,9 +44,7 @@ impl UpdateOneProjectReqJson {
     pub fn name(&self) -> &Option<String> {
         &self.name
     }
-}
 
-impl UpdateOneProjectReqJson {
     pub fn is_all_none(&self) -> bool {
         self.name.is_none()
     }
@@ -68,7 +66,6 @@ pub struct ProjectResJson {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
-    admin_id: Uuid,
     name: String,
 }
 
@@ -77,14 +74,12 @@ impl ProjectResJson {
         id: &Uuid,
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
-        admin_id: &Uuid,
         name: &str,
     ) -> Self {
         Self {
             id: *id,
             created_at: *created_at,
             updated_at: *updated_at,
-            admin_id: *admin_id,
             name: name.to_owned(),
         }
     }

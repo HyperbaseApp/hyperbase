@@ -30,8 +30,8 @@ impl RegistrationScyllaModel {
         }
     }
 
-    pub fn set_code(&mut self, code: String) {
-        self.code = code;
+    pub fn set_code(&mut self, code: &str) {
+        self.code = code.to_owned();
     }
 
     pub fn id(&self) -> &Uuid {

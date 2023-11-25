@@ -13,9 +13,7 @@ impl UpdateOneAdminReqJson {
     pub fn password(&self) -> &Option<String> {
         &self.password
     }
-}
 
-impl UpdateOneAdminReqJson {
     pub fn is_all_none(&self) -> bool {
         self.password.is_none() && self.role.is_none()
     }

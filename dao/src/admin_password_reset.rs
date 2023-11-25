@@ -1,7 +1,11 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_db_scylladb::{db::ScyllaDb, model::admin_password_reset::AdminPasswordResetScyllaModel};
-use rand::Rng;
+use hb_db_scylladb::{
+    db::ScyllaDb,
+    model::admin_password_reset::AdminPasswordResetScyllaModel,
+    query::admin_password_reset::{INSERT, SELECT},
+};
+use rand::{thread_rng, Rng};
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
 
@@ -26,7 +30,7 @@ impl AdminPasswordResetDao {
             created_at: now,
             updated_at: now,
             admin_id: *admin_id,
-            code: rand::thread_rng().gen_range(100000..=999999).to_string(),
+            code: thread_rng().gen_range(100000..=999999).to_string(),
         }
     }
 
@@ -52,7 +56,7 @@ impl AdminPasswordResetDao {
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_insert(&self, db).await,
+            Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
         }
     }
 
@@ -65,20 +69,13 @@ impl AdminPasswordResetDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(
-            db.prepared_statement().admin_password_reset().insert(),
-            self.to_scylladb_model(),
-        )
-        .await?;
+        db.execute(INSERT, &self.to_scylladb_model()).await?;
         Ok(())
     }
 
     async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<AdminPasswordResetScyllaModel> {
         Ok(db
-            .execute(
-                db.prepared_statement().admin_password_reset().select(),
-                [id].as_ref(),
-            )
+            .execute(SELECT, [id].as_ref())
             .await?
             .first_row_typed::<AdminPasswordResetScyllaModel>()?)
     }
@@ -86,8 +83,8 @@ impl AdminPasswordResetDao {
     fn from_scylladb_model(model: &AdminPasswordResetScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(model.updated_at().0)?,
+            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
+            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
             admin_id: *model.admin_id(),
             code: model.code().to_owned(),
         })
@@ -96,8 +93,8 @@ impl AdminPasswordResetDao {
     fn to_scylladb_model(&self) -> AdminPasswordResetScyllaModel {
         AdminPasswordResetScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(self.updated_at)),
+            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
+            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
             &self.admin_id,
             &self.code,
         )

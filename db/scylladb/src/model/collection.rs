@@ -38,8 +38,8 @@ impl CollectionScyllaModel {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_owned(),
-            schema_fields: schema_fields.to_owned(),
-            indexes: indexes.to_owned(),
+            schema_fields: schema_fields.clone(),
+            indexes: indexes.clone(),
         }
     }
 
