@@ -7,8 +7,9 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 [dependencies]
 hb_log = { workspace = true }
 
+ahash = { workspace = true }
+itertools = { workspace = true }
 scylla = { workspace = true }
-strum = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }
 
 [lints]

@@ -6,7 +6,6 @@ use validator::Validate;
 #[derive(Deserialize, Validate)]
 pub struct UpdateOneAdminReqJson {
     password: Option<String>,
-    role: Option<String>,
 }
 
 impl UpdateOneAdminReqJson {
@@ -15,7 +14,7 @@ impl UpdateOneAdminReqJson {
     }
 
     pub fn is_all_none(&self) -> bool {
-        self.password.is_none() && self.role.is_none()
+        self.password.is_none()
     }
 }
 

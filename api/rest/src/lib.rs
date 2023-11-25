@@ -4,7 +4,7 @@ use actix_web::{
 };
 use anyhow::Result;
 use config::config;
-use context::Context;
+use context::ApiRestCtx;
 use error_handler::default_error_handler;
 use logger::logger_format;
 
@@ -17,11 +17,11 @@ mod service;
 
 pub struct ApiRestServer {
     address: String,
-    context: web::Data<Context>,
+    context: web::Data<ApiRestCtx>,
 }
 
 impl ApiRestServer {
-    pub fn new(host: &str, port: &str, ctx: Context) -> Self {
+    pub fn new(host: &str, port: &str, ctx: ApiRestCtx) -> Self {
         hb_log::info(Some("⚡"), "ApiRestServer: Initializing component");
 
         let address = format!("{}:{}", host, port);

@@ -3,7 +3,7 @@ use hb_dao::project::ProjectDao;
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
-    context::Context,
+    context::ApiRestCtx,
     model::{
         project::{
             DeleteOneProjectReqPath, DeleteProjectResJson, FindOneProjectReqPath,
@@ -23,7 +23,7 @@ pub fn project_api(cfg: &mut web::ServiceConfig) {
 }
 
 async fn insert_one(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     data: web::Json<InsertOneProjectReqJson>,
 ) -> HttpResponse {
@@ -63,7 +63,7 @@ async fn insert_one(
 }
 
 async fn find_one(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     path: web::Path<FindOneProjectReqPath>,
 ) -> HttpResponse {
@@ -109,7 +109,7 @@ async fn find_one(
 }
 
 async fn update_one(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     path: web::Path<UpdateOneProjectReqPath>,
     data: web::Json<UpdateOneProjectReqJson>,
@@ -166,7 +166,7 @@ async fn update_one(
 }
 
 async fn delete_one(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     path: web::Path<DeleteOneProjectReqPath>,
 ) -> HttpResponse {
@@ -210,7 +210,7 @@ async fn delete_one(
     )
 }
 
-async fn find_many(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
         None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),

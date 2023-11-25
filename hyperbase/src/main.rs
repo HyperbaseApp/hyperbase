@@ -1,5 +1,5 @@
 use hb_api_rest::{
-    context::{Context as ApiRestCtx, DaoCtx, HashCtx, MailerCtx, TokenCtx},
+    context::{ApiRestCtx, DaoCtx, HashCtx, MailerCtx, TokenCtx},
     ApiRestServer,
 };
 use hb_dao::Db;

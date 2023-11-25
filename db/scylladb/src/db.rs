@@ -57,6 +57,14 @@ impl ScyllaDb {
         admin_password_reset::init(cached_session, table_reset_password_ttl).await;
     }
 
+    pub async fn session_query(
+        &self,
+        query: &str,
+        values: impl ValueList,
+    ) -> Result<QueryResult, QueryError> {
+        self.cached_session.get_session().query(query, values).await
+    }
+
     pub async fn execute(
         &self,
         query: &str,

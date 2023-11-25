@@ -1,13 +1,8 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::{
-    collection::CollectionDao,
-    project::ProjectDao,
-    record::{RecordDao, Value},
-    token::TokenDao,
-};
+use hb_dao::{collection::CollectionDao, project::ProjectDao, record::Value, token::TokenDao};
 
 use crate::{
-    context::Context,
+    context::ApiRestCtx,
     model::{
         record::{
             DeleteOneRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson,
@@ -37,7 +32,7 @@ pub fn record_api(cfg: &mut web::ServiceConfig) {
 }
 
 async fn insert_one(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     path: web::Path<InsertOneRecordReqPath>,
     data: web::Json<InsertOneRecordReqJson>,
@@ -79,16 +74,16 @@ async fn insert_one(
 
     if collection_data.schema_fields().keys().len() != data.keys().len() {
         for field_name in data.keys() {
-            if let None = collection_data.schema_fields().get(field_name) {
+            if !collection_data.schema_fields().contains_key(field_name) {
                 return Response::error(
                     &StatusCode::BAD_REQUEST,
-                    &format!("{field_name} is not exist in the collection"),
+                    &format!("Field {field_name} is not exist in the collection"),
                 );
             }
         }
     }
 
-    let mut record_data = RecordDao::new(&Some(data.len()));
+    let mut record_data = collection_data.to_record(&Some(data.len()));
     for (field_name, field_props) in collection_data.schema_fields().iter() {
         match data.get(field_name) {
             Some(value) => record_data.insert(

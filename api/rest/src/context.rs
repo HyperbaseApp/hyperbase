@@ -5,7 +5,7 @@ use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::MailPayload;
 use hb_token_jwt::token::JwtToken;
 
-pub struct Context {
+pub struct ApiRestCtx {
     hash: HashCtx,
     token: TokenCtx,
     mailer: MailerCtx,
@@ -15,7 +15,7 @@ pub struct Context {
     access_token_length: usize,
 }
 
-impl Context {
+impl ApiRestCtx {
     pub fn new(
         hash: HashCtx,
         token: TokenCtx,

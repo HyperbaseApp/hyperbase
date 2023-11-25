@@ -1,5 +1,6 @@
-use std::collections::{hash_map::Keys, HashMap};
+use std::collections::hash_map::Keys;
 
+use ahash::{HashMap, HashMapExt};
 use anyhow::{Error, Result};
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use uuid::Uuid;
@@ -7,19 +8,32 @@ use uuid::Uuid;
 use crate::collection::SchemaFieldKind;
 
 pub struct RecordDao {
+    table_name: String,
     base: HashMap<String, Value>,
 }
 
 impl RecordDao {
-    pub fn new(capacity: &Option<usize>) -> Self {
-        match capacity {
-            Some(capacity) => Self {
-                base: HashMap::with_capacity(*capacity),
-            },
-            None => Self {
-                base: HashMap::new(),
-            },
+    pub fn new(table_name: &str, capacity: &Option<usize>) -> Self {
+        let capacity = match capacity {
+            Some(capacity) => capacity + 1,
+            None => 1,
+        };
+
+        let mut base = HashMap::with_capacity(capacity);
+        base.insert("_id".to_owned(), Value::Uuid(Some(Uuid::new_v4())));
+
+        Self {
+            table_name: table_name.to_owned(),
+            base,
         }
+    }
+
+    pub fn new_table_name(collection_id: &Uuid) -> String {
+        "record_".to_owned() + &collection_id.to_string().replace("-", "")
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
     }
 
     pub fn get(&self, key: &str) -> Option<&Value> {
@@ -59,33 +73,33 @@ impl Value {
         match value {
             serde_json::Value::Null => Ok(Self::none(kind)),
             serde_json::Value::Bool(value) => match kind {
-                SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(*value))),
+                SchemaFieldKind::Bool => Ok(Self::Boolean(Some(*value))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(vec![*value as u8]))),
                 _ => return Err(Error::msg("wrong value type")),
             },
             serde_json::Value::Number(value) => match kind {
-                SchemaFieldKind::TinyInteger => match value.as_i64() {
+                SchemaFieldKind::TinyInt => match value.as_i64() {
                     Some(value) => match i8::try_from(value) {
                         Ok(value) => Ok(Self::TinyInteger(Some(value))),
                         Err(err) => Err(err.into()),
                     },
                     None => Err(Error::msg("wrong value type")),
                 },
-                SchemaFieldKind::SmallInteger => match value.as_i64() {
+                SchemaFieldKind::SmallInt => match value.as_i64() {
                     Some(value) => match i16::try_from(value) {
                         Ok(value) => Ok(Self::SmallInteger(Some(value))),
                         Err(err) => Err(err.into()),
                     },
                     None => Err(Error::msg("wrong value type")),
                 },
-                SchemaFieldKind::Integer => match value.as_i64() {
+                SchemaFieldKind::Int => match value.as_i64() {
                     Some(value) => match i32::try_from(value) {
                         Ok(value) => Ok(Self::Integer(Some(value))),
                         Err(err) => Err(err.into()),
                     },
                     None => Err(Error::msg("wrong value type")),
                 },
-                SchemaFieldKind::BigInteger => match value.as_i64() {
+                SchemaFieldKind::BigInt => match value.as_i64() {
                     Some(value) => Ok(Self::BigInteger(Some(value))),
                     None => Err(Error::msg("wrong value type")),
                 },
@@ -150,11 +164,11 @@ impl Value {
     }
     pub fn none(kind: &SchemaFieldKind) -> Self {
         match kind {
-            SchemaFieldKind::Boolean => Self::Boolean(None),
-            SchemaFieldKind::TinyInteger => Self::TinyInteger(None),
-            SchemaFieldKind::SmallInteger => Self::SmallInteger(None),
-            SchemaFieldKind::Integer => Self::Integer(None),
-            SchemaFieldKind::BigInteger => Self::BigInteger(None),
+            SchemaFieldKind::Bool => Self::Boolean(None),
+            SchemaFieldKind::TinyInt => Self::TinyInteger(None),
+            SchemaFieldKind::SmallInt => Self::SmallInteger(None),
+            SchemaFieldKind::Int => Self::Integer(None),
+            SchemaFieldKind::BigInt => Self::BigInteger(None),
             SchemaFieldKind::Float => Self::Float(None),
             SchemaFieldKind::Double => Self::Double(None),
             SchemaFieldKind::String => Self::String(None),

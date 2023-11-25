@@ -17,7 +17,7 @@ use crate::{
         },
         Response, TokenReqHeader,
     },
-    Context,
+    ApiRestCtx,
 };
 
 pub fn auth_api(cfg: &mut web::ServiceConfig) {
@@ -39,7 +39,7 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
         );
 }
 
-async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
         None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
@@ -72,7 +72,7 @@ async fn token(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> H
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
 }
 
-async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> HttpResponse {
+async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) -> HttpResponse {
     if let Err(err) = data.validate() {
         return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
@@ -116,7 +116,7 @@ async fn register(ctx: web::Data<Context>, data: web::Json<RegisterReqJson>) -> 
 }
 
 async fn verify_registration(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     data: web::Json<VerifyRegistrationReqJson>,
 ) -> HttpResponse {
     let registration_data = match RegistrationDao::db_select(ctx.dao().db(), data.id()).await {
@@ -146,7 +146,7 @@ async fn verify_registration(
 }
 
 async fn password_based(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     data: web::Json<PasswordBasedReqJson>,
 ) -> HttpResponse {
     if let Err(err) = data.validate() {
@@ -178,7 +178,10 @@ async fn password_based(
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
 }
 
-async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>) -> HttpResponse {
+async fn token_based(
+    ctx: web::Data<ApiRestCtx>,
+    data: web::Json<TokenBasedReqJson>,
+) -> HttpResponse {
     let token_data = match TokenDao::db_select_by_token(ctx.dao().db(), data.token()).await {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -197,7 +200,7 @@ async fn token_based(ctx: web::Data<Context>, data: web::Json<TokenBasedReqJson>
 }
 
 async fn request_password_reset(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     data: web::Json<RequestPasswordResetReqJson>,
 ) -> HttpResponse {
     if let Err(err) = data.validate() {
@@ -238,7 +241,7 @@ async fn request_password_reset(
 }
 
 async fn confirm_password_reset(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     data: web::Json<ConfirmPasswordResetReqJson>,
 ) -> HttpResponse {
     let password_reset_data =

@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use ahash::{HashMap, HashMapExt};
 use scylla::frame::response::result::CqlValue;
 
 pub struct RecordScyllaModel<'a> {

@@ -3,7 +3,7 @@ use hb_dao::admin::AdminDao;
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
-    context::Context,
+    context::ApiRestCtx,
     model::{
         admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
         Response, TokenReqHeader,
@@ -16,7 +16,7 @@ pub fn admin_api(cfg: &mut web::ServiceConfig) {
         .route("/admin", web::delete().to(delete_one));
 }
 
-async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
         None => return Response::error(&&StatusCode::BAD_REQUEST, "Invalid token"),
@@ -52,7 +52,7 @@ async fn find_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -
 }
 
 async fn update_one(
-    ctx: web::Data<Context>,
+    ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     data: web::Json<UpdateOneAdminReqJson>,
 ) -> HttpResponse {
@@ -109,7 +109,10 @@ async fn update_one(
     )
 }
 
-async fn delete_one(ctx: web::Data<Context>, token: web::Header<TokenReqHeader>) -> HttpResponse {
+async fn delete_one(
+    ctx: web::Data<ApiRestCtx>,
+    token: web::Header<TokenReqHeader>,
+) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
         None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
