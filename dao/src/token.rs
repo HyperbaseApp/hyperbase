@@ -1,3 +1,4 @@
+use ahash::{HashMap, HashMapExt};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
@@ -20,11 +21,17 @@ pub struct TokenDao {
     updated_at: DateTime<Utc>,
     admin_id: Uuid,
     token: String,
-    expired_at: DateTime<Utc>,
+    rules: HashMap<Uuid, i8>,
+    expired_at: Option<DateTime<Utc>>,
 }
 
 impl TokenDao {
-    pub fn new(admin_id: &Uuid, expired_at: &DateTime<Utc>, token_length: &usize) -> Self {
+    pub fn new(
+        admin_id: &Uuid,
+        token_length: &usize,
+        number_of_rules: &usize,
+        expired_at: &Option<DateTime<Utc>>,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
@@ -36,6 +43,7 @@ impl TokenDao {
                 .take(*token_length)
                 .map(char::from)
                 .collect(),
+            rules: HashMap::with_capacity(*number_of_rules),
             expired_at: *expired_at,
         }
     }
@@ -60,11 +68,26 @@ impl TokenDao {
         &self.token
     }
 
-    pub fn expired_at(&self) -> &DateTime<Utc> {
+    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+        &self.rules
+    }
+
+    pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
     }
 
-    pub fn set_expired_at(&mut self, expired_at: &DateTime<Utc>) {
+    pub fn new_rules(&mut self, capacity: &Option<usize>) {
+        self.rules = match capacity {
+            Some(capacity) => HashMap::with_capacity(*capacity),
+            None => HashMap::new(),
+        }
+    }
+
+    pub fn insert_rule(&mut self, collection_id: &Uuid, rule: &i8) {
+        self.rules.insert(*collection_id, *rule);
+    }
+
+    pub fn set_expired_at(&mut self, expired_at: &Option<DateTime<Utc>>) {
         self.expired_at = *expired_at;
     }
 
@@ -150,8 +173,11 @@ impl TokenDao {
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(UPDATE, &(&self.updated_at, &self.expired_at, &self.id))
-            .await?;
+        db.execute(
+            UPDATE,
+            &(&self.updated_at, &self.rules, &self.expired_at, &self.id),
+        )
+        .await?;
         Ok(())
     }
 
@@ -167,7 +193,11 @@ impl TokenDao {
             updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            expired_at: duration_since_epoch_to_datetime(&model.expired_at().0)?,
+            rules: model.rules().clone(),
+            expired_at: match &model.expired_at() {
+                Some(expired_at) => Some(duration_since_epoch_to_datetime(&expired_at.0)?),
+                None => None,
+            },
         })
     }
 
@@ -178,7 +208,11 @@ impl TokenDao {
             &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
             &self.admin_id,
             &self.token,
-            &Timestamp(datetime_to_duration_since_epoch(&self.expired_at)),
+            &self.rules,
+            &match &self.expired_at {
+                Some(expired_at) => Some(Timestamp(datetime_to_duration_since_epoch(expired_at))),
+                None => None,
+            },
         )
     }
 }

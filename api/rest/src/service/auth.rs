@@ -50,6 +50,19 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
+    match token_claim.kind() {
+        JwtTokenKind::User => {
+            if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+            }
+        }
+        JwtTokenKind::Token => {
+            if let Err(err) = TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+            }
+        }
+    }
+
     let token = match ctx.token().jwt().need_renew(&token_claim) {
         Ok(need) => {
             if need {

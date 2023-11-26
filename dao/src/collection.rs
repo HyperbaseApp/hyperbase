@@ -6,10 +6,7 @@ use hb_db_scylladb::{
     model::collection::{
         CollectionScyllaModel, SchemaFieldPropsScyllaModel, SchemaFieldScyllaKind,
     },
-    query::{
-        collection::{DELETE, INSERT, SELECT, SELECT_MANY_BY_PROJECT_ID, UPDATE},
-        record,
-    },
+    query::collection::{DELETE, INSERT, SELECT, SELECT_MANY_BY_PROJECT_ID, UPDATE},
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use uuid::Uuid;
@@ -119,6 +116,11 @@ impl CollectionDao {
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
+        RecordDao::db_create_table(db, self).await?;
+        for index in &self.indexes {
+            RecordDao::db_create_index(db, &self.id, index).await?;
+        }
+
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
         }
@@ -150,40 +152,94 @@ impl CollectionDao {
     }
 
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
+        let is_preserve_schema_fields_exist = self
+            ._preserve
+            .as_ref()
+            .is_some_and(|preserve| preserve.schema_fields.as_ref().is_some());
+        let is_preserve_indexes_exist = self
+            ._preserve
+            .as_ref()
+            .is_some_and(|preserve| preserve.indexes.as_ref().is_some());
+
+        if is_preserve_indexes_exist {
+            for index in self._preserve.as_ref().unwrap().indexes.as_ref().unwrap() {
+                if !self.indexes.contains(index) {
+                    RecordDao::db_drop_index(db, &self.id, index).await?;
+                }
+            }
+        }
+
+        if is_preserve_schema_fields_exist {
+            for field_name in self
+                ._preserve
+                .as_ref()
+                .unwrap()
+                .schema_fields
+                .as_ref()
+                .unwrap()
+                .keys()
+            {
+                let mut drop_columns = HashSet::new();
+                if !self.schema_fields.contains_key(field_name) {
+                    drop_columns.insert(field_name.clone());
+                }
+                if !drop_columns.is_empty() {
+                    RecordDao::db_drop_columns(db, &self.id, &drop_columns).await?;
+                }
+            }
+
+            for (field_name, field_props) in &self.schema_fields {
+                let mut add_columns = HashMap::new();
+                if !self
+                    ._preserve
+                    .as_ref()
+                    .unwrap()
+                    .schema_fields
+                    .as_ref()
+                    .unwrap()
+                    .contains_key(field_name)
+                {
+                    add_columns.insert(field_name.to_owned(), field_props.to_scylladb_model());
+                }
+                if !add_columns.is_empty() {
+                    RecordDao::db_add_columns(db, &self.id, &add_columns).await?;
+                }
+            }
+        }
+
+        if is_preserve_indexes_exist {
+            for index in &self.indexes {
+                if !self
+                    ._preserve
+                    .as_ref()
+                    .unwrap()
+                    .indexes
+                    .as_ref()
+                    .unwrap()
+                    .contains(index)
+                {
+                    RecordDao::db_create_index(db, &self.id, index).await?;
+                }
+            }
+        }
+
         self.updated_at = Utc::now();
+
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
         }
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
+        RecordDao::db_drop_table(db, id).await?;
+
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        let record_table = RecordDao::new_table_name(&self.id);
-        db.session_query(
-            record::create_table(
-                &record_table,
-                &self
-                    .schema_fields
-                    .iter()
-                    .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
-                    .collect::<HashMap<_, _>>(),
-            )
-            .as_str(),
-            &[],
-        )
-        .await?;
-        for index in &self.indexes {
-            db.session_query(record::create_index(&record_table, &index).as_str(), &[])
-                .await?;
-        }
-
         db.execute(INSERT, &self.to_scylladb_model()).await?;
-
         Ok(())
     }
 
@@ -205,83 +261,6 @@ impl CollectionDao {
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
-        let record_table = RecordDao::new_table_name(&self.id);
-
-        let is_preserve_schema_fields_exist = self
-            ._preserve
-            .as_ref()
-            .is_some_and(|preserve| preserve.schema_fields.as_ref().is_some());
-        let is_preserve_indexes_exist = self
-            ._preserve
-            .as_ref()
-            .is_some_and(|preserve| preserve.indexes.as_ref().is_some());
-
-        if is_preserve_indexes_exist {
-            for index in self._preserve.as_ref().unwrap().indexes.as_ref().unwrap() {
-                if !self.indexes.contains(index) {
-                    db.session_query(&record::drop_index(&record_table, index.as_str()), &[])
-                        .await?;
-                }
-            }
-        }
-
-        if is_preserve_schema_fields_exist {
-            for field_name in self
-                ._preserve
-                .as_ref()
-                .unwrap()
-                .schema_fields
-                .as_ref()
-                .unwrap()
-                .keys()
-            {
-                let mut drop_columns = HashSet::new();
-                if !self.schema_fields.contains_key(field_name) {
-                    drop_columns.insert(field_name.clone());
-                }
-                if !drop_columns.is_empty() {
-                    db.session_query(&record::drop_columns(&record_table, &drop_columns), &[])
-                        .await?;
-                }
-            }
-
-            for (field_name, field_props) in &self.schema_fields {
-                let mut add_colums = HashMap::new();
-                if !self
-                    ._preserve
-                    .as_ref()
-                    .unwrap()
-                    .schema_fields
-                    .as_ref()
-                    .unwrap()
-                    .contains_key(field_name)
-                {
-                    add_colums.insert(field_name.to_owned(), field_props.to_scylladb_model());
-                }
-                if !add_colums.is_empty() {
-                    db.session_query(&record::add_columns(&record_table, &add_colums), &[])
-                        .await?;
-                }
-            }
-        }
-
-        if is_preserve_indexes_exist {
-            for index in &self.indexes {
-                if !self
-                    ._preserve
-                    .as_ref()
-                    .unwrap()
-                    .indexes
-                    .as_ref()
-                    .unwrap()
-                    .contains(index)
-                {
-                    db.session_query(&record::create_index(&record_table, index.as_str()), &[])
-                        .await?;
-                }
-            }
-        }
-
         db.execute(
             UPDATE,
             &(
@@ -297,19 +276,11 @@ impl CollectionDao {
             ),
         )
         .await?;
-
         Ok(())
     }
 
     async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
-        db.session_query(
-            record::drop_table(&RecordDao::new_table_name(id)).as_str(),
-            &[],
-        )
-        .await?;
-
         db.execute(DELETE, [id].as_ref()).await?;
-
         Ok(())
     }
 
@@ -388,7 +359,7 @@ impl SchemaFieldPropsModel {
         }
     }
 
-    fn to_scylladb_model(&self) -> SchemaFieldPropsScyllaModel {
+    pub fn to_scylladb_model(&self) -> SchemaFieldPropsScyllaModel {
         SchemaFieldPropsScyllaModel::new(&self.kind.to_scylladb_model(), &self.required)
     }
 }

@@ -1,6 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use chrono::{Duration, Utc};
-use hb_dao::token::TokenDao;
+use hb_dao::{record::RecordDao, token::TokenDao};
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
@@ -44,18 +44,42 @@ async fn insert_one(
         );
     }
 
-    if (*data.expired_at() - Utc::now()) < Duration::zero() {
+    if data.rules().is_empty() {
         return Response::error(
             &StatusCode::BAD_REQUEST,
             "Expiration date must be in the future",
         );
     }
 
-    let token_data = TokenDao::new(
+    if let Some(expired_at) = data.expired_at() {
+        if (*expired_at - Utc::now()) < Duration::zero() {
+            return Response::error(
+                &StatusCode::BAD_REQUEST,
+                "Expiration date must be in the future",
+            );
+        }
+    }
+
+    let mut check_tables_must_exist_fut = Vec::with_capacity(data.rules().len());
+    for collection_id in data.rules().keys() {
+        check_tables_must_exist_fut.push(RecordDao::db_check_table_must_exist(
+            ctx.dao().db(),
+            collection_id,
+        ));
+    }
+    if let Err(err) = futures::future::try_join_all(check_tables_must_exist_fut).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
+    let mut token_data = TokenDao::new(
         token_claim.id(),
-        data.expired_at(),
         ctx.access_token_length(),
+        &data.rules().len(),
+        data.expired_at(),
     );
+    for (collection_id, rule) in data.rules() {
+        token_data.insert_rule(collection_id, rule);
+    }
 
     if let Err(err) = token_data.db_insert(ctx.dao().db()).await {
         return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -69,6 +93,7 @@ async fn insert_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
+            token_data.rules(),
             token_data.expired_at(),
         ),
     )
@@ -113,6 +138,7 @@ async fn find_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
+            token_data.rules(),
             token_data.expired_at(),
         ),
     )
@@ -157,7 +183,24 @@ async fn update_one(
                 "Expiration date must be in the future",
             );
         }
-        token_data.set_expired_at(expired_at);
+        token_data.set_expired_at(data.expired_at());
+    }
+
+    if let Some(rules) = data.rules() {
+        let mut check_tables_must_exist_fut = Vec::with_capacity(rules.len());
+        for collection_id in rules.keys() {
+            check_tables_must_exist_fut.push(RecordDao::db_check_table_must_exist(
+                ctx.dao().db(),
+                collection_id,
+            ));
+        }
+        if let Err(err) = futures::future::try_join_all(check_tables_must_exist_fut).await {
+            return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        }
+        token_data.new_rules(&Some(rules.len()));
+        for (collection_id, rule) in rules {
+            token_data.insert_rule(collection_id, rule);
+        }
     }
 
     if !data.is_all_none() {
@@ -174,6 +217,7 @@ async fn update_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
+            token_data.rules(),
             token_data.expired_at(),
         ),
     )
@@ -261,6 +305,7 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
                     data.created_at(),
                     data.updated_at(),
                     data.token(),
+                    data.rules(),
                     data.expired_at(),
                 )
             })

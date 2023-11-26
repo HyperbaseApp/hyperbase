@@ -1,14 +1,20 @@
+use ahash::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct InsertOneTokenReqJson {
-    expired_at: DateTime<Utc>,
+    rules: HashMap<Uuid, i8>,
+    expired_at: Option<DateTime<Utc>>,
 }
 
 impl InsertOneTokenReqJson {
-    pub fn expired_at(&self) -> &DateTime<Utc> {
+    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+        &self.rules
+    }
+
+    pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
     }
 }
@@ -37,10 +43,15 @@ impl UpdateOneTokenReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneTokenReqJson {
+    rules: Option<HashMap<Uuid, i8>>,
     expired_at: Option<DateTime<Utc>>,
 }
 
 impl UpdateOneTokenReqJson {
+    pub fn rules(&self) -> &Option<HashMap<Uuid, i8>> {
+        &self.rules
+    }
+
     pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
     }
@@ -67,7 +78,8 @@ pub struct TokenResJson {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     token: String,
-    expired_at: DateTime<Utc>,
+    rules: HashMap<Uuid, i8>,
+    expired_at: Option<DateTime<Utc>>,
 }
 
 impl TokenResJson {
@@ -76,13 +88,15 @@ impl TokenResJson {
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
         token: &str,
-        expired_at: &DateTime<Utc>,
+        rules: &HashMap<Uuid, i8>,
+        expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             id: *id,
             created_at: *created_at,
             updated_at: *updated_at,
             token: token.to_owned(),
+            rules: rules.clone(),
             expired_at: *expired_at,
         }
     }

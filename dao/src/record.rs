@@ -1,11 +1,19 @@
 use std::collections::hash_map::Keys;
 
-use ahash::{HashMap, HashMapExt};
+use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
+use hb_db_scylladb::{
+    db::ScyllaDb,
+    model::collection::SchemaFieldPropsScyllaModel,
+    query::record::{self, COUNT_TABLE},
+};
 use uuid::Uuid;
 
-use crate::collection::SchemaFieldKind;
+use crate::{
+    collection::{CollectionDao, SchemaFieldKind},
+    Db,
+};
 
 pub struct RecordDao {
     table_name: String,
@@ -46,6 +54,162 @@ impl RecordDao {
 
     pub fn insert(&mut self, key: &str, value: &Value) {
         self.base.insert(key.to_owned(), value.to_owned());
+    }
+
+    pub async fn db_create_table(db: &Db, collection: &CollectionDao) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => {
+                Self::scylladb_create_table(
+                    db,
+                    collection.id(),
+                    &collection
+                        .schema_fields()
+                        .iter()
+                        .map(|(field_name, field_props)| {
+                            (field_name.clone(), field_props.to_scylladb_model())
+                        })
+                        .collect::<HashMap<_, _>>(),
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn db_drop_table(db: &Db, collection_id: &Uuid) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_drop_table(db, collection_id).await,
+        }
+    }
+
+    pub async fn db_check_table_existence(db: &Db, collection_id: &Uuid) -> Result<bool> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_check_table_existence(db, collection_id).await,
+        }
+    }
+
+    pub async fn db_check_table_must_exist(db: &Db, collection_id: &Uuid) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => match Self::scylladb_check_table_existence(db, collection_id).await
+            {
+                Ok(is_exist) => match is_exist {
+                    true => Ok(()),
+                    false => Err(Error::msg(format!(
+                        "Collection {collection_id} does not exist"
+                    ))),
+                },
+                Err(err) => Err(err),
+            },
+        }
+    }
+
+    pub async fn db_add_columns(
+        db: &Db,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
+    ) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_add_columns(db, collection_id, columns).await,
+        }
+    }
+
+    pub async fn db_drop_columns(
+        db: &Db,
+        collection_id: &Uuid,
+        columns: &HashSet<String>,
+    ) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_drop_columns(db, collection_id, columns).await,
+        }
+    }
+
+    pub async fn db_create_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_create_index(db, collection_id, index).await,
+        }
+    }
+
+    pub async fn db_drop_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_drop_index(db, collection_id, index).await,
+        }
+    }
+
+    async fn scylladb_create_table(
+        db: &ScyllaDb,
+        collection_id: &Uuid,
+        schema_fields: &HashMap<String, SchemaFieldPropsScyllaModel>,
+    ) -> Result<()> {
+        db.session_query(
+            record::create_table(&Self::new_table_name(collection_id), schema_fields).as_str(),
+            &[],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn scylladb_drop_table(db: &ScyllaDb, collection_id: &Uuid) -> Result<()> {
+        db.session_query(
+            record::drop_table(&RecordDao::new_table_name(collection_id)).as_str(),
+            &[],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn scylladb_check_table_existence(db: &ScyllaDb, collection_id: &Uuid) -> Result<bool> {
+        Ok(db
+            .session_query(
+                COUNT_TABLE,
+                [&RecordDao::new_table_name(collection_id)].as_ref(),
+            )
+            .await?
+            .first_row_typed::<(i64,)>()?
+            .0
+            > 0)
+    }
+
+    async fn scylladb_add_columns(
+        db: &ScyllaDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
+    ) -> Result<()> {
+        db.session_query(
+            &record::add_columns(&Self::new_table_name(collection_id), columns),
+            &[],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn scylladb_drop_columns(
+        db: &ScyllaDb,
+        collection_id: &Uuid,
+        columns: &HashSet<String>,
+    ) -> Result<()> {
+        db.session_query(
+            &record::drop_columns(&Self::new_table_name(collection_id), columns),
+            &[],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn scylladb_create_index(db: &ScyllaDb, collection_id: &Uuid, index: &str) -> Result<()> {
+        db.session_query(
+            record::create_index(&Self::new_table_name(collection_id), index).as_str(),
+            &[],
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn scylladb_drop_index(db: &ScyllaDb, collection_id: &Uuid, index: &str) -> Result<()> {
+        db.session_query(
+            &record::drop_index(&Self::new_table_name(collection_id), index),
+            &[],
+        )
+        .await?;
+        Ok(())
     }
 }
 

@@ -1,3 +1,4 @@
+use ahash::HashMap;
 use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
@@ -8,7 +9,8 @@ pub struct TokenScyllaModel {
     updated_at: Timestamp,
     admin_id: Uuid,
     token: String,
-    expired_at: Timestamp,
+    rules: HashMap<Uuid, i8>, // 0: no access, 1: read only, 2: read and write
+    expired_at: Option<Timestamp>,
 }
 
 impl TokenScyllaModel {
@@ -18,7 +20,8 @@ impl TokenScyllaModel {
         updated_at: &Timestamp,
         admin_id: &Uuid,
         token: &str,
-        expired_at: &Timestamp,
+        rules: &HashMap<Uuid, i8>,
+        expired_at: &Option<Timestamp>,
     ) -> Self {
         Self {
             id: *id,
@@ -26,6 +29,7 @@ impl TokenScyllaModel {
             updated_at: *updated_at,
             admin_id: *admin_id,
             token: token.to_owned(),
+            rules: rules.clone(),
             expired_at: *expired_at,
         }
     }
@@ -50,7 +54,11 @@ impl TokenScyllaModel {
         &self.token
     }
 
-    pub fn expired_at(&self) -> &Timestamp {
+    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+        &self.rules
+    }
+
+    pub fn expired_at(&self) -> &Option<Timestamp> {
         &self.expired_at
     }
 }
