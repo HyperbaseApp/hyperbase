@@ -10,7 +10,6 @@ pub mod record;
 pub mod token;
 
 #[actix_header("Authorization")]
-#[derive(Debug)]
 pub struct TokenReqHeader(String);
 
 impl TokenReqHeader {

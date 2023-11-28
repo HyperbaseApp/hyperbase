@@ -1,5 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use chrono::{Duration, Utc};
+use futures::future;
 use hb_dao::{record::RecordDao, token::TokenDao};
 use hb_token_jwt::kind::JwtTokenKind;
 
@@ -67,7 +68,7 @@ async fn insert_one(
             collection_id,
         ));
     }
-    if let Err(err) = futures::future::try_join_all(check_tables_must_exist_fut).await {
+    if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
         return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
@@ -194,7 +195,7 @@ async fn update_one(
                 collection_id,
             ));
         }
-        if let Err(err) = futures::future::try_join_all(check_tables_must_exist_fut).await {
+        if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
             return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
         }
         token_data.new_rules(&Some(rules.len()));

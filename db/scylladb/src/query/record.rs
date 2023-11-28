@@ -37,7 +37,7 @@ pub fn add_columns(
     columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
 ) -> String {
     format!(
-        "ALTER TABLE \"hyperbase\".\"{}\" ADD {}",
+        "ALTER TABLE \"hyperbase\".\"{}\" ADD ({})",
         record_table,
         columns
             .iter()
@@ -49,8 +49,25 @@ pub fn add_columns(
 
 pub fn drop_columns(record_table: &str, column_names: &HashSet<String>) -> String {
     format!(
-        "ALTER TABLE \"hyperbase\".\"{}\" DROP {}",
+        "ALTER TABLE \"hyperbase\".\"{}\" DROP ({})",
         record_table,
-        &column_names.iter().join(", ")
+        &column_names
+            .iter()
+            .map(|col| format!("\"{col}\""))
+            .join(", ")
     )
+}
+
+pub fn insert(record_table: &str, columns: &HashSet<String>) -> String {
+    let mut cols = "".to_owned();
+    let mut vals = "".to_owned();
+    for (idx, col) in columns.iter().enumerate() {
+        cols += &format!("\"{col}\"");
+        vals += "?";
+        if idx < columns.len() {
+            cols += ", ";
+            vals += ", ";
+        }
+    }
+    format!("INSERT INTO \"hyperbase\".\"{record_table}\" ({cols}) VALUES ({vals})")
 }

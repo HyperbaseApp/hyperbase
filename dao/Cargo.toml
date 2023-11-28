@@ -10,6 +10,7 @@ hb_db_scylladb = { workspace = true }
 ahash = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+futures = { workspace = true }
 rand = { workspace = true }
 scylla = { workspace = true }
 serde_json = { workspace = true }

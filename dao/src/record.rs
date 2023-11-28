@@ -1,4 +1,4 @@
-use std::collections::hash_map::Keys;
+use std::{collections::hash_map::Keys, str::FromStr};
 
 use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
@@ -17,7 +17,7 @@ use crate::{
 
 pub struct RecordDao {
     table_name: String,
-    base: HashMap<String, Value>,
+    base: HashMap<String, ColumnValue>,
 }
 
 impl RecordDao {
@@ -28,7 +28,7 @@ impl RecordDao {
         };
 
         let mut base = HashMap::with_capacity(capacity);
-        base.insert("_id".to_owned(), Value::Uuid(Some(Uuid::new_v4())));
+        base.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::new_v4())));
 
         Self {
             table_name: table_name.to_owned(),
@@ -44,15 +44,19 @@ impl RecordDao {
         &self.table_name
     }
 
-    pub fn get(&self, key: &str) -> Option<&Value> {
+    pub fn is_empty(&self) -> bool {
+        self.base.is_empty()
+    }
+
+    pub fn get(&self, key: &str) -> Option<&ColumnValue> {
         self.base.get(key)
     }
 
-    pub fn keys(&self) -> Keys<'_, String, Value> {
+    pub fn keys(&self) -> Keys<'_, String, ColumnValue> {
         self.base.keys()
     }
 
-    pub fn insert(&mut self, key: &str, value: &Value) {
+    pub fn insert(&mut self, key: &str, value: &ColumnValue) {
         self.base.insert(key.to_owned(), value.to_owned());
     }
 
@@ -134,6 +138,12 @@ impl RecordDao {
         }
     }
 
+    pub async fn db_insert(&self, db: &Db) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+        }
+    }
+
     async fn scylladb_create_table(
         db: &ScyllaDb,
         collection_id: &Uuid,
@@ -211,10 +221,23 @@ impl RecordDao {
         .await?;
         Ok(())
     }
+
+    async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
+        // let mut cols = HashSet::with_capacity(self.base.len());
+        // let mut vals = Vec::with_capacity(self.base.len());
+        // for (col, val) in &self.base {
+        //     cols.insert(col.to_owned());
+        //     vals.push(val.to_scylladb_model());
+        // }
+        // db.execute(&record::insert(&self.table_name, &cols), )
+        //     .await?;
+        // TODO!
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
-pub enum Value {
+pub enum ColumnValue {
     Boolean(Option<bool>),
     TinyInteger(Option<i8>),
     SmallInteger(Option<i16>),
@@ -232,7 +255,7 @@ pub enum Value {
     Json(Option<Vec<u8>>),
 }
 
-impl Value {
+impl ColumnValue {
     pub fn from_serde_json(kind: &SchemaFieldKind, value: &serde_json::Value) -> Result<Self> {
         match value {
             serde_json::Value::Null => Ok(Self::none(kind)),
@@ -288,6 +311,26 @@ impl Value {
             serde_json::Value::String(value) => match kind {
                 SchemaFieldKind::String => Ok(Self::String(Some(value.to_owned()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
+                SchemaFieldKind::Uuid => match Uuid::from_str(value) {
+                    Ok(uuid) => Ok(Self::Uuid(Some(uuid))),
+                    Err(err) => Err(err.into()),
+                },
+                SchemaFieldKind::Date => match NaiveDate::parse_from_str(value, "%Y-%m-%d") {
+                    Ok(date) => Ok(Self::Date(Some(date))),
+                    Err(err) => Err(err.into()),
+                },
+                SchemaFieldKind::Time => match NaiveTime::parse_from_str(value, "%H:%M:%S") {
+                    Ok(time) => Ok(Self::Time(Some(time))),
+                    Err(err) => Err(err.into()),
+                },
+                SchemaFieldKind::DateTime => match DateTime::parse_from_rfc3339(value) {
+                    Ok(datetime) => Ok(Self::DateTime(Some(datetime))),
+                    Err(err) => Err(err.into()),
+                },
+                SchemaFieldKind::Timestamp => match DateTime::parse_from_rfc3339(value) {
+                    Ok(timestamp) => Ok(Self::Timestamp(Some(timestamp))),
+                    Err(err) => Err(err.into()),
+                },
                 _ => return Err(Error::msg("wrong value type")),
             },
             serde_json::Value::Array(value) => match kind {
@@ -326,6 +369,7 @@ impl Value {
             },
         }
     }
+
     pub fn none(kind: &SchemaFieldKind) -> Self {
         match kind {
             SchemaFieldKind::Bool => Self::Boolean(None),

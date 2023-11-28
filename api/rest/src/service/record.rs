@@ -1,5 +1,9 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::{collection::CollectionDao, project::ProjectDao, record::Value, token::TokenDao};
+use hb_dao::{
+    admin::AdminDao, collection::CollectionDao, project::ProjectDao, record::ColumnValue,
+    token::TokenDao,
+};
+use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
     context::ApiRestCtx,
@@ -47,15 +51,23 @@ async fn insert_one(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (token_data, project_data) = match tokio::try_join!(
-        TokenDao::db_select(ctx.dao().db(), token_claim.id()),
-        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
-    ) {
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+    };
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_data.admin_id() != project_data.admin_id() {
+    if &admin_id != project_data.admin_id() {
         return Response::error(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -72,14 +84,12 @@ async fn insert_one(
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if collection_data.schema_fields().keys().len() != data.keys().len() {
-        for field_name in data.keys() {
-            if !collection_data.schema_fields().contains_key(field_name) {
-                return Response::error(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Field {field_name} is not exist in the collection"),
-                );
-            }
+    for field_name in data.keys() {
+        if !collection_data.schema_fields().contains_key(field_name) {
+            return Response::error(
+                &StatusCode::BAD_REQUEST,
+                &format!("Field {field_name} is not exist in the collection"),
+            );
         }
     }
 
@@ -88,27 +98,38 @@ async fn insert_one(
         match data.get(field_name) {
             Some(value) => record_data.insert(
                 field_name,
-                &match Value::from_serde_json(field_props.kind(), value) {
+                &match ColumnValue::from_serde_json(field_props.kind(), value) {
                     Ok(value) => value,
-                    Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+                    Err(err) => {
+                        return Response::error(
+                            &StatusCode::BAD_REQUEST,
+                            &format!("Error in field {}: {}", field_name, err),
+                        )
+                    }
                 },
             ),
             None => match field_props.required() {
                 true => {
                     return Response::error(
                         &StatusCode::BAD_REQUEST,
-                        &format!("value for {field_name} is required"),
+                        &format!("Value for {field_name} is required"),
                     )
                 }
-                false => record_data.insert(field_name, &Value::none(field_props.kind())),
+                false => record_data.insert(field_name, &ColumnValue::none(field_props.kind())),
             },
+        }
+    }
+
+    if record_data.is_empty() {
+        if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
+            return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
     }
 
     HttpResponse::Ok().body(format!(
         "record insert_one {} {}",
         path.project_id(),
-        path.collection_id()
+        path.collection_id(),
     ))
 }
 

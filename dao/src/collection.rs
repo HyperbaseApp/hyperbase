@@ -1,6 +1,7 @@
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
+use futures::future;
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::collection::{
@@ -117,9 +118,12 @@ impl CollectionDao {
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         RecordDao::db_create_table(db, self).await?;
+
+        let mut create_indexes_fut = Vec::with_capacity(self.indexes.len());
         for index in &self.indexes {
-            RecordDao::db_create_index(db, &self.id, index).await?;
+            create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, index));
         }
+        future::try_join_all(create_indexes_fut).await?;
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
@@ -162,11 +166,13 @@ impl CollectionDao {
             .is_some_and(|preserve| preserve.indexes.as_ref().is_some());
 
         if is_preserve_indexes_exist {
+            let mut drop_indexes_fut = Vec::new();
             for index in self._preserve.as_ref().unwrap().indexes.as_ref().unwrap() {
                 if !self.indexes.contains(index) {
-                    RecordDao::db_drop_index(db, &self.id, index).await?;
+                    drop_indexes_fut.push(RecordDao::db_drop_index(db, &self.id, index));
                 }
             }
+            future::try_join_all(drop_indexes_fut).await?;
         }
 
         if is_preserve_schema_fields_exist {
@@ -208,6 +214,7 @@ impl CollectionDao {
         }
 
         if is_preserve_indexes_exist {
+            let mut create_indexes_fut = Vec::new();
             for index in &self.indexes {
                 if !self
                     ._preserve
@@ -218,9 +225,10 @@ impl CollectionDao {
                     .unwrap()
                     .contains(index)
                 {
-                    RecordDao::db_create_index(db, &self.id, index).await?;
+                    create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, index));
                 }
             }
+            future::try_join_all(create_indexes_fut).await?;
         }
 
         self.updated_at = Utc::now();

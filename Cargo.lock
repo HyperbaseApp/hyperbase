@@ -808,6 +808,7 @@ dependencies = [
  "ahash",
  "anyhow",
  "chrono",
+ "futures",
  "hb_db_scylladb",
  "rand",
  "scylla",
