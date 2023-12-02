@@ -58,16 +58,35 @@ pub fn drop_columns(record_table: &str, column_names: &HashSet<String>) -> Strin
     )
 }
 
-pub fn insert(record_table: &str, columns: &HashSet<String>) -> String {
+pub fn insert(record_table: &str, columns: &Vec<String>) -> String {
     let mut cols = "".to_owned();
     let mut vals = "".to_owned();
     for (idx, col) in columns.iter().enumerate() {
         cols += &format!("\"{col}\"");
         vals += "?";
-        if idx < columns.len() {
+        if idx < columns.len() - 1 {
             cols += ", ";
             vals += ", ";
         }
     }
     format!("INSERT INTO \"hyperbase\".\"{record_table}\" ({cols}) VALUES ({vals})")
+}
+
+pub fn select(record_table: &str, columns: &Vec<String>) -> String {
+    format!(
+        "SELECT {} FROM \"hyperbase\".\"{}\" WHERE \"_id\" = ?",
+        columns.iter().map(|col| format!("\"{col}\"")).join(", "),
+        record_table
+    )
+}
+
+pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
+    format!(
+        "DELETE FROM \"hyperbase\".\"{}\" WHERE {}",
+        record_table,
+        columns
+            .iter()
+            .map(|col| format!("\"{col}\" = ?"))
+            .join(", ")
+    )
 }

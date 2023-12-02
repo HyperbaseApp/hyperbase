@@ -9,6 +9,7 @@ hb_db_scylladb = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
+bigdecimal = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }

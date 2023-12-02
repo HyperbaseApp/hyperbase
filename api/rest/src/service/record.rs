@@ -1,6 +1,9 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
-    admin::AdminDao, collection::CollectionDao, project::ProjectDao, record::ColumnValue,
+    admin::AdminDao,
+    collection::CollectionDao,
+    project::ProjectDao,
+    record::{ColumnValue, RecordDao},
     token::TokenDao,
 };
 use hb_token_jwt::kind::JwtTokenKind;
@@ -9,8 +12,9 @@ use crate::{
     context::ApiRestCtx,
     model::{
         record::{
-            DeleteOneRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson,
-            InsertOneRecordReqPath, UpdateOneRecordReqJson, UpdateOneRecordReqPath,
+            DeleteOneRecordReqPath, DeleteRecordResJson, FindOneRecordReqPath,
+            InsertOneRecordReqJson, InsertOneRecordReqPath, RecordColumnValueJson, RecordResJson,
+            UpdateOneRecordReqJson, UpdateOneRecordReqPath,
         },
         Response, TokenReqHeader,
     },
@@ -30,7 +34,7 @@ pub fn record_api(cfg: &mut web::ServiceConfig) {
         web::patch().to(update_one),
     )
     .route(
-        "/project/{project_id}/collection/{collection_id}/record/{delete_one}",
+        "/project/{project_id}/collection/{collection_id}/record/{record_id}",
         web::delete().to(delete_one),
     );
 }
@@ -120,20 +124,63 @@ async fn insert_one(
         }
     }
 
-    if record_data.is_empty() {
+    if !record_data.is_empty() {
         if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
             return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
     }
 
-    HttpResponse::Ok().body(format!(
-        "record insert_one {} {}",
-        path.project_id(),
-        path.collection_id(),
-    ))
+    Response::data(
+        &StatusCode::CREATED,
+        &None,
+        &RecordResJson::new(
+            &record_data
+                .data()
+                .iter()
+                .map(|(key, value)| (key.to_owned(), RecordColumnValueJson::from_dao(value)))
+                .collect(),
+        ),
+    )
 }
 
-async fn find_one(path: web::Path<FindOneRecordReqPath>) -> HttpResponse {
+async fn find_one(
+    ctx: web::Data<ApiRestCtx>,
+    token: web::Header<TokenReqHeader>,
+    path: web::Path<FindOneRecordReqPath>,
+) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+    };
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if &admin_id != project_data.admin_id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
     HttpResponse::Ok().body(format!(
         "record find_one {} {} {}",
         path.project_id(),
@@ -143,13 +190,44 @@ async fn find_one(path: web::Path<FindOneRecordReqPath>) -> HttpResponse {
 }
 
 async fn update_one(
+    ctx: web::Data<ApiRestCtx>,
+    token: web::Header<TokenReqHeader>,
     path: web::Path<UpdateOneRecordReqPath>,
     data: web::Json<UpdateOneRecordReqJson>,
 ) -> HttpResponse {
-    let data = data.into_inner();
-    for (key, value) in &data {
-        println!("{} {:?}", key, value);
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+    };
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if &admin_id != project_data.admin_id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
     }
+
     HttpResponse::Ok().body(format!(
         "record update_one {} {} {}",
         path.project_id(),
@@ -158,11 +236,72 @@ async fn update_one(
     ))
 }
 
-async fn delete_one(path: web::Path<DeleteOneRecordReqPath>) -> HttpResponse {
-    HttpResponse::Ok().body(format!(
-        "record delete_one {} {} {}",
-        path.project_id(),
-        path.collection_id(),
-        path.record_id()
-    ))
+async fn delete_one(
+    ctx: web::Data<ApiRestCtx>,
+    token: web::Header<TokenReqHeader>,
+    path: web::Path<DeleteOneRecordReqPath>,
+) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+    };
+
+    let (project_data, collection_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
+    ) {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if &admin_id != project_data.admin_id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
+    if project_data.id() != collection_data.project_id() {
+        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    // TODO: change to RecordDao::db_select()
+    let record_data = collection_data.to_record(&None);
+
+    if let Err(err) =
+        RecordDao::db_delete(ctx.dao().db(), record_data.table_name(), path.record_id()).await
+    {
+        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let record_data_id = if let Some(ColumnValue::Uuid(Some(id))) = record_data.get("_id") {
+        id
+    } else {
+        return Response::error(
+            &StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to get record id",
+        );
+    };
+
+    Response::data(
+        &StatusCode::OK,
+        &None,
+        &DeleteRecordResJson::new(record_data_id),
+    )
 }

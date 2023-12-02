@@ -28,6 +28,7 @@ ahash = "0.8"
 anyhow = "1"
 argon2 = "0.5"
 backtrace = "0.3"
+bigdecimal = "0.4"
 chrono = { version = "0.4", default-features = false }
 futures = "0.3"
 itertools = "0.12"
@@ -39,6 +40,7 @@ lettre = { version = "0.11", default-features = false, features = [
     "smtp-transport",
     "pool",
 ] }
+num-bigint = "0.4"
 rand = "0.8"
 scylla = "0.10"
 serde = { version = "1", default-features = false }
