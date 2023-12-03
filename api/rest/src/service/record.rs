@@ -1,6 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
-    admin::AdminDao,
     collection::CollectionDao,
     project::ProjectDao,
     record::{ColumnValue, RecordDao},
@@ -56,17 +55,17 @@ async fn insert_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
-        },
+        JwtTokenKind::User => *token_claim.id(),
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
 
-    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+    let (project_data, collection_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        CollectionDao::db_select(ctx.dao().db(), path.collection_id())
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -77,12 +76,6 @@ async fn insert_one(
             "This project does not belong to you",
         );
     }
-
-    let collection_data = match CollectionDao::db_select(ctx.dao().db(), path.collection_id()).await
-    {
-        Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
-    };
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
@@ -97,7 +90,7 @@ async fn insert_one(
         }
     }
 
-    let mut record_data = collection_data.to_record(&Some(data.len()));
+    let mut record_data = collection_data.new_record(&Some(data.len()));
     for (field_name, field_props) in collection_data.schema_fields().iter() {
         match data.get(field_name) {
             Some(value) => record_data.insert(
@@ -159,17 +152,17 @@ async fn find_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
-        },
+        JwtTokenKind::User => *token_claim.id(),
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
 
-    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+    let (project_data, collection_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -181,12 +174,27 @@ async fn find_one(
         );
     }
 
-    HttpResponse::Ok().body(format!(
-        "record find_one {} {} {}",
-        path.project_id(),
-        path.collection_id(),
-        path.record_id()
-    ))
+    if project_data.id() != collection_data.project_id() {
+        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    let record_data =
+        match RecordDao::db_select(ctx.dao().db(), &collection_data, path.record_id()).await {
+            Ok(data) => data,
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+    Response::data(
+        &StatusCode::OK,
+        &None,
+        &RecordResJson::new(
+            &record_data
+                .data()
+                .iter()
+                .map(|(key, value)| (key.to_owned(), RecordColumnValueJson::from_dao(value)))
+                .collect(),
+        ),
+    )
 }
 
 async fn update_one(
@@ -206,17 +214,17 @@ async fn update_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
-        },
+        JwtTokenKind::User => *token_claim.id(),
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
 
-    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+    let (project_data, collection_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -226,6 +234,10 @@ async fn update_one(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
+    }
+
+    if project_data.id() != collection_data.project_id() {
+        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
     HttpResponse::Ok().body(format!(
@@ -252,10 +264,7 @@ async fn delete_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
-        },
+        JwtTokenKind::User => *token_claim.id(),
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -281,27 +290,15 @@ async fn delete_one(
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    // TODO: change to RecordDao::db_select()
-    let record_data = collection_data.to_record(&None);
-
     if let Err(err) =
-        RecordDao::db_delete(ctx.dao().db(), record_data.table_name(), path.record_id()).await
+        RecordDao::db_delete(ctx.dao().db(), collection_data.id(), path.record_id()).await
     {
         return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    let record_data_id = if let Some(ColumnValue::Uuid(Some(id))) = record_data.get("_id") {
-        id
-    } else {
-        return Response::error(
-            &StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to get record id",
-        );
-    };
-
     Response::data(
         &StatusCode::OK,
         &None,
-        &DeleteRecordResJson::new(record_data_id),
+        &DeleteRecordResJson::new(path.record_id()),
     )
 }

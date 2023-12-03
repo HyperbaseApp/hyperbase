@@ -112,7 +112,7 @@ impl CollectionDao {
         self.indexes = indexes.to_owned();
     }
 
-    pub fn to_record(&self, capacity: &Option<usize>) -> RecordDao {
+    pub fn new_record(&self, capacity: &Option<usize>) -> RecordDao {
         RecordDao::new(&RecordDao::new_table_name(&self.id), capacity)
     }
 
@@ -338,7 +338,7 @@ impl CollectionDao {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct SchemaFieldPropsModel {
     kind: SchemaFieldKind,
     required: bool,

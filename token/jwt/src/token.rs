@@ -27,14 +27,19 @@ impl JwtToken {
     }
 
     pub fn encode(&self, id: &Uuid, kind: &JwtTokenKind) -> Result<String> {
-        let expiration_time = time::SystemTime::now()
-            .duration_since(time::UNIX_EPOCH)?
-            .as_secs()
-            + self.expiry_duration;
+        let expiration_time = match usize::try_from(
+            time::SystemTime::now()
+                .duration_since(time::UNIX_EPOCH)?
+                .as_secs()
+                + self.expiry_duration,
+        ) {
+            Ok(time) => time,
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(encode(
             &self.header,
-            &Claim::new(id, kind, &(expiration_time as usize)),
+            &Claim::new(id, kind, &expiration_time),
             &self.encoding_key,
         )?)
     }
@@ -44,7 +49,11 @@ impl JwtToken {
     }
 
     pub fn need_renew(&self, claim: &Claim) -> Result<bool> {
-        if (*claim.exp() as u64) - (self.expiry_duration / 2)
+        let expiry = match u64::try_from(*claim.exp()) {
+            Ok(expiry) => expiry,
+            Err(err) => return Err(err.into()),
+        };
+        if expiry - (self.expiry_duration / 2)
             < time::SystemTime::now()
                 .duration_since(time::UNIX_EPOCH)?
                 .as_secs()

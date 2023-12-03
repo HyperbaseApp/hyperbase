@@ -65,9 +65,17 @@ async fn insert_one(
         );
     }
 
-    if let Err(err) = ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
 
     let mut schema_fields = HashMap::with_capacity(data.schema_fields().len());
     for (key, value) in data.schema_fields().iter() {
@@ -195,6 +203,13 @@ async fn find_one(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
@@ -256,6 +271,13 @@ async fn update_one(
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
@@ -389,6 +411,13 @@ async fn delete_one(
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
