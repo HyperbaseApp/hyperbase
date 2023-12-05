@@ -1,5 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use hb_dao::project::ProjectDao;
+use hb_dao::{admin::AdminDao, project::ProjectDao};
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
@@ -44,6 +44,10 @@ async fn insert_one(
         );
     }
 
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
     let project_data = ProjectDao::new(token_claim.id(), data.name());
 
     if let Err(err) = project_data.db_insert(ctx.dao().db()).await {
@@ -82,6 +86,10 @@ async fn find_one(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
@@ -129,6 +137,10 @@ async fn update_one(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let mut project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
@@ -187,6 +199,10 @@ async fn delete_one(
         );
     }
 
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -226,6 +242,10 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let projects_data =

@@ -1,7 +1,7 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use chrono::{Duration, Utc};
 use futures::future;
-use hb_dao::{record::RecordDao, token::TokenDao};
+use hb_dao::{admin::AdminDao, record::RecordDao, token::TokenDao};
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
@@ -43,6 +43,10 @@ async fn insert_one(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if data.rules().is_empty() {
@@ -122,6 +126,10 @@ async fn find_one(
         );
     }
 
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
     let token_data = match TokenDao::db_select(ctx.dao().db(), path.token_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -166,6 +174,10 @@ async fn update_one(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let mut token_data = match TokenDao::db_select(ctx.dao().db(), path.token_id()).await {
@@ -246,6 +258,10 @@ async fn delete_one(
         );
     }
 
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
     let token_data = match TokenDao::db_select(ctx.dao().db(), path.token_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -282,6 +298,10 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let tokens_data =

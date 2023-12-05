@@ -3,7 +3,7 @@ use std::{collections::hash_map::Keys, str::FromStr};
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use bigdecimal::{num_traits::ToBytes, ToPrimitive};
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::collection::SchemaFieldPropsScyllaModel,
@@ -17,7 +17,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
-    collection::{CollectionDao, SchemaFieldKind},
+    collection::{CollectionDao, SchemaFieldKind, SchemaFieldPropsModel},
     Db,
 };
 
@@ -154,8 +154,11 @@ impl RecordDao {
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len());
-                let mut columns_props = Vec::with_capacity(collection_data.schema_fields().len());
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id".to_owned());
+                let mut columns_props =
+                    Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
                 for (column, props) in collection_data.schema_fields() {
                     columns.push(column.to_owned());
                     columns_props.push(*props)
@@ -274,7 +277,6 @@ impl RecordDao {
         for (col, val) in &self.data {
             cols.push(col.to_owned());
             vals.push(val.to_scylladb_model());
-            println!("{col} - {val:?}");
         }
         db.execute(
             &record::insert(&self.table_name, &cols),
@@ -390,7 +392,7 @@ impl ColumnValue {
                     Ok(date) => Ok(Self::Date(Some(date))),
                     Err(err) => Err(err.into()),
                 },
-                SchemaFieldKind::Time => match NaiveTime::parse_from_str(value, "%H:%M:%S") {
+                SchemaFieldKind::Time => match NaiveTime::parse_from_str(value, "%H:%M:%S%.f") {
                     Ok(time) => Ok(Self::Time(Some(time))),
                     Err(err) => Err(err.into()),
                 },
@@ -587,35 +589,44 @@ impl ColumnValue {
                         ),
                 )),
                 SchemaFieldKind::Time => {
-                    let nano = match (chrono::Duration::nanoseconds(value.nanoseconds)
-                        - chrono::Duration::days(1 << 31))
-                    .num_nanoseconds()
-                    {
-                        Some(nano) => match u32::try_from(nano) {
-                            Ok(nano) => nano,
-                            Err(_) => return Err(Error::msg("wrong value type")),
-                        },
-                        None => return Err(Error::msg("wrong value type")),
+                    let total_milli = value.nanoseconds / 1000000;
+                    let milli = match u32::try_from(total_milli % 60) {
+                        Ok(milli) => milli,
+                        Err(_) => return Err(Error::msg("wrong value type")),
                     };
-                    match NaiveTime::from_hms_nano_opt(0, 0, 0, nano) {
-                        Some(value) => Ok(Self::Time(Some(value))),
+                    let sec = match u32::try_from((total_milli / 1000) % 60) {
+                        Ok(sec) => sec,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    let min: u32 = match u32::try_from((total_milli / (1000 * 60)) % 60) {
+                        Ok(sec) => sec,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    let hour: u32 = match u32::try_from((total_milli / (1000 * 60 * 60)) % 60) {
+                        Ok(sec) => sec,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    match NaiveTime::from_hms_milli_opt(hour, min, sec, milli) {
+                        Some(data) => Ok(Self::Time(Some(data))),
                         None => Err(Error::msg("wrong value type")),
                     }
                 }
                 SchemaFieldKind::DateTime => {
-                    let secs = (chrono::Duration::nanoseconds(value.nanoseconds)
-                        - chrono::Duration::days(1 << 31))
-                    .num_seconds();
-                    match DateTime::from_timestamp(secs, 0) {
+                    let nsecs = match u32::try_from(value.nanoseconds) {
+                        Ok(nsecs) => nsecs,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    match DateTime::from_timestamp(0, nsecs) {
                         Some(value) => Ok(Self::DateTime(Some(value.into()))),
                         None => Err(Error::msg("wrong value type")),
                     }
                 }
                 SchemaFieldKind::Timestamp => {
-                    let secs = (chrono::Duration::nanoseconds(value.nanoseconds)
-                        - chrono::Duration::days(1 << 31))
-                    .num_seconds();
-                    match DateTime::from_timestamp(secs, 0) {
+                    let nsecs = match u32::try_from(value.nanoseconds) {
+                        Ok(nsecs) => nsecs,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    match DateTime::from_timestamp(0, nsecs) {
                         Some(value) => Ok(Self::Timestamp(Some(value.into()))),
                         None => Err(Error::msg("wrong value type")),
                     }
@@ -654,19 +665,13 @@ impl ColumnValue {
             },
             CqlValue::Timestamp(value) => match kind {
                 SchemaFieldKind::DateTime => {
-                    let secs = (chrono::Duration::milliseconds(value.num_milliseconds())
-                        - chrono::Duration::days(1 << 31))
-                    .num_seconds();
-                    match DateTime::from_timestamp(secs, 0) {
+                    match DateTime::from_timestamp(value.num_seconds(), 0) {
                         Some(value) => Ok(Self::DateTime(Some(value.into()))),
                         None => Err(Error::msg("wrong value type")),
                     }
                 }
                 SchemaFieldKind::Timestamp => {
-                    let secs = (chrono::Duration::milliseconds(value.num_milliseconds())
-                        - chrono::Duration::days(1 << 31))
-                    .num_seconds();
-                    match DateTime::from_timestamp(secs, 0) {
+                    match DateTime::from_timestamp(value.num_seconds(), 0) {
                         Some(value) => Ok(Self::Timestamp(Some(value.into()))),
                         None => Err(Error::msg("wrong value type")),
                     }
@@ -765,15 +770,24 @@ impl ColumnValue {
             },
             CqlValue::Time(value) => match kind {
                 SchemaFieldKind::Time => {
-                    let milli = match u32::try_from(
-                        (chrono::Duration::milliseconds(value.num_milliseconds())
-                            - chrono::Duration::days(1 << 31))
-                        .num_milliseconds(),
-                    ) {
-                        Ok(data) => data,
+                    let total_milli = value.num_milliseconds();
+                    let milli = match u32::try_from(total_milli % 60) {
+                        Ok(milli) => milli,
                         Err(_) => return Err(Error::msg("wrong value type")),
                     };
-                    match NaiveTime::from_hms_milli_opt(0, 0, 0, milli) {
+                    let sec = match u32::try_from((total_milli / 1000) % 60) {
+                        Ok(sec) => sec,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    let min: u32 = match u32::try_from((total_milli / (1000 * 60)) % 60) {
+                        Ok(sec) => sec,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    let hour: u32 = match u32::try_from((total_milli / (1000 * 60 * 60)) % 60) {
+                        Ok(sec) => sec,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    match NaiveTime::from_hms_milli_opt(hour, min, sec, milli) {
                         Some(data) => Ok(Self::Time(Some(data))),
                         None => Err(Error::msg("wrong value type")),
                     }
@@ -836,11 +850,11 @@ impl ColumnValue {
                 None => None,
             }),
             ColumnValue::DateTime(data) => Box::new(match data {
-                Some(data) => Some(Timestamp(Utc::now().signed_duration_since(data))),
+                Some(data) => Some(Timestamp(data.signed_duration_since(DateTime::UNIX_EPOCH))),
                 None => None,
             }),
             ColumnValue::Timestamp(data) => Box::new(match data {
-                Some(data) => Some(Timestamp(Utc::now().signed_duration_since(data))),
+                Some(data) => Some(Timestamp(data.signed_duration_since(DateTime::UNIX_EPOCH))),
                 None => None,
             }),
             ColumnValue::Json(data) => Box::new(data.to_owned()),

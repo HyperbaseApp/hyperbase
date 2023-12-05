@@ -36,7 +36,7 @@ async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>
 
     let admin_data = match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     Response::data(
@@ -128,6 +128,10 @@ async fn delete_one(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if let Err(err) = AdminDao::db_delete(ctx.dao().db(), token_claim.id()).await {

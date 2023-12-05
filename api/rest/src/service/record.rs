@@ -1,5 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use hb_dao::{
+    admin::AdminDao,
     collection::CollectionDao,
     project::ProjectDao,
     record::{ColumnValue, RecordDao},
@@ -55,7 +56,10 @@ async fn insert_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => *token_claim.id(),
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -150,7 +154,10 @@ async fn find_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => *token_claim.id(),
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -212,7 +219,10 @@ async fn update_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => *token_claim.id(),
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -262,7 +272,10 @@ async fn delete_one(
     };
 
     let admin_id = match token_claim.kind() {
-        JwtTokenKind::User => *token_claim.id(),
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
