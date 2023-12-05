@@ -19,7 +19,7 @@ pub fn admin_api(cfg: &mut web::ServiceConfig) {
 async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {

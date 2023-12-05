@@ -1,4 +1,4 @@
-use std::{any::Any, collections::hash_map::Keys, str::FromStr};
+use std::{collections::hash_map::Keys, str::FromStr};
 
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
@@ -13,6 +13,7 @@ use scylla::frame::{
     response::result::CqlValue,
     value::{Time, Timestamp, Value},
 };
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
@@ -51,10 +52,6 @@ impl RecordDao {
 
     pub fn data(&self) -> &HashMap<String, ColumnValue> {
         &self.data
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
     }
 
     pub fn get(&self, key: &str) -> Option<&ColumnValue> {
@@ -277,6 +274,7 @@ impl RecordDao {
         for (col, val) in &self.data {
             cols.push(col.to_owned());
             vals.push(val.to_scylladb_model());
+            println!("{col} - {val:?}");
         }
         db.execute(
             &record::insert(&self.table_name, &cols),
@@ -443,6 +441,71 @@ impl ColumnValue {
         }
     }
 
+    pub fn to_serde_json(&self) -> serde_json::Value {
+        match self {
+            ColumnValue::Boolean(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::TinyInteger(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::SmallInteger(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Integer(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::BigInteger(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Float(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Double(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::String(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Byte(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Uuid(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Date(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Time(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::DateTime(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Timestamp(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+            ColumnValue::Json(data) => match data {
+                Some(data) => json!(data),
+                None => serde_json::Value::Null,
+            },
+        }
+    }
+
     pub fn none(kind: &SchemaFieldKind) -> Self {
         match kind {
             SchemaFieldKind::Bool => Self::Boolean(None),
@@ -463,54 +526,34 @@ impl ColumnValue {
         }
     }
 
-    pub fn into_inner_boxed(&self) -> Box<dyn Any> {
-        match self {
-            ColumnValue::Boolean(data) => Box::new(*data),
-            ColumnValue::TinyInteger(data) => Box::new(*data),
-            ColumnValue::SmallInteger(data) => Box::new(*data),
-            ColumnValue::Integer(data) => Box::new(*data),
-            ColumnValue::BigInteger(data) => Box::new(*data),
-            ColumnValue::Float(data) => Box::new(*data),
-            ColumnValue::Double(data) => Box::new(*data),
-            ColumnValue::String(data) => Box::new(data.to_owned()),
-            ColumnValue::Byte(data) => Box::new(data.to_owned()),
-            ColumnValue::Uuid(data) => Box::new(*data),
-            ColumnValue::Date(data) => Box::new(*data),
-            ColumnValue::Time(data) => Box::new(*data),
-            ColumnValue::DateTime(data) => Box::new(*data),
-            ColumnValue::Timestamp(data) => Box::new(*data),
-            ColumnValue::Json(data) => Box::new(data.to_owned()),
-        }
-    }
-
     pub fn from_scylladb_model(kind: &SchemaFieldKind, value: &CqlValue) -> Result<Self> {
         match value {
             CqlValue::Ascii(value) => match kind {
                 SchemaFieldKind::String => Ok(Self::String(Some(value.to_owned()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Boolean(value) => match kind {
                 SchemaFieldKind::Bool => Ok(Self::Boolean(Some(*value))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some([(*value).into()].to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Blob(value) => match kind {
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_owned()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Counter(value) => match kind {
                 SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some(value.0))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.0.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Decimal(value) => match value.to_f64() {
                 Some(value) => match kind {
                     SchemaFieldKind::Double => Ok(Self::Double(Some(value))),
                     SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                    _ => return Err(Error::msg("wrong value type")),
+                    _ => Err(Error::msg("wrong value type")),
                 },
-                None => return Err(Error::msg("wrong value type")),
+                None => Err(Error::msg("wrong value type")),
             },
             CqlValue::Date(value) => match kind {
                 SchemaFieldKind::Date => Ok(Self::Date(
@@ -521,13 +564,18 @@ impl ColumnValue {
                                 - chrono::Duration::days(1 << 31),
                         ),
                 )),
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(
+                    (chrono::Duration::days((*value).into()) - chrono::Duration::days(1 << 31))
+                        .num_milliseconds()
+                        .to_be_bytes()
+                        .to_vec(),
+                ))),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Double(value) => match kind {
                 SchemaFieldKind::Double => Ok(Self::Double(Some(*value))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Duration(value) => match kind {
                 SchemaFieldKind::Date => Ok(Self::Date(
@@ -551,97 +599,161 @@ impl ColumnValue {
                     };
                     match NaiveTime::from_hms_nano_opt(0, 0, 0, nano) {
                         Some(value) => Ok(Self::Time(Some(value))),
-                        None => return Err(Error::msg("wrong value type")),
+                        None => Err(Error::msg("wrong value type")),
                     }
                 }
-                SchemaFieldKind::DateTime => Ok(Self::DateTime(Some(todo!()))),
-                SchemaFieldKind::Timestamp => Ok(Self::Timestamp(Some(todo!()))),
-                SchemaFieldKind::Byte => {
-                    Ok(Self::Byte(Some(value.nanoseconds.to_be_bytes().to_vec())))
+                SchemaFieldKind::DateTime => {
+                    let secs = (chrono::Duration::nanoseconds(value.nanoseconds)
+                        - chrono::Duration::days(1 << 31))
+                    .num_seconds();
+                    match DateTime::from_timestamp(secs, 0) {
+                        Some(value) => Ok(Self::DateTime(Some(value.into()))),
+                        None => Err(Error::msg("wrong value type")),
+                    }
                 }
-                _ => return Err(Error::msg("wrong value type")),
+                SchemaFieldKind::Timestamp => {
+                    let secs = (chrono::Duration::nanoseconds(value.nanoseconds)
+                        - chrono::Duration::days(1 << 31))
+                    .num_seconds();
+                    match DateTime::from_timestamp(secs, 0) {
+                        Some(value) => Ok(Self::Timestamp(Some(value.into()))),
+                        None => Err(Error::msg("wrong value type")),
+                    }
+                }
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(
+                    (chrono::Duration::nanoseconds(value.nanoseconds)
+                        - chrono::Duration::days(1 << 31))
+                    .num_milliseconds()
+                    .to_be_bytes()
+                    .to_vec(),
+                ))),
+                _ => Err(Error::msg("wrong value type")),
             },
-            CqlValue::Empty => match kind {
-                SchemaFieldKind::Bool => Ok(Self::Boolean(None)),
-                SchemaFieldKind::TinyInt => Ok(Self::TinyInteger(None)),
-                SchemaFieldKind::SmallInt => Ok(Self::SmallInteger(None)),
-                SchemaFieldKind::Int => Ok(Self::Integer(None)),
-                SchemaFieldKind::BigInt => Ok(Self::BigInteger(None)),
-                SchemaFieldKind::Float => Ok(Self::Float(None)),
-                SchemaFieldKind::Double => Ok(Self::Double(None)),
-                SchemaFieldKind::String => Ok(Self::String(None)),
-                SchemaFieldKind::Byte => Ok(Self::Byte(None)),
-                SchemaFieldKind::Uuid => Ok(Self::Uuid(None)),
-                SchemaFieldKind::Date => Ok(Self::Date(None)),
-                SchemaFieldKind::Time => Ok(Self::Time(None)),
-                SchemaFieldKind::DateTime => Ok(Self::DateTime(None)),
-                SchemaFieldKind::Timestamp => Ok(Self::Timestamp(None)),
-                SchemaFieldKind::Json => Ok(Self::Json(None)),
-            },
+            CqlValue::Empty => Ok(Self::none(kind)),
             CqlValue::Float(value) => match kind {
                 SchemaFieldKind::Float => Ok(Self::Float(Some(*value))),
                 SchemaFieldKind::Double => Ok(Self::Double(Some((*value).into()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Int(value) => match kind {
                 SchemaFieldKind::Int => Ok(Self::Integer(Some(*value))),
                 SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some((*value).into()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::BigInt(value) => match kind {
                 SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some(*value))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Text(value) => match kind {
                 SchemaFieldKind::String => Ok(Self::String(Some(value.to_owned()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Timestamp(value) => match kind {
-                SchemaFieldKind::DateTime => Ok(Self::DateTime(Some(todo!()))),
-                SchemaFieldKind::Timestamp => Ok(Self::Timestamp(Some(todo!()))),
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+                SchemaFieldKind::DateTime => {
+                    let secs = (chrono::Duration::milliseconds(value.num_milliseconds())
+                        - chrono::Duration::days(1 << 31))
+                    .num_seconds();
+                    match DateTime::from_timestamp(secs, 0) {
+                        Some(value) => Ok(Self::DateTime(Some(value.into()))),
+                        None => Err(Error::msg("wrong value type")),
+                    }
+                }
+                SchemaFieldKind::Timestamp => {
+                    let secs = (chrono::Duration::milliseconds(value.num_milliseconds())
+                        - chrono::Duration::days(1 << 31))
+                    .num_seconds();
+                    match DateTime::from_timestamp(secs, 0) {
+                        Some(value) => Ok(Self::Timestamp(Some(value.into()))),
+                        None => Err(Error::msg("wrong value type")),
+                    }
+                }
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(
+                    (chrono::Duration::milliseconds(value.num_milliseconds())
+                        - chrono::Duration::days(1 << 31))
+                    .num_milliseconds()
+                    .to_be_bytes()
+                    .to_vec(),
+                ))),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Inet(value) => match kind {
                 SchemaFieldKind::String => Ok(Self::String(Some(value.to_string()))),
                 SchemaFieldKind::Byte => {
                     Ok(Self::Byte(Some(value.to_string().as_bytes().to_vec())))
                 }
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
-            CqlValue::List(value) => match kind {
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                SchemaFieldKind::Json => Ok(Self::Json(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+            CqlValue::List(values) => match kind {
+                SchemaFieldKind::Byte => {
+                    let mut data = Vec::new();
+                    if values.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Byte(Some(data)))
+                }
+                SchemaFieldKind::Json => {
+                    let mut data = Vec::new();
+                    if values.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Json(Some(data)))
+                }
+                _ => Err(Error::msg("wrong value type")),
             },
-            CqlValue::Map(value) => match kind {
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                SchemaFieldKind::Json => Ok(Self::Json(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+            CqlValue::Map(values) => match kind {
+                SchemaFieldKind::Byte => {
+                    let mut data = Vec::new();
+                    if values.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Byte(Some(data)))
+                }
+                SchemaFieldKind::Json => {
+                    let mut data = Vec::new();
+                    if values.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Json(Some(data)))
+                }
+                _ => Err(Error::msg("wrong value type")),
             },
-            CqlValue::Set(value) => match kind {
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+            CqlValue::Set(values) => match kind {
+                SchemaFieldKind::Byte => {
+                    let mut data = Vec::new();
+                    if values.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Byte(Some(data)))
+                }
+                _ => Err(Error::msg("wrong value type")),
             },
-            CqlValue::UserDefinedType {
-                keyspace,
-                type_name,
-                fields,
-            } => match kind {
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                SchemaFieldKind::Json => Ok(Self::Json(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+            CqlValue::UserDefinedType { fields, .. } => match kind {
+                SchemaFieldKind::Byte => {
+                    let mut data = Vec::new();
+                    if fields.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Byte(Some(data)))
+                }
+                SchemaFieldKind::Json => {
+                    let mut data = Vec::new();
+                    if fields.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Json(Some(data)))
+                }
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::SmallInt(value) => match kind {
                 SchemaFieldKind::SmallInt => Ok(Self::SmallInteger(Some(*value))),
                 SchemaFieldKind::Int => Ok(Self::Integer(Some((*value).into()))),
                 SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some((*value).into()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::TinyInt(value) => match kind {
                 SchemaFieldKind::TinyInt => Ok(Self::TinyInteger(Some(*value))),
@@ -649,34 +761,59 @@ impl ColumnValue {
                 SchemaFieldKind::Int => Ok(Self::Integer(Some((*value).into()))),
                 SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some((*value).into()))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Time(value) => match kind {
-                SchemaFieldKind::Time => Ok(Self::Time(Some(todo!()))),
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+                SchemaFieldKind::Time => {
+                    let milli = match u32::try_from(
+                        (chrono::Duration::milliseconds(value.num_milliseconds())
+                            - chrono::Duration::days(1 << 31))
+                        .num_milliseconds(),
+                    ) {
+                        Ok(data) => data,
+                        Err(_) => return Err(Error::msg("wrong value type")),
+                    };
+                    match NaiveTime::from_hms_milli_opt(0, 0, 0, milli) {
+                        Some(data) => Ok(Self::Time(Some(data))),
+                        None => Err(Error::msg("wrong value type")),
+                    }
+                }
+                SchemaFieldKind::Byte => Ok(Self::Byte(Some(
+                    (chrono::Duration::milliseconds(value.num_milliseconds())
+                        - chrono::Duration::days(1 << 31))
+                    .num_milliseconds()
+                    .to_be_bytes()
+                    .to_vec(),
+                ))),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Timeuuid(value) => match kind {
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
                 SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(*value))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Tuple(value) => match kind {
-                SchemaFieldKind::Byte => Ok(Self::Byte(Some(todo!()))),
-                _ => return Err(Error::msg("wrong value type")),
+                SchemaFieldKind::Byte => {
+                    let mut data = Vec::new();
+                    if value.serialize(&mut data).is_err() {
+                        return Err(Error::msg("wrong value type"));
+                    }
+                    Ok(Self::Byte(Some(data)))
+                }
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Uuid(value) => match kind {
                 SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(*value))),
                 SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.as_bytes().to_vec()))),
-                _ => return Err(Error::msg("wrong value type")),
+                _ => Err(Error::msg("wrong value type")),
             },
             CqlValue::Varint(value) => match value.to_i64() {
                 Some(value) => match kind {
                     SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some(value))),
                     SchemaFieldKind::Byte => Ok(Self::Byte(Some(value.to_be_bytes().to_vec()))),
-                    _ => return Err(Error::msg("wrong value type")),
+                    _ => Err(Error::msg("wrong value type")),
                 },
-                None => return Err(Error::msg("wrong value type")),
+                None => Err(Error::msg("wrong value type")),
             },
         }
     }

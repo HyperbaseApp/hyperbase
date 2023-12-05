@@ -12,8 +12,8 @@ use crate::{
     model::{
         record::{
             DeleteOneRecordReqPath, DeleteRecordResJson, FindOneRecordReqPath,
-            InsertOneRecordReqJson, InsertOneRecordReqPath, RecordColumnValueJson, RecordResJson,
-            UpdateOneRecordReqJson, UpdateOneRecordReqPath,
+            InsertOneRecordReqJson, InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson,
+            UpdateOneRecordReqPath,
         },
         Response, TokenReqHeader,
     },
@@ -117,10 +117,8 @@ async fn insert_one(
         }
     }
 
-    if !record_data.is_empty() {
-        if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
-            return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-        }
+    if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
+        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -130,7 +128,7 @@ async fn insert_one(
             &record_data
                 .data()
                 .iter()
-                .map(|(key, value)| (key.to_owned(), RecordColumnValueJson::from_dao(value)))
+                .map(|(key, value)| (key.to_owned(), value.to_serde_json()))
                 .collect(),
         ),
     )
@@ -191,7 +189,7 @@ async fn find_one(
             &record_data
                 .data()
                 .iter()
-                .map(|(key, value)| (key.to_owned(), RecordColumnValueJson::from_dao(value)))
+                .map(|(key, value)| (key.to_owned(), value.to_serde_json()))
                 .collect(),
         ),
     )

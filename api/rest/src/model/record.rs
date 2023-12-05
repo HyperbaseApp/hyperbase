@@ -1,6 +1,4 @@
 use ahash::HashMap;
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
-use hb_dao::record::ColumnValue;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -90,53 +88,12 @@ impl DeleteOneRecordReqPath {
 
 #[derive(Serialize)]
 pub struct RecordResJson {
-    data: HashMap<String, RecordColumnValueJson>,
+    data: HashMap<String, Value>,
 }
 
 impl RecordResJson {
-    pub fn new(data: &HashMap<String, RecordColumnValueJson>) -> Self {
+    pub fn new(data: &HashMap<String, Value>) -> Self {
         Self { data: data.clone() }
-    }
-}
-
-#[derive(Serialize, Clone)]
-pub enum RecordColumnValueJson {
-    Boolean(Option<bool>),
-    TinyInteger(Option<i8>),
-    SmallInteger(Option<i16>),
-    Integer(Option<i32>),
-    BigInteger(Option<i64>),
-    Float(Option<f32>),
-    Double(Option<f64>),
-    String(Option<String>),
-    Byte(Option<Vec<u8>>),
-    Uuid(Option<Uuid>),
-    Date(Option<NaiveDate>),
-    Time(Option<NaiveTime>),
-    DateTime(Option<DateTime<FixedOffset>>),
-    Timestamp(Option<DateTime<FixedOffset>>),
-    Json(Option<Vec<u8>>),
-}
-
-impl RecordColumnValueJson {
-    pub fn from_dao(value: &ColumnValue) -> Self {
-        match value {
-            ColumnValue::Boolean(data) => Self::Boolean(*data),
-            ColumnValue::TinyInteger(data) => Self::TinyInteger(*data),
-            ColumnValue::SmallInteger(data) => Self::SmallInteger(*data),
-            ColumnValue::Integer(data) => Self::Integer(*data),
-            ColumnValue::BigInteger(data) => Self::BigInteger(*data),
-            ColumnValue::Float(data) => Self::Float(*data),
-            ColumnValue::Double(data) => Self::Double(*data),
-            ColumnValue::String(data) => Self::String(data.to_owned()),
-            ColumnValue::Byte(data) => Self::Byte(data.to_owned()),
-            ColumnValue::Uuid(data) => Self::Uuid(*data),
-            ColumnValue::Date(data) => Self::Date(*data),
-            ColumnValue::Time(data) => Self::Time(*data),
-            ColumnValue::DateTime(data) => Self::DateTime(*data),
-            ColumnValue::Timestamp(data) => Self::Timestamp(*data),
-            ColumnValue::Json(data) => Self::Json(data.to_owned()),
-        }
     }
 }
 
