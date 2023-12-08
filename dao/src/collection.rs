@@ -82,38 +82,32 @@ impl CollectionDao {
         self.name = name.to_owned();
     }
 
-    pub fn set_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldPropsModel>) {
+    pub fn update_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldPropsModel>) {
         if self._preserve.is_none() {
             self._preserve = Some(Preserve {
                 schema_fields: Some(self.schema_fields.clone()),
                 indexes: None,
             });
         } else {
-            let preserve = self._preserve.as_mut().unwrap();
-            if preserve.schema_fields.is_none() {
-                preserve.schema_fields = Some(self.schema_fields.clone());
-            }
+            self._preserve.as_mut().unwrap().schema_fields = Some(self.schema_fields.clone());
         }
         self.schema_fields = schema_fields.clone();
     }
 
-    pub fn set_indexes(&mut self, indexes: &HashSet<String>) {
+    pub fn update_indexes(&mut self, indexes: &HashSet<String>) {
         if self._preserve.is_none() {
             self._preserve = Some(Preserve {
                 schema_fields: None,
                 indexes: Some(self.indexes.clone()),
             });
         } else {
-            let preserve = self._preserve.as_mut().unwrap();
-            if preserve.indexes.is_none() {
-                preserve.indexes = Some(self.indexes.clone());
-            }
+            self._preserve.as_mut().unwrap().indexes = Some(self.indexes.clone());
         }
         self.indexes = indexes.to_owned();
     }
 
     pub fn new_record(&self, capacity: &Option<usize>) -> RecordDao {
-        RecordDao::new(&RecordDao::new_table_name(&self.id), capacity)
+        RecordDao::new(&self.id, &None, capacity)
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {

@@ -99,6 +99,25 @@ pub fn select(record_table: &str, columns: &Vec<String>) -> String {
     )
 }
 
+pub fn select_many(record_table: &str, columns: &Vec<String>) -> String {
+    format!(
+        "SELECT {} FROM \"hyperbase\".\"{}\"",
+        columns.iter().map(|col| format!("\"{col}\"")).join(", "),
+        record_table
+    )
+}
+
+pub fn update(record_table: &str, columns: &Vec<String>) -> String {
+    format!(
+        "UPDATE \"hyperbase\".\"{}\" SET {} WHERE \"_id\" = ?",
+        record_table,
+        columns
+            .iter()
+            .map(|col| format!("\"{col}\" = ?"))
+            .join(", ")
+    )
+}
+
 pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
     format!(
         "DELETE FROM \"hyperbase\".\"{}\" WHERE {}",

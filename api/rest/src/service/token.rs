@@ -83,7 +83,7 @@ async fn insert_one(
         data.expired_at(),
     );
     for (collection_id, rule) in data.rules() {
-        token_data.insert_rule(collection_id, rule);
+        token_data.upsert_rule(collection_id, rule);
     }
 
     if let Err(err) = token_data.db_insert(ctx.dao().db()).await {
@@ -210,9 +210,8 @@ async fn update_one(
         if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
             return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
         }
-        token_data.new_rules(&Some(rules.len()));
         for (collection_id, rule) in rules {
-            token_data.insert_rule(collection_id, rule);
+            token_data.upsert_rule(collection_id, rule);
         }
     }
 

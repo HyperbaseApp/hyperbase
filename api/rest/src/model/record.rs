@@ -86,6 +86,22 @@ impl DeleteOneRecordReqPath {
     }
 }
 
+#[derive(Deserialize)]
+pub struct FindManyRecordReqPath {
+    project_id: Uuid,
+    collection_id: Uuid,
+}
+
+impl FindManyRecordReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+
+    pub fn collection_id(&self) -> &Uuid {
+        &self.collection_id
+    }
+}
+
 #[derive(Serialize)]
 pub struct RecordResJson {
     #[serde(flatten)]

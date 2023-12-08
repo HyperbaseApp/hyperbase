@@ -337,7 +337,7 @@ async fn update_one(
                 ),
             );
         }
-        collection_data.set_schema_fields(&schema_fields);
+        collection_data.update_schema_fields(&schema_fields);
     }
 
     if let Some(indexes) = data.indexes() {
@@ -359,7 +359,7 @@ async fn update_one(
                 }
             }
         }
-        collection_data.set_indexes(indexes);
+        collection_data.update_indexes(indexes);
     }
 
     if !data.is_all_none() {

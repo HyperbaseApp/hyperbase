@@ -13,11 +13,11 @@ use crate::{
     context::ApiRestCtx,
     model::{
         record::{
-            DeleteOneRecordReqPath, DeleteRecordResJson, FindOneRecordReqPath,
-            InsertOneRecordReqJson, InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson,
-            UpdateOneRecordReqPath,
+            DeleteOneRecordReqPath, DeleteRecordResJson, FindManyRecordReqPath,
+            FindOneRecordReqPath, InsertOneRecordReqJson, InsertOneRecordReqPath, RecordResJson,
+            UpdateOneRecordReqJson, UpdateOneRecordReqPath,
         },
-        Response, TokenReqHeader,
+        PaginationRes, Response, TokenReqHeader,
     },
 };
 
@@ -37,6 +37,10 @@ pub fn record_api(cfg: &mut web::ServiceConfig) {
     .route(
         "/project/{project_id}/collection/{collection_id}/record/{record_id}",
         web::delete().to(delete_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}/records",
+        web::get().to(find_many),
     );
 }
 
@@ -96,30 +100,33 @@ async fn insert_one(
     }
 
     let mut record_data = collection_data.new_record(&Some(data.len()));
-    for (field_name, field_props) in collection_data.schema_fields().iter() {
-        match data.get(field_name) {
-            Some(value) => record_data.insert(
-                field_name,
-                &match ColumnValue::from_serde_json(field_props.kind(), value) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        return Response::error(
-                            &StatusCode::BAD_REQUEST,
-                            &format!("Error in field {}: {}", field_name, err),
-                        )
-                    }
-                },
-            ),
-            None => match field_props.required() {
-                true => {
-                    return Response::error(
-                        &StatusCode::BAD_REQUEST,
-                        &format!("Value for {field_name} is required"),
-                    )
-                }
-                false => record_data.insert(field_name, &ColumnValue::none(field_props.kind())),
-            },
+    for (field_name, field_props) in collection_data.schema_fields() {
+        if let Some(value) = data.get(field_name) {
+            if !value.is_null() {
+                record_data.upsert(
+                    field_name,
+                    &match ColumnValue::from_serde_json(field_props.kind(), value) {
+                        Ok(value) => value,
+                        Err(err) => {
+                            return Response::error(
+                                &StatusCode::BAD_REQUEST,
+                                &format!("Error in field {}: {}", field_name, err),
+                            )
+                        }
+                    },
+                );
+                continue;
+            }
         }
+        match field_props.required() {
+            true => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Value for {field_name} is required"),
+                )
+            }
+            false => record_data.upsert(field_name, &ColumnValue::none(field_props.kind())),
+        };
     }
 
     if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
@@ -251,12 +258,61 @@ async fn update_one(
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    HttpResponse::Ok().body(format!(
-        "record update_one {} {} {}",
-        path.project_id(),
-        path.collection_id(),
-        path.record_id()
-    ))
+    for field_name in data.keys() {
+        if !collection_data.schema_fields().contains_key(field_name) {
+            return Response::error(
+                &StatusCode::BAD_REQUEST,
+                &format!("Field {field_name} is not exist in the collection"),
+            );
+        }
+    }
+
+    let mut record_data =
+        match RecordDao::db_select(ctx.dao().db(), &collection_data, path.record_id()).await {
+            Ok(data) => data,
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+    for (field_name, field_props) in collection_data.schema_fields() {
+        if let Some(value) = data.get(field_name) {
+            if value.is_null() {
+                if *field_props.required() {
+                    return Response::error(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Value for {field_name} is required"),
+                    );
+                }
+            }
+            record_data.upsert(
+                field_name,
+                &match ColumnValue::from_serde_json(field_props.kind(), value) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        return Response::error(
+                            &StatusCode::BAD_REQUEST,
+                            &format!("Error in field {}: {}", field_name, err),
+                        )
+                    }
+                },
+            );
+        }
+    }
+
+    if let Err(err) = record_data.db_update(ctx.dao().db()).await {
+        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let mut record = HashMap::with_capacity(record_data.len());
+    for (key, value) in record_data.data() {
+        let value = match value.to_serde_json() {
+            Ok(value) => value,
+            Err(err) => {
+                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        };
+        record.insert(key.to_owned(), value);
+    }
+
+    Response::data(&StatusCode::OK, &None, &RecordResJson::new(&record))
 }
 
 async fn delete_one(
@@ -314,5 +370,85 @@ async fn delete_one(
         &StatusCode::OK,
         &None,
         &DeleteRecordResJson::new(path.record_id()),
+    )
+}
+
+async fn find_many(
+    ctx: web::Data<ApiRestCtx>,
+    token: web::Header<TokenReqHeader>,
+    path: web::Path<FindManyRecordReqPath>,
+) -> HttpResponse {
+    let token = match token.get() {
+        Some(token) => token,
+        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+    };
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+    };
+
+    let (project_data, collection_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
+    ) {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if &admin_id != project_data.admin_id() {
+        return Response::error(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
+    if project_data.id() != collection_data.project_id() {
+        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    let records_data = match RecordDao::db_select_many(ctx.dao().db(), &collection_data).await {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let mut records = Vec::with_capacity(records_data.len());
+    for record_data in &records_data {
+        let mut record = HashMap::with_capacity(record_data.len());
+        for (key, value) in record_data.data() {
+            let value = match value.to_serde_json() {
+                Ok(value) => value,
+                Err(err) => {
+                    return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                }
+            };
+            record.insert(key.to_owned(), value);
+        }
+        records.push(record);
+    }
+
+    Response::data(
+        &StatusCode::OK,
+        &Some(PaginationRes::new(
+            &records_data.len(),
+            &records_data.len(),
+            &1,
+            &records_data.len(),
+        )),
+        &records
+            .iter()
+            .map(|record| RecordResJson::new(record))
+            .collect::<Vec<_>>(),
     )
 }

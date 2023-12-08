@@ -27,17 +27,19 @@ pub struct RecordDao {
 }
 
 impl RecordDao {
-    pub fn new(table_name: &str, capacity: &Option<usize>) -> Self {
-        let capacity = match capacity {
+    pub fn new(collection_id: &Uuid, record_id: &Option<Uuid>, capacity: &Option<usize>) -> Self {
+        let mut data = HashMap::with_capacity(match capacity {
             Some(capacity) => capacity + 1,
             None => 1,
-        };
-
-        let mut data = HashMap::with_capacity(capacity);
-        data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::new_v4())));
+        });
+        if let Some(record_id) = record_id {
+            data.insert("_id".to_owned(), ColumnValue::Uuid(Some(*record_id)));
+        } else {
+            data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::new_v4())));
+        }
 
         Self {
-            table_name: table_name.to_owned(),
+            table_name: Self::new_table_name(collection_id),
             data,
         }
     }
@@ -66,7 +68,7 @@ impl RecordDao {
         self.data.len()
     }
 
-    pub fn insert(&mut self, key: &str, value: &ColumnValue) {
+    pub fn upsert(&mut self, key: &str, value: &ColumnValue) {
         self.data.insert(key.to_owned(), value.to_owned());
     }
 
@@ -219,6 +221,58 @@ impl RecordDao {
         }
     }
 
+    pub async fn db_select_many(db: &Db, collection_data: &CollectionDao) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let table_name = Self::new_table_name(collection_data.id());
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id".to_owned());
+                let mut columns_props =
+                    Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
+                for (column, props) in collection_data.schema_fields() {
+                    columns.push(column.to_owned());
+                    columns_props.push(*props)
+                }
+                let scylladb_data_many =
+                    Self::scylladb_select_many(db, &table_name, &columns).await?;
+                let mut data_many = Vec::with_capacity(scylladb_data_many.len());
+                for scylladb_data in scylladb_data_many {
+                    let mut data = HashMap::with_capacity(scylladb_data.len());
+                    for (idx, value) in scylladb_data.iter().enumerate() {
+                        match value {
+                            Some(value) => match ColumnValue::from_scylladb_model(
+                                columns_props[idx].kind(),
+                                value,
+                            ) {
+                                Ok(value) => data.insert(columns[idx].to_owned(), value),
+                                Err(err) => return Err(err.into()),
+                            },
+                            None => data.insert(
+                                columns[idx].to_owned(),
+                                ColumnValue::none(columns_props[idx].kind()),
+                            ),
+                        };
+                    }
+                    data_many.push(data);
+                }
+                Ok(data_many
+                    .iter()
+                    .map(|data| Self {
+                        table_name: table_name.to_owned(),
+                        data: data.clone(),
+                    })
+                    .collect())
+            }
+        }
+    }
+
+    pub async fn db_update(&self, db: &Db) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
+        }
+    }
+
     pub async fn db_delete(db: &Db, collection_id: &Uuid, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => {
@@ -339,12 +393,46 @@ impl RecordDao {
         columns: &Vec<String>,
         id: &Uuid,
     ) -> Result<Vec<Option<CqlValue>>> {
-        let values = db
+        Ok(db
             .execute(&record::select(table_name, columns), [id].as_ref())
             .await?
             .first_row()?
-            .columns;
-        Ok(values)
+            .columns)
+    }
+
+    async fn scylladb_select_many(
+        db: &ScyllaDb,
+        table_name: &str,
+        columns: &Vec<String>,
+    ) -> Result<Vec<Vec<Option<CqlValue>>>> {
+        Ok(db
+            .execute(&record::select_many(table_name, columns), &[])
+            .await?
+            .rows()?
+            .iter()
+            .map(|row| row.columns.to_owned())
+            .collect())
+    }
+
+    async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
+        let mut cols = Vec::with_capacity(self.data.len());
+        let mut vals = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            if col != "_id" {
+                cols.push(col.to_owned());
+                vals.push(val.to_scylladb_model());
+            }
+        }
+        match self.data.get("_id") {
+            Some(id) => vals.push(id.to_scylladb_model()),
+            None => return Err(Error::msg("Id is undefined")),
+        }
+        db.execute(
+            &record::update(&self.table_name, &cols),
+            vals.as_ref() as &[Box<dyn Value>],
+        )
+        .await?;
+        Ok(())
     }
 
     async fn scylladb_delete(db: &ScyllaDb, table_name: &str, id: &Uuid) -> Result<()> {

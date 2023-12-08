@@ -76,14 +76,7 @@ impl TokenDao {
         &self.expired_at
     }
 
-    pub fn new_rules(&mut self, capacity: &Option<usize>) {
-        self.rules = match capacity {
-            Some(capacity) => HashMap::with_capacity(*capacity),
-            None => HashMap::new(),
-        }
-    }
-
-    pub fn insert_rule(&mut self, collection_id: &Uuid, rule: &i8) {
+    pub fn upsert_rule(&mut self, collection_id: &Uuid, rule: &i8) {
         self.rules.insert(*collection_id, *rule);
     }
 
