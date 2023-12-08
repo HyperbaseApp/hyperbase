@@ -14,7 +14,7 @@ pub fn create_table(
         record_table,
         columns
             .iter()
-            .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.kind().to_str()))
+            .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.internal_kind().to_str()))
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -41,7 +41,7 @@ pub fn add_columns(
         record_table,
         columns
             .iter()
-            .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.kind().to_str()))
+            .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.internal_kind().to_str()))
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -54,6 +54,25 @@ pub fn drop_columns(record_table: &str, column_names: &HashSet<String>) -> Strin
         &column_names
             .iter()
             .map(|col| format!("\"{col}\""))
+            .join(", ")
+    )
+}
+
+pub fn change_columns_type(
+    record_table: &str,
+    columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
+) -> String {
+    format!(
+        "ALTER TABLE \"hyperbase\".\"{}\" {}",
+        record_table,
+        columns
+            .iter()
+            .map(|(col, col_props)| format!(
+                "ALTER \"{}\" TYPE {}",
+                col,
+                col_props.internal_kind().to_str()
+            ))
+            .collect::<Vec<_>>()
             .join(", ")
     )
 }

@@ -88,6 +88,7 @@ impl DeleteOneRecordReqPath {
 
 #[derive(Serialize)]
 pub struct RecordResJson {
+    #[serde(flatten)]
     data: HashMap<String, Value>,
 }
 

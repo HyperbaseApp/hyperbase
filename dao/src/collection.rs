@@ -176,26 +176,36 @@ impl CollectionDao {
         }
 
         if is_preserve_schema_fields_exist {
-            for field_name in self
+            let mut columns_change_type = HashMap::new();
+            let mut columns_drop = HashSet::new();
+            for (field_name, field_props) in self
                 ._preserve
                 .as_ref()
                 .unwrap()
                 .schema_fields
                 .as_ref()
                 .unwrap()
-                .keys()
             {
-                let mut drop_columns = HashSet::new();
-                if !self.schema_fields.contains_key(field_name) {
-                    drop_columns.insert(field_name.clone());
-                }
-                if !drop_columns.is_empty() {
-                    RecordDao::db_drop_columns(db, &self.id, &drop_columns).await?;
-                }
+                match self.schema_fields.get(field_name) {
+                    Some(field) => {
+                        if field.kind() != field_props.kind() {
+                            columns_change_type.insert(field_name.to_owned(), *field);
+                        }
+                    }
+                    None => {
+                        columns_drop.insert(field_name.clone());
+                    }
+                };
+            }
+            if !columns_change_type.is_empty() {
+                RecordDao::db_change_columns_type(db, &self.id, &columns_change_type).await?;
+            }
+            if !columns_drop.is_empty() {
+                RecordDao::db_drop_columns(db, &self.id, &columns_drop).await?;
             }
 
+            let mut columns_add = HashMap::new();
             for (field_name, field_props) in &self.schema_fields {
-                let mut add_columns = HashMap::new();
                 if !self
                     ._preserve
                     .as_ref()
@@ -205,11 +215,11 @@ impl CollectionDao {
                     .unwrap()
                     .contains_key(field_name)
                 {
-                    add_columns.insert(field_name.to_owned(), field_props.to_scylladb_model());
+                    columns_add.insert(field_name.to_owned(), *field_props);
                 }
-                if !add_columns.is_empty() {
-                    RecordDao::db_add_columns(db, &self.id, &add_columns).await?;
-                }
+            }
+            if !columns_add.is_empty() {
+                RecordDao::db_add_columns(db, &self.id, &columns_add).await?;
             }
         }
 
@@ -293,22 +303,21 @@ impl CollectionDao {
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
+        let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
+        for (key, value) in model.schema_fields() {
+            let value = match SchemaFieldPropsModel::from_scylladb_model(value) {
+                Ok(value) => value,
+                Err(err) => return Err(err.into()),
+            };
+            schema_fields.insert(key.to_owned(), value);
+        }
         Ok(Self {
             id: *model.id(),
             created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
             updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
             project_id: *model.project_id(),
             name: model.name().to_owned(),
-            schema_fields: model
-                .schema_fields()
-                .iter()
-                .map(|(key, value)| {
-                    (
-                        key.to_owned(),
-                        SchemaFieldPropsModel::from_scylladb_model(value),
-                    )
-                })
-                .collect(),
+            schema_fields,
             indexes: match model.indexes() {
                 Some(indexes) => indexes.to_owned(),
                 None => HashSet::new(),
@@ -360,19 +369,27 @@ impl SchemaFieldPropsModel {
         &self.required
     }
 
-    fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Self {
-        Self {
-            kind: SchemaFieldKind::from_scylladb_model(model.kind()),
+    fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Result<Self> {
+        let kind = match SchemaFieldKind::from_str(model.kind()) {
+            Ok(kind) => kind,
+            Err(err) => return Err(err.into()),
+        };
+        Ok(Self {
+            kind,
             required: *model.required(),
-        }
+        })
     }
 
     pub fn to_scylladb_model(&self) -> SchemaFieldPropsScyllaModel {
-        SchemaFieldPropsScyllaModel::new(&self.kind.to_scylladb_model(), &self.required)
+        SchemaFieldPropsScyllaModel::new(
+            self.kind.to_str(),
+            &self.kind.to_scylladb_model(),
+            &self.required,
+        )
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum SchemaFieldKind {
     Bool,      // boolean
     TinyInt,   // 8-bit signed int
@@ -382,7 +399,7 @@ pub enum SchemaFieldKind {
     Float,     // 32-bit IEEE-754 floating point
     Double,    // 64-bit IEEE-754 floating point
     String,    // UTF8 encoded string
-    Byte,      // Arbitrary bytes
+    Bytes,     // Arbitrary bytes
     Uuid,      // A UUID (of any version)
     Date,      // A date (with no corresponding time value)
     Time,      // A time (with no corresponding date value)
@@ -402,7 +419,7 @@ impl SchemaFieldKind {
             Self::Float => "float",
             Self::Double => "double",
             Self::String => "string",
-            Self::Byte => "byte",
+            Self::Bytes => "byte",
             Self::Uuid => "uuid",
             Self::Date => "date",
             Self::Time => "time",
@@ -422,7 +439,7 @@ impl SchemaFieldKind {
             "float" => Ok(Self::Float),
             "double" => Ok(Self::Double),
             "string" => Ok(Self::String),
-            "byte" => Ok(Self::Byte),
+            "bytes" => Ok(Self::Bytes),
             "uuid" => Ok(Self::Uuid),
             "date" => Ok(Self::Date),
             "time" => Ok(Self::Time),
@@ -430,32 +447,6 @@ impl SchemaFieldKind {
             "timestamp" => Ok(Self::Timestamp),
             "json" => Ok(Self::Json),
             _ => Err(Error::msg("Unknown schema field kind")),
-        }
-    }
-
-    fn from_scylladb_model(model: &SchemaFieldScyllaKind) -> Self {
-        match model {
-            SchemaFieldScyllaKind::Boolean => Self::Bool,
-            SchemaFieldScyllaKind::Tinyint => Self::TinyInt,
-            SchemaFieldScyllaKind::Smallint => Self::SmallInt,
-            SchemaFieldScyllaKind::Int => Self::Int,
-            SchemaFieldScyllaKind::Bigint | SchemaFieldScyllaKind::Varint => Self::BigInt,
-            SchemaFieldScyllaKind::Float => Self::Float,
-            SchemaFieldScyllaKind::Double | SchemaFieldScyllaKind::Decimal => Self::Double,
-            SchemaFieldScyllaKind::Ascii
-            | SchemaFieldScyllaKind::Text
-            | SchemaFieldScyllaKind::Inet
-            | SchemaFieldScyllaKind::Varchar => Self::String,
-            SchemaFieldScyllaKind::Blob => Self::Byte,
-            SchemaFieldScyllaKind::Uuid => Self::Uuid,
-            SchemaFieldScyllaKind::Timeuuid => Self::Uuid,
-            SchemaFieldScyllaKind::Date => Self::Date,
-            SchemaFieldScyllaKind::Time => Self::Time,
-            SchemaFieldScyllaKind::Timestamp | SchemaFieldScyllaKind::Duration => Self::Timestamp,
-            SchemaFieldScyllaKind::List
-            | SchemaFieldScyllaKind::Set
-            | SchemaFieldScyllaKind::Map
-            | SchemaFieldScyllaKind::Tuple => Self::Byte,
         }
     }
 
@@ -469,7 +460,7 @@ impl SchemaFieldKind {
             Self::Float => SchemaFieldScyllaKind::Float,
             Self::Double => SchemaFieldScyllaKind::Double,
             Self::String => SchemaFieldScyllaKind::Text,
-            Self::Byte | Self::Json => SchemaFieldScyllaKind::Blob,
+            Self::Bytes | Self::Json => SchemaFieldScyllaKind::Blob,
             Self::Uuid => SchemaFieldScyllaKind::Uuid,
             Self::Date => SchemaFieldScyllaKind::Date,
             Self::Time => SchemaFieldScyllaKind::Time,

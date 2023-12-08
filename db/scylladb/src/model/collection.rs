@@ -72,20 +72,26 @@ impl CollectionScyllaModel {
 
 #[derive(IntoUserType, FromUserType, Clone)]
 pub struct SchemaFieldPropsScyllaModel {
-    kind: SchemaFieldScyllaKind,
+    kind: String,
+    internal_kind: SchemaFieldScyllaKind,
     required: bool,
 }
 
 impl SchemaFieldPropsScyllaModel {
-    pub fn new(kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
+    pub fn new(kind: &str, internal_kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
         Self {
-            kind: *kind,
+            kind: kind.to_owned(),
+            internal_kind: *internal_kind,
             required: *required,
         }
     }
 
-    pub fn kind(&self) -> &SchemaFieldScyllaKind {
+    pub fn kind(&self) -> &str {
         &self.kind
+    }
+
+    pub fn internal_kind(&self) -> &SchemaFieldScyllaKind {
+        &self.internal_kind
     }
 
     pub fn required(&self) -> &bool {

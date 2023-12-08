@@ -1,4 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
+use ahash::{HashMap, HashMapExt};
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
@@ -125,17 +126,18 @@ async fn insert_one(
         return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    Response::data(
-        &StatusCode::CREATED,
-        &None,
-        &RecordResJson::new(
-            &record_data
-                .data()
-                .iter()
-                .map(|(key, value)| (key.to_owned(), value.to_serde_json()))
-                .collect(),
-        ),
-    )
+    let mut record = HashMap::with_capacity(record_data.len());
+    for (key, value) in record_data.data() {
+        let value = match value.to_serde_json() {
+            Ok(value) => value,
+            Err(err) => {
+                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        };
+        record.insert(key.to_owned(), value);
+    }
+
+    Response::data(&StatusCode::CREATED, &None, &RecordResJson::new(&record))
 }
 
 async fn find_one(
@@ -189,17 +191,18 @@ async fn find_one(
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
-    Response::data(
-        &StatusCode::OK,
-        &None,
-        &RecordResJson::new(
-            &record_data
-                .data()
-                .iter()
-                .map(|(key, value)| (key.to_owned(), value.to_serde_json()))
-                .collect(),
-        ),
-    )
+    let mut record = HashMap::with_capacity(record_data.len());
+    for (key, value) in record_data.data() {
+        let value = match value.to_serde_json() {
+            Ok(value) => value,
+            Err(err) => {
+                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        };
+        record.insert(key.to_owned(), value);
+    }
+
+    Response::data(&StatusCode::OK, &None, &RecordResJson::new(&record))
 }
 
 async fn update_one(
