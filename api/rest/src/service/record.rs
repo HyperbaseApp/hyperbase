@@ -3,6 +3,7 @@ use ahash::{HashMap, HashMapExt};
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
+    dto::pagination::Pagination,
     project::ProjectDao,
     record::{ColumnValue, RecordDao},
     token::TokenDao,
@@ -14,8 +15,8 @@ use crate::{
     model::{
         record::{
             DeleteOneRecordReqPath, DeleteRecordResJson, FindManyRecordReqPath,
-            FindOneRecordReqPath, InsertOneRecordReqJson, InsertOneRecordReqPath, RecordResJson,
-            UpdateOneRecordReqJson, UpdateOneRecordReqPath,
+            FindManyRecordReqQuery, FindOneRecordReqPath, InsertOneRecordReqJson,
+            InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson, UpdateOneRecordReqPath,
         },
         PaginationRes, Response, TokenReqHeader,
     },
@@ -377,6 +378,7 @@ async fn find_many(
     ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     path: web::Path<FindManyRecordReqPath>,
+    query: web::Query<FindManyRecordReqQuery>,
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
@@ -418,7 +420,13 @@ async fn find_many(
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    let records_data = match RecordDao::db_select_many(ctx.dao().db(), &collection_data).await {
+    let records_data = match RecordDao::db_select_many(
+        ctx.dao().db(),
+        &collection_data,
+        &Pagination::new(query.last_id(), query.limit()),
+    )
+    .await
+    {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };

@@ -13,11 +13,11 @@ use scylla::frame::{
     response::result::CqlValue,
     value::{Time, Timestamp, Value},
 };
-use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
     collection::{CollectionDao, SchemaFieldKind, SchemaFieldPropsModel},
+    dto::pagination::Pagination,
     Db,
 };
 
@@ -221,7 +221,11 @@ impl RecordDao {
         }
     }
 
-    pub async fn db_select_many(db: &Db, collection_data: &CollectionDao) -> Result<Vec<Self>> {
+    pub async fn db_select_many(
+        db: &Db,
+        collection_data: &CollectionDao,
+        pagination: &Pagination,
+    ) -> Result<Vec<Self>> {
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -234,8 +238,8 @@ impl RecordDao {
                     columns.push(column.to_owned());
                     columns_props.push(*props)
                 }
-                let scylladb_data_many =
-                    Self::scylladb_select_many(db, &table_name, &columns).await?;
+                let scylladb_data_many: Vec<Vec<Option<CqlValue>>> =
+                    Self::scylladb_select_many(db, &table_name, &columns, pagination).await?;
                 let mut data_many = Vec::with_capacity(scylladb_data_many.len());
                 for scylladb_data in scylladb_data_many {
                     let mut data = HashMap::with_capacity(scylladb_data.len());
@@ -373,17 +377,14 @@ impl RecordDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        let mut cols = Vec::with_capacity(self.data.len());
-        let mut vals = Vec::with_capacity(self.data.len());
+        let mut columns: Vec<_> = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            cols.push(col.to_owned());
-            vals.push(val.to_scylladb_model());
+            columns.push(col.to_owned());
+            values.push(val.to_scylladb_model());
         }
-        db.execute(
-            &record::insert(&self.table_name, &cols),
-            vals.as_ref() as &[Box<dyn Value>],
-        )
-        .await?;
+        db.execute(&record::insert(&self.table_name, &columns), &values)
+            .await?;
         Ok(())
     }
 
@@ -404,9 +405,25 @@ impl RecordDao {
         db: &ScyllaDb,
         table_name: &str,
         columns: &Vec<String>,
+        pagination: &Pagination,
     ) -> Result<Vec<Vec<Option<CqlValue>>>> {
+        let mut values = Vec::<Box<dyn Value>>::with_capacity(2);
+        if let Some(last_id) = pagination.last_id() {
+            values.push(Box::new(last_id));
+        }
+        if let Some(limit) = pagination.limit() {
+            values.push(Box::new(limit))
+        }
         Ok(db
-            .execute(&record::select_many(table_name, columns), &[])
+            .execute(
+                &record::select_many(
+                    table_name,
+                    columns,
+                    &pagination.last_id().is_some(),
+                    &pagination.limit().is_some(),
+                ),
+                &values,
+            )
             .await?
             .rows()?
             .iter()
@@ -539,7 +556,7 @@ impl ColumnValue {
                     Ok(timestamp) => Ok(Self::Timestamp(Some(timestamp))),
                     Err(err) => Err(err.into()),
                 },
-                SchemaFieldKind::Json => Ok(Self::Json(Some(json!(value).to_string()))),
+                SchemaFieldKind::Json => Ok(Self::Json(Some(serde_json::json!(value).to_string()))),
                 _ => return Err(Error::msg("wrong value type")),
             },
             serde_json::Value::Array(value) => match kind {
@@ -561,15 +578,15 @@ impl ColumnValue {
                             None => return Err(Error::msg("wrong value type")),
                         }
                     }
-                    Ok(Self::Json(Some(json!(bytes).to_string())))
+                    Ok(Self::Json(Some(serde_json::json!(bytes).to_string())))
                 }
                 _ => return Err(Error::msg("wrong value type")),
             },
             serde_json::Value::Object(value) => match kind {
-                SchemaFieldKind::Bytes => {
-                    Ok(Self::Bytes(Some(json!(value).to_string().into_bytes())))
-                }
-                SchemaFieldKind::Json => Ok(Self::Json(Some(json!(value).to_string()))),
+                SchemaFieldKind::Bytes => Ok(Self::Bytes(Some(
+                    serde_json::json!(value).to_string().into_bytes(),
+                ))),
+                SchemaFieldKind::Json => Ok(Self::Json(Some(serde_json::json!(value).to_string()))),
                 _ => return Err(Error::msg("wrong value type")),
             },
         }
@@ -578,59 +595,59 @@ impl ColumnValue {
     pub fn to_serde_json(&self) -> Result<serde_json::Value> {
         match self {
             ColumnValue::Boolean(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::TinyInteger(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::SmallInteger(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Integer(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::BigInteger(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Float(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Double(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::String(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Bytes(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Uuid(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Date(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Time(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::DateTime(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Timestamp(data) => match data {
-                Some(data) => Ok(json!(data)),
+                Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
             ColumnValue::Json(data) => match data {
@@ -844,7 +861,7 @@ impl ColumnValue {
                     if values.serialize(&mut data).is_err() {
                         return Err(Error::msg("wrong value type"));
                     }
-                    Ok(Self::Json(Some(json!(data).to_string())))
+                    Ok(Self::Json(Some(serde_json::json!(data).to_string())))
                 }
                 _ => Err(Error::msg("wrong value type")),
             },
@@ -861,7 +878,7 @@ impl ColumnValue {
                     if values.serialize(&mut data).is_err() {
                         return Err(Error::msg("wrong value type"));
                     }
-                    Ok(Self::Json(Some(json!(data).to_string())))
+                    Ok(Self::Json(Some(serde_json::json!(data).to_string())))
                 }
                 _ => Err(Error::msg("wrong value type")),
             },
@@ -888,7 +905,7 @@ impl ColumnValue {
                     if fields.serialize(&mut data).is_err() {
                         return Err(Error::msg("wrong value type"));
                     }
-                    Ok(Self::Json(Some(json!(data).to_string())))
+                    Ok(Self::Json(Some(serde_json::json!(data).to_string())))
                 }
                 _ => Err(Error::msg("wrong value type")),
             },

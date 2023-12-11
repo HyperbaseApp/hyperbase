@@ -1,6 +1,7 @@
 use scylla::{
-    frame::value::ValueList, transport::errors::QueryError, CachingSession, QueryResult,
-    SessionBuilder,
+    frame::value::ValueList,
+    transport::{errors::QueryError, iterator::RowIterator},
+    Bytes, CachingSession, QueryResult, SessionBuilder,
 };
 
 use crate::query::{
@@ -71,5 +72,24 @@ impl ScyllaDb {
         values: impl ValueList,
     ) -> Result<QueryResult, QueryError> {
         self.cached_session.execute(query, values).await
+    }
+
+    pub async fn execute_iter(
+        &self,
+        query: &str,
+        values: impl ValueList,
+    ) -> Result<RowIterator, QueryError> {
+        self.cached_session.execute_iter(query, values).await
+    }
+
+    pub async fn execute_paged(
+        &self,
+        query: &str,
+        values: impl ValueList,
+        paging_state: Option<Bytes>,
+    ) -> Result<QueryResult, QueryError> {
+        self.cached_session
+            .execute_paged(query, values, paging_state)
+            .await
     }
 }

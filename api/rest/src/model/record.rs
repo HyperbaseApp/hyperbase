@@ -102,6 +102,22 @@ impl FindManyRecordReqPath {
     }
 }
 
+#[derive(Deserialize)]
+pub struct FindManyRecordReqQuery {
+    last_id: Option<Uuid>,
+    limit: Option<i32>,
+}
+
+impl FindManyRecordReqQuery {
+    pub fn last_id(&self) -> &Option<Uuid> {
+        &self.last_id
+    }
+
+    pub fn limit(&self) -> &Option<i32> {
+        &self.limit
+    }
+}
+
 #[derive(Serialize)]
 pub struct RecordResJson {
     #[serde(flatten)]

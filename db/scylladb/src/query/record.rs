@@ -99,12 +99,24 @@ pub fn select(record_table: &str, columns: &Vec<String>) -> String {
     )
 }
 
-pub fn select_many(record_table: &str, columns: &Vec<String>) -> String {
-    format!(
+pub fn select_many(
+    record_table: &str,
+    columns: &Vec<String>,
+    with_query_last_id: &bool,
+    with_query_limit: &bool,
+) -> String {
+    let mut query = format!(
         "SELECT {} FROM \"hyperbase\".\"{}\"",
         columns.iter().map(|col| format!("\"{col}\"")).join(", "),
-        record_table
-    )
+        record_table,
+    );
+    if *with_query_last_id {
+        query += " WHERE token(\"_id\") > token(?)";
+    }
+    if *with_query_limit {
+        query += " LIMIT ?"
+    }
+    query
 }
 
 pub fn update(record_table: &str, columns: &Vec<String>) -> String {
