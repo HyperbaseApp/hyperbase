@@ -103,18 +103,39 @@ impl FindManyRecordReqPath {
 }
 
 #[derive(Deserialize)]
-pub struct FindManyRecordReqQuery {
-    last_id: Option<Uuid>,
+pub struct FindManyRecordReqJson {
+    filter: Option<Vec<FindManyRecordFilterReqJson>>,
     limit: Option<i32>,
 }
 
-impl FindManyRecordReqQuery {
-    pub fn last_id(&self) -> &Option<Uuid> {
-        &self.last_id
+impl FindManyRecordReqJson {
+    pub fn filter(&self) -> &Option<Vec<FindManyRecordFilterReqJson>> {
+        &self.filter
     }
 
     pub fn limit(&self) -> &Option<i32> {
         &self.limit
+    }
+}
+
+#[derive(Deserialize)]
+pub struct FindManyRecordFilterReqJson {
+    field: String,
+    op: String,
+    value: serde_json::Value,
+}
+
+impl FindManyRecordFilterReqJson {
+    pub fn field(&self) -> &str {
+        &self.field
+    }
+
+    pub fn op(&self) -> &str {
+        &self.op
+    }
+
+    pub fn value(&self) -> &serde_json::Value {
+        &self.value
     }
 }
 

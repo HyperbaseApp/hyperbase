@@ -3,9 +3,8 @@ use ahash::{HashMap, HashMapExt};
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
-    dto::pagination::Pagination,
     project::ProjectDao,
-    record::{ColumnValue, RecordDao},
+    record::{RecordColumnValue, RecordDao, RecordFilter, RecordPagination},
     token::TokenDao,
 };
 use hb_token_jwt::kind::JwtTokenKind;
@@ -14,8 +13,8 @@ use crate::{
     context::ApiRestCtx,
     model::{
         record::{
-            DeleteOneRecordReqPath, DeleteRecordResJson, FindManyRecordReqPath,
-            FindManyRecordReqQuery, FindOneRecordReqPath, InsertOneRecordReqJson,
+            DeleteOneRecordReqPath, DeleteRecordResJson, FindManyRecordReqJson,
+            FindManyRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson,
             InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson, UpdateOneRecordReqPath,
         },
         PaginationRes, Response, TokenReqHeader,
@@ -41,7 +40,7 @@ pub fn record_api(cfg: &mut web::ServiceConfig) {
     )
     .route(
         "/project/{project_id}/collection/{collection_id}/records",
-        web::get().to(find_many),
+        web::post().to(find_many),
     );
 }
 
@@ -106,7 +105,7 @@ async fn insert_one(
             if !value.is_null() {
                 record_data.upsert(
                     field_name,
-                    &match ColumnValue::from_serde_json(field_props.kind(), value) {
+                    &match RecordColumnValue::from_serde_json(field_props.kind(), value) {
                         Ok(value) => value,
                         Err(err) => {
                             return Response::error(
@@ -126,7 +125,7 @@ async fn insert_one(
                     &format!("Value for {field_name} is required"),
                 )
             }
-            false => record_data.upsert(field_name, &ColumnValue::none(field_props.kind())),
+            false => record_data.upsert(field_name, &RecordColumnValue::none(field_props.kind())),
         };
     }
 
@@ -285,7 +284,7 @@ async fn update_one(
             }
             record_data.upsert(
                 field_name,
-                &match ColumnValue::from_serde_json(field_props.kind(), value) {
+                &match RecordColumnValue::from_serde_json(field_props.kind(), value) {
                     Ok(value) => value,
                     Err(err) => {
                         return Response::error(
@@ -378,7 +377,7 @@ async fn find_many(
     ctx: web::Data<ApiRestCtx>,
     token: web::Header<TokenReqHeader>,
     path: web::Path<FindManyRecordReqPath>,
-    query: web::Query<FindManyRecordReqQuery>,
+    query_data: web::Json<FindManyRecordReqJson>,
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
@@ -420,16 +419,49 @@ async fn find_many(
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    let records_data = match RecordDao::db_select_many(
-        ctx.dao().db(),
-        &collection_data,
-        &Pagination::new(query.last_id(), query.limit()),
-    )
-    .await
-    {
-        Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    let filter = match query_data.filter() {
+        Some(filter) => {
+            for f in filter {
+                if !collection_data.schema_fields().contains_key(f.field()) {
+                    return Response::error(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Field {} is not exist in the collection", f.field()),
+                    );
+                }
+            }
+            let mut filters = Vec::<RecordFilter>::with_capacity(filter.len());
+            for f in filter {
+                let schema_field_kind = match collection_data.schema_fields().get(f.field()) {
+                    Some(field) => field.kind(),
+                    None => {
+                        return Response::error(
+                            &StatusCode::BAD_REQUEST,
+                            &format!("Field {} is not exist in the collection", f.field()),
+                        );
+                    }
+                };
+                let value = match RecordColumnValue::from_serde_json(schema_field_kind, f.value()) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+                    }
+                };
+                filters.push(RecordFilter::new(f.field(), f.op(), &value));
+            }
+            filters
+        }
+        None => Vec::new(),
     };
+
+    let pagination = RecordPagination::new(query_data.limit());
+
+    let records_data =
+        match RecordDao::db_select_many(ctx.dao().db(), &collection_data, &filter, &pagination)
+            .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
 
     let mut records = Vec::with_capacity(records_data.len());
     for record_data in &records_data {

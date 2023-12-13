@@ -102,7 +102,7 @@ pub fn select(record_table: &str, columns: &Vec<String>) -> String {
 pub fn select_many(
     record_table: &str,
     columns: &Vec<String>,
-    with_query_last_id: &bool,
+    filter: &Vec<(&str, &str)>,
     with_query_limit: &bool,
 ) -> String {
     let mut query = format!(
@@ -110,13 +110,16 @@ pub fn select_many(
         columns.iter().map(|col| format!("\"{col}\"")).join(", "),
         record_table,
     );
-    if *with_query_last_id {
-        query += " WHERE token(\"_id\") > token(?)";
+    if filter.len() > 0 {
+        query += " WHERE"
+    }
+    for (field, op) in filter {
+        query += &format!(" \"{}\" {} ?", &field, &op)
     }
     if *with_query_limit {
         query += " LIMIT ?"
     }
-    query
+    query + " ALLOW FILTERING"
 }
 
 pub fn update(record_table: &str, columns: &Vec<String>) -> String {
