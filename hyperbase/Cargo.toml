@@ -14,7 +14,7 @@ hb_log = { workspace = true }
 hb_mailer = { workspace = true }
 hb_token_jwt = { workspace = true }
 
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

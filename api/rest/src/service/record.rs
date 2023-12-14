@@ -60,13 +60,13 @@ async fn insert_one(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let admin_id = match token_claim.kind() {
+    let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
+            Ok(data) => (*data.id(), None),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.admin_id(),
+            Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
@@ -88,6 +88,15 @@ async fn insert_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    if let Some(token_data) = token_data {
+        if !token_data.is_allow_write(path.collection_id()) {
+            return Response::error(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to write data to this collection",
+            );
+        }
     }
 
     for field_name in data.keys() {
@@ -162,13 +171,13 @@ async fn find_one(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let admin_id = match token_claim.kind() {
+    let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
+            Ok(data) => (*data.id(), None),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.admin_id(),
+            Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
@@ -190,6 +199,15 @@ async fn find_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    if let Some(token_data) = token_data {
+        if !token_data.is_allow_read(path.collection_id()) {
+            return Response::error(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to read this record",
+            );
+        }
     }
 
     let record_data =
@@ -228,13 +246,13 @@ async fn update_one(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let admin_id = match token_claim.kind() {
+    let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
+            Ok(data) => (*data.id(), None),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.admin_id(),
+            Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
@@ -256,6 +274,15 @@ async fn update_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    if let Some(token_data) = token_data {
+        if !token_data.is_allow_write(path.collection_id()) {
+            return Response::error(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to update this record",
+            );
+        }
     }
 
     for field_name in data.keys() {
@@ -330,13 +357,13 @@ async fn delete_one(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let admin_id = match token_claim.kind() {
+    let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
+            Ok(data) => (*data.id(), None),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.admin_id(),
+            Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
@@ -358,6 +385,15 @@ async fn delete_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    if let Some(token_data) = token_data {
+        if !token_data.is_allow_write(path.collection_id()) {
+            return Response::error(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to delete this record",
+            );
+        }
     }
 
     if let Err(err) =
@@ -389,13 +425,13 @@ async fn find_many(
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let admin_id = match token_claim.kind() {
+    let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.id(),
+            Ok(data) => (*data.id(), None),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => *data.admin_id(),
+            Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
     };
@@ -417,6 +453,15 @@ async fn find_many(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+    }
+
+    if let Some(token_data) = token_data {
+        if !token_data.is_allow_read(path.collection_id()) {
+            return Response::error(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to read these records",
+            );
+        }
     }
 
     let filter = match query_data.filter() {
@@ -455,7 +500,7 @@ async fn find_many(
 
     let pagination = RecordPagination::new(query_data.limit());
 
-    let records_data =
+    let (records_data, total) =
         match RecordDao::db_select_many(ctx.dao().db(), &collection_data, &filter, &pagination)
             .await
         {
@@ -478,14 +523,14 @@ async fn find_many(
         records.push(record);
     }
 
+    let total = match usize::try_from(total) {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+    };
+
     Response::data(
         &StatusCode::OK,
-        &Some(PaginationRes::new(
-            &records_data.len(),
-            &records_data.len(),
-            &1,
-            &records_data.len(),
-        )),
+        &Some(PaginationRes::new(&records_data.len(), &total)),
         &records
             .iter()
             .map(|record| RecordResJson::new(record))

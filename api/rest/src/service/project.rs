@@ -259,8 +259,6 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
         &Some(PaginationRes::new(
             &projects_data.len(),
             &projects_data.len(),
-            &1,
-            &projects_data.len(),
         )),
         &projects_data
             .iter()

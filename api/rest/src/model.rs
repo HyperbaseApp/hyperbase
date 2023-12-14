@@ -84,18 +84,14 @@ pub struct ErrorRes {
 
 #[derive(Serialize, Clone, Copy)]
 pub struct PaginationRes {
-    limit: usize,
     count: usize,
-    page: usize,
     total: usize,
 }
 
 impl PaginationRes {
-    pub fn new(limit: &usize, count: &usize, page: &usize, total: &usize) -> Self {
+    pub fn new(count: &usize, total: &usize) -> Self {
         Self {
-            limit: *limit,
             count: *count,
-            page: *page,
             total: *total,
         }
     }

@@ -504,8 +504,6 @@ async fn find_many(
         &Some(PaginationRes::new(
             &collections_data.len(),
             &collections_data.len(),
-            &1,
-            &collections_data.len(),
         )),
         &collections_data
             .iter()

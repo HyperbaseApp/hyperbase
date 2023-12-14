@@ -1,7 +1,11 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
+use ahash::{HashSet, HashSetExt};
 use chrono::{Duration, Utc};
 use futures::future;
-use hb_dao::{admin::AdminDao, record::RecordDao, token::TokenDao};
+use hb_dao::{
+    admin::AdminDao, collection::CollectionDao, project::ProjectDao, record::RecordDao,
+    token::TokenDao,
+};
 use hb_token_jwt::kind::JwtTokenKind;
 
 use crate::{
@@ -18,7 +22,7 @@ use crate::{
 pub fn token_api(cfg: &mut web::ServiceConfig) {
     cfg.route("/admin/token", web::post().to(insert_one))
         .route("/admin/token/{token_id}", web::get().to(find_one))
-        .route("/admin/token/{token_id}", web::patch().to(update_one))
+        .route("/admin/token/{token_id}", web::put().to(update_one))
         .route("/admin/token/{token_id}", web::delete().to(delete_one))
         .route("/admin/tokens", web::get().to(find_many));
 }
@@ -50,10 +54,7 @@ async fn insert_one(
     }
 
     if data.rules().is_empty() {
-        return Response::error(
-            &StatusCode::BAD_REQUEST,
-            "Expiration date must be in the future",
-        );
+        return Response::error(&StatusCode::BAD_REQUEST, "Rules can't be empty");
     }
 
     if let Some(expired_at) = data.expired_at() {
@@ -65,27 +66,51 @@ async fn insert_one(
         }
     }
 
+    let mut collections_data_fut = Vec::with_capacity(data.rules().len());
     let mut check_tables_must_exist_fut = Vec::with_capacity(data.rules().len());
     for collection_id in data.rules().keys() {
+        collections_data_fut.push(CollectionDao::db_select(ctx.dao().db(), collection_id));
         check_tables_must_exist_fut.push(RecordDao::db_check_table_must_exist(
             ctx.dao().db(),
             collection_id,
         ));
     }
+    let mut project_ids = HashSet::new();
+    match future::try_join_all(collections_data_fut).await {
+        Ok(collections_data) => {
+            for collection_data in collections_data {
+                project_ids.insert(*collection_data.project_id());
+            }
+        }
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    }
+    let mut projects_data_fut = Vec::with_capacity(project_ids.len());
+    for project_id in &project_ids {
+        projects_data_fut.push(ProjectDao::db_select(ctx.dao().db(), project_id));
+    }
+    match future::try_join_all(projects_data_fut).await {
+        Ok(projects_data) => {
+            for project_data in projects_data {
+                if project_data.admin_id() != token_claim.id() {
+                    return Response::error(
+                        &StatusCode::FORBIDDEN,
+                        "This collection does not belong to you",
+                    );
+                }
+            }
+        }
+        Err(_) => todo!(),
+    }
     if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
         return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let mut token_data = TokenDao::new(
+    let token_data = TokenDao::new(
         token_claim.id(),
         ctx.access_token_length(),
-        &data.rules().len(),
+        data.rules(),
         data.expired_at(),
     );
-    for (collection_id, rule) in data.rules() {
-        token_data.upsert_rule(collection_id, rule);
-    }
-
     if let Err(err) = token_data.db_insert(ctx.dao().db()).await {
         return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
@@ -196,29 +221,55 @@ async fn update_one(
                 "Expiration date must be in the future",
             );
         }
-        token_data.set_expired_at(data.expired_at());
     }
 
     if let Some(rules) = data.rules() {
+        let mut collections_data_fut = Vec::with_capacity(rules.len());
         let mut check_tables_must_exist_fut = Vec::with_capacity(rules.len());
         for collection_id in rules.keys() {
+            collections_data_fut.push(CollectionDao::db_select(ctx.dao().db(), collection_id));
             check_tables_must_exist_fut.push(RecordDao::db_check_table_must_exist(
                 ctx.dao().db(),
                 collection_id,
             ));
         }
+        let mut project_ids = HashSet::new();
+        match future::try_join_all(collections_data_fut).await {
+            Ok(collections_data) => {
+                for collection_data in collections_data {
+                    project_ids.insert(*collection_data.project_id());
+                }
+            }
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        }
+        let mut projects_data_fut = Vec::with_capacity(project_ids.len());
+        for project_id in &project_ids {
+            projects_data_fut.push(ProjectDao::db_select(ctx.dao().db(), project_id));
+        }
+        match future::try_join_all(projects_data_fut).await {
+            Ok(projects_data) => {
+                for project_data in projects_data {
+                    if project_data.admin_id() != token_claim.id() {
+                        return Response::error(
+                            &StatusCode::FORBIDDEN,
+                            "This collection does not belong to you",
+                        );
+                    }
+                }
+            }
+            Err(_) => todo!(),
+        }
         if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
             return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
         }
-        for (collection_id, rule) in rules {
-            token_data.upsert_rule(collection_id, rule);
-        }
     }
 
-    if !data.is_all_none() {
-        if let Err(err) = token_data.db_update(ctx.dao().db()).await {
-            return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-        }
+    if let Some(rules) = data.rules() {
+        token_data.set_rules(rules);
+    }
+    token_data.set_expired_at(data.expired_at());
+    if let Err(err) = token_data.db_update(ctx.dao().db()).await {
+        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -311,12 +362,7 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
 
     Response::data(
         &StatusCode::OK,
-        &Some(PaginationRes::new(
-            &tokens_data.len(),
-            &tokens_data.len(),
-            &1,
-            &tokens_data.len(),
-        )),
+        &Some(PaginationRes::new(&tokens_data.len(), &tokens_data.len())),
         &tokens_data
             .iter()
             .map(|data| {

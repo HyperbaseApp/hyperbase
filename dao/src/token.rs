@@ -1,4 +1,4 @@
-use ahash::{HashMap, HashMapExt};
+use ahash::HashMap;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
@@ -29,7 +29,7 @@ impl TokenDao {
     pub fn new(
         admin_id: &Uuid,
         token_length: &usize,
-        number_of_rules: &usize,
+        rules: &HashMap<Uuid, i8>,
         expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         let now = Utc::now();
@@ -43,7 +43,7 @@ impl TokenDao {
                 .take(*token_length)
                 .map(char::from)
                 .collect(),
-            rules: HashMap::with_capacity(*number_of_rules),
+            rules: rules.clone(),
             expired_at: *expired_at,
         }
     }
@@ -80,8 +80,20 @@ impl TokenDao {
         self.rules.insert(*collection_id, *rule);
     }
 
+    pub fn set_rules(&mut self, rules: &HashMap<Uuid, i8>) {
+        self.rules = rules.clone();
+    }
+
     pub fn set_expired_at(&mut self, expired_at: &Option<DateTime<Utc>>) {
         self.expired_at = *expired_at;
+    }
+
+    pub fn is_allow_write(&self, collection_id: &Uuid) -> bool {
+        self.is_allow(&2, collection_id)
+    }
+
+    pub fn is_allow_read(&self, collection_id: &Uuid) -> bool {
+        self.is_allow(&1, collection_id)
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -134,6 +146,21 @@ impl TokenDao {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
         }
+    }
+
+    fn is_allow(&self, rule: &i8, collection_id: &Uuid) -> bool {
+        if let Some(collection_rule) = self.rules.get(collection_id) {
+            if collection_rule >= rule {
+                if let Some(expired_at) = self.expired_at {
+                    if expired_at > Utc::now() {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {

@@ -230,7 +230,7 @@ impl RecordDao {
         collection_data: &CollectionDao,
         filter: &Vec<RecordFilter>,
         pagination: &RecordPagination,
-    ) -> Result<Vec<Self>> {
+    ) -> Result<(Vec<Self>, i64)> {
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -243,7 +243,7 @@ impl RecordDao {
                     columns.push(column.to_owned());
                     columns_props.push(*props)
                 }
-                let scylladb_data_many: Vec<Vec<Option<CqlValue>>> =
+                let (scylladb_data_many, total) =
                     Self::scylladb_select_many(db, &table_name, &columns, filter, pagination)
                         .await?;
                 let mut data_many = Vec::with_capacity(scylladb_data_many.len());
@@ -266,13 +266,16 @@ impl RecordDao {
                     }
                     data_many.push(data);
                 }
-                Ok(data_many
-                    .iter()
-                    .map(|data| Self {
-                        table_name: table_name.to_owned(),
-                        data: data.clone(),
-                    })
-                    .collect())
+                Ok((
+                    data_many
+                        .iter()
+                        .map(|data| Self {
+                            table_name: table_name.to_owned(),
+                            data: data.clone(),
+                        })
+                        .collect(),
+                    total,
+                ))
             }
         }
     }
@@ -411,33 +414,34 @@ impl RecordDao {
         db: &ScyllaDb,
         table_name: &str,
         columns: &Vec<String>,
-        filter: &Vec<RecordFilter>,
+        filters: &Vec<RecordFilter>,
         pagination: &RecordPagination,
-    ) -> Result<Vec<Vec<Option<CqlValue>>>> {
-        let mut query_filter = Vec::with_capacity(filter.len());
-        let mut values = Vec::<Box<dyn Value>>::with_capacity(filter.len() + 1);
-        for f in filter {
-            query_filter.push((f.field(), f.op()));
+    ) -> Result<(Vec<Vec<Option<CqlValue>>>, i64)> {
+        let mut filter = Vec::with_capacity(filters.len());
+        let mut total_values = Vec::with_capacity(filters.len());
+        let mut values = Vec::<Box<dyn Value>>::with_capacity(filters.len() + 1);
+        for f in filters {
+            filter.push((f.field(), f.op()));
+            total_values.push(f.value().to_scylladb_model());
             values.push(f.value().to_scylladb_model());
         }
         if let Some(limit) = pagination.limit() {
             values.push(Box::new(limit))
         }
-        Ok(db
-            .execute(
-                &record::select_many(
-                    table_name,
-                    columns,
-                    &query_filter,
-                    &pagination.limit().is_some(),
-                ),
-                &values,
-            )
-            .await?
-            .rows()?
-            .iter()
-            .map(|row| row.columns.to_owned())
-            .collect())
+        let query_select_many =
+            record::select_many(table_name, columns, &filter, &pagination.limit().is_some());
+        let query_total = record::count(table_name, &filter);
+        let (data, total) = tokio::try_join!(
+            db.execute(&query_select_many, &values,),
+            db.execute(&query_total, &total_values)
+        )?;
+        Ok((
+            data.rows()?
+                .iter()
+                .map(|row| row.columns.to_owned())
+                .collect(),
+            total.first_row_typed::<(i64,)>()?.0,
+        ))
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {

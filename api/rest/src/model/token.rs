@@ -55,10 +55,6 @@ impl UpdateOneTokenReqJson {
     pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
     }
-
-    pub fn is_all_none(&self) -> bool {
-        self.expired_at.is_none()
-    }
 }
 
 #[derive(Deserialize)]

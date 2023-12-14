@@ -99,29 +99,6 @@ pub fn select(record_table: &str, columns: &Vec<String>) -> String {
     )
 }
 
-pub fn select_many(
-    record_table: &str,
-    columns: &Vec<String>,
-    filter: &Vec<(&str, &str)>,
-    with_query_limit: &bool,
-) -> String {
-    let mut query = format!(
-        "SELECT {} FROM \"hyperbase\".\"{}\"",
-        columns.iter().map(|col| format!("\"{col}\"")).join(", "),
-        record_table,
-    );
-    if filter.len() > 0 {
-        query += " WHERE"
-    }
-    for (field, op) in filter {
-        query += &format!(" \"{}\" {} ?", &field, &op)
-    }
-    if *with_query_limit {
-        query += " LIMIT ?"
-    }
-    query + " ALLOW FILTERING"
-}
-
 pub fn update(record_table: &str, columns: &Vec<String>) -> String {
     format!(
         "UPDATE \"hyperbase\".\"{}\" SET {} WHERE \"_id\" = ?",
@@ -142,4 +119,38 @@ pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
             .map(|col| format!("\"{col}\" = ?"))
             .join(", ")
     )
+}
+
+pub fn select_many(
+    record_table: &str,
+    columns: &Vec<String>,
+    filter: &Vec<(&str, &str)>,
+    with_query_limit: &bool,
+) -> String {
+    let mut query = format!(
+        "SELECT {} FROM \"hyperbase\".\"{}\"",
+        columns.iter().map(|col| format!("\"{col}\"")).join(", "),
+        record_table,
+    );
+    if filter.len() > 0 {
+        query += " WHERE"
+    }
+    for (field, op) in filter {
+        query += &format!(" \"{}\" {} ?", field, op)
+    }
+    if *with_query_limit {
+        query += " LIMIT ?"
+    }
+    query + " ALLOW FILTERING"
+}
+
+pub fn count(record_table: &str, filter: &Vec<(&str, &str)>) -> String {
+    let mut query = format!("SELECT COUNT(1) FROM \"hyperbase\".\"{}\"", record_table);
+    if filter.len() > 0 {
+        query += " WHERE"
+    }
+    for (field, op) in filter {
+        query += &format!(" \"{}\" {} ?", field, op)
+    }
+    query + " ALLOW FILTERING"
 }
