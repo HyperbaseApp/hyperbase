@@ -87,7 +87,7 @@ async fn insert_one(
         if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
             return Response::error(
                 &StatusCode::BAD_REQUEST,
-                &format!("Field {key} should only have lowercase English letters and an optional underscore (_) after the first character"),
+                &format!("Field '{key}' should only have lowercase English letters and an optional underscore (_) after the first character"),
             );
         }
         if let Some(indexes) = data.indexes() {
@@ -96,7 +96,7 @@ async fn insert_one(
                     return Response::error(
                         &StatusCode::BAD_REQUEST,
                         &format!(
-                            "Field {field_name} must be required because it is in the indexes"
+                            "Field '{field_name}' must be required because it is in the indexes"
                         ),
                     );
                 }
@@ -121,14 +121,16 @@ async fn insert_one(
                     if !field.required() {
                         return Response::error(
                             &StatusCode::BAD_REQUEST,
-                            &format!("Field {index} must be required because it is in the indexes"),
+                            &format!(
+                                "Field '{index}' must be required because it is in the indexes"
+                            ),
                         );
                     }
                 }
                 None => {
                     return Response::error(
                         &StatusCode::BAD_REQUEST,
-                        &format!("Field {index} is not exist in the schema fields"),
+                        &format!("Field '{index}' is not exist in the schema fields"),
                     )
                 }
             }
@@ -306,7 +308,7 @@ async fn update_one(
             if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
                 return Response::error(
                     &StatusCode::BAD_REQUEST,
-                    &format!("Field {key} should only have lowercase English letters and an optional underscore (_) after the first character"),
+                    &format!("Field '{key}' should only have lowercase English letters and an optional underscore (_) after the first character"),
                 );
             }
             if let Some(indexes) = data.indexes() {
@@ -315,7 +317,7 @@ async fn update_one(
                         return Response::error(
                             &StatusCode::BAD_REQUEST,
                             &format!(
-                                "Field {field_name} must be required because it is in the indexes"
+                                "Field '{field_name}' must be required because it is in the indexes"
                             ),
                         );
                     }
@@ -347,14 +349,18 @@ async fn update_one(
                     if !field.required() {
                         return Response::error(
                             &StatusCode::BAD_REQUEST,
-                            &format!("Field {index} must be required because it is in the indexes"),
+                            &format!(
+                                "Field '{index}' must be required because it is in the indexes"
+                            ),
                         );
                     }
                 }
                 None => {
                     return Response::error(
                         &StatusCode::BAD_REQUEST,
-                        &format!("Field {index} is in indexes but not exist in the schema fields"),
+                        &format!(
+                            "Field '{index}' is in indexes but not exist in the schema fields"
+                        ),
                     )
                 }
             }

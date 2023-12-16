@@ -5,4 +5,5 @@ pub mod keyspace;
 pub mod project;
 pub mod record;
 pub mod registration;
+pub mod system;
 pub mod token;

@@ -3,8 +3,6 @@ use itertools::Itertools;
 
 use crate::model::collection::SchemaFieldPropsScyllaModel;
 
-pub const COUNT_TABLE: &str = "SELECT COUNT(1) FROM \"system_schema\".\"tables\" WHERE \"keyspace_name\" = 'hyperbase' AND \"table_name\" = ?";
-
 pub fn create_table(
     record_table: &str,
     columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
@@ -123,8 +121,9 @@ pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
 
 pub fn select_many(
     record_table: &str,
-    columns: &Vec<String>,
-    filter: &Vec<(&str, &str)>,
+    columns: &Vec<&str>,
+    filter: &str,
+    order: &HashMap<&str, &str>,
     with_query_limit: &bool,
 ) -> String {
     let mut query = format!(
@@ -133,10 +132,13 @@ pub fn select_many(
         record_table,
     );
     if filter.len() > 0 {
-        query += " WHERE"
+        query += &format!(" WHERE {filter}")
     }
-    for (field, op) in filter {
-        query += &format!(" \"{}\" {} ?", field, op)
+    if order.len() > 0 {
+        query += " ORDER BY";
+        for (field, kind) in order {
+            query += &format!(" \"{field}\" {kind}");
+        }
     }
     if *with_query_limit {
         query += " LIMIT ?"
@@ -144,13 +146,10 @@ pub fn select_many(
     query + " ALLOW FILTERING"
 }
 
-pub fn count(record_table: &str, filter: &Vec<(&str, &str)>) -> String {
+pub fn count(record_table: &str, filter: &str) -> String {
     let mut query = format!("SELECT COUNT(1) FROM \"hyperbase\".\"{}\"", record_table);
     if filter.len() > 0 {
-        query += " WHERE"
-    }
-    for (field, op) in filter {
-        query += &format!(" \"{}\" {} ?", field, op)
+        query += &format!(" WHERE {filter}")
     }
     query + " ALLOW FILTERING"
 }

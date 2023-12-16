@@ -6,8 +6,11 @@ use bigdecimal::{num_traits::ToBytes, ToPrimitive};
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::collection::SchemaFieldPropsScyllaModel,
-    query::record::{self, COUNT_TABLE},
+    model::{
+        collection::SchemaFieldPropsScyllaModel,
+        system::{COMPARISON_OPERATOR, LOGICAL_OPERATOR, ORDER_TYPE},
+    },
+    query::{record, system::COUNT_TABLE},
 };
 use scylla::frame::{
     response::result::CqlValue,
@@ -26,19 +29,15 @@ pub struct RecordDao {
 }
 
 impl RecordDao {
-    pub fn new(collection_id: &Uuid, record_id: &Option<Uuid>, capacity: &Option<usize>) -> Self {
+    pub fn new(collection_id: &Uuid, capacity: &Option<usize>) -> Self {
         let mut data = HashMap::with_capacity(match capacity {
             Some(capacity) => capacity + 1,
             None => 1,
         });
-        if let Some(record_id) = record_id {
-            data.insert("_id".to_owned(), RecordColumnValue::Uuid(Some(*record_id)));
-        } else {
-            data.insert(
-                "_id".to_owned(),
-                RecordColumnValue::Uuid(Some(Uuid::new_v4())),
-            );
-        }
+        data.insert(
+            "_id".to_owned(),
+            RecordColumnValue::Uuid(Some(Uuid::new_v4())),
+        );
 
         Self {
             table_name: Self::new_table_name(collection_id),
@@ -112,7 +111,7 @@ impl RecordDao {
                 Ok(is_exist) => match is_exist {
                     true => Ok(()),
                     false => Err(Error::msg(format!(
-                        "Collection {collection_id} does not exist"
+                        "Collection '{collection_id}' doesn't exist"
                     ))),
                 },
                 Err(err) => Err(err),
@@ -228,24 +227,31 @@ impl RecordDao {
     pub async fn db_select_many(
         db: &Db,
         collection_data: &CollectionDao,
-        filter: &Vec<RecordFilter>,
+        filters: &RecordFilters,
+        orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Self>, i64)> {
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
                 let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id".to_owned());
+                columns.push("_id");
                 let mut columns_props =
                     Vec::with_capacity(collection_data.schema_fields().len() + 1);
                 columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
                 for (column, props) in collection_data.schema_fields() {
-                    columns.push(column.to_owned());
+                    columns.push(column);
                     columns_props.push(*props)
                 }
-                let (scylladb_data_many, total) =
-                    Self::scylladb_select_many(db, &table_name, &columns, filter, pagination)
-                        .await?;
+                let (scylladb_data_many, total) = Self::scylladb_select_many(
+                    db,
+                    &table_name,
+                    &columns,
+                    filters,
+                    &orders,
+                    pagination,
+                )
+                .await?;
                 let mut data_many = Vec::with_capacity(scylladb_data_many.len());
                 for scylladb_data in scylladb_data_many {
                     let mut data = HashMap::with_capacity(scylladb_data.len());
@@ -413,26 +419,38 @@ impl RecordDao {
     async fn scylladb_select_many(
         db: &ScyllaDb,
         table_name: &str,
-        columns: &Vec<String>,
-        filters: &Vec<RecordFilter>,
+        columns: &Vec<&str>,
+        filters: &RecordFilters,
+        orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Vec<Option<CqlValue>>>, i64)> {
-        let mut filter = Vec::with_capacity(filters.len());
-        let mut total_values = Vec::with_capacity(filters.len());
-        let mut values = Vec::<Box<dyn Value>>::with_capacity(filters.len() + 1);
-        for f in filters {
-            filter.push((f.field(), f.op()));
-            total_values.push(f.value().to_scylladb_model());
-            values.push(f.value().to_scylladb_model());
+        let filter = filters.scylladb_filter_query(&None, 0)?;
+        let mut order = HashMap::with_capacity(orders.len());
+        for o in orders {
+            if ORDER_TYPE.contains(&o.kind.as_str()) {
+                order.insert(o.field.as_str(), o.kind.as_str());
+            } else {
+                return Err(Error::msg(format!(
+                    "Order type '{}' is not supported",
+                    &o.kind
+                )));
+            }
         }
+        let mut values = filters.scylladb_values();
+        let total_values = filters.scylladb_values();
         if let Some(limit) = pagination.limit() {
             values.push(Box::new(limit))
         }
-        let query_select_many =
-            record::select_many(table_name, columns, &filter, &pagination.limit().is_some());
+        let query_select_many = record::select_many(
+            table_name,
+            columns,
+            &filter,
+            &order,
+            &pagination.limit().is_some(),
+        );
         let query_total = record::count(table_name, &filter);
         let (data, total) = tokio::try_join!(
-            db.execute(&query_select_many, &values,),
+            db.execute(&query_select_many, &values),
             db.execute(&query_total, &total_values)
         )?;
         Ok((
@@ -471,7 +489,7 @@ impl RecordDao {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RecordColumnValue {
     Boolean(Option<bool>),
     TinyInteger(Option<i8>),
@@ -1021,22 +1039,111 @@ impl RecordColumnValue {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct RecordFilters(Vec<RecordFilter>);
+
+impl RecordFilters {
+    pub fn new(data: &Vec<RecordFilter>) -> Self {
+        Self(data.to_vec())
+    }
+
+    pub fn scylladb_filter_query(
+        &self,
+        logical_operator: &Option<&str>,
+        level: usize,
+    ) -> Result<String> {
+        if level > 1 {
+            return Err(Error::msg(
+                "ScyllaDB doesn't support filter query with level greater than 2",
+            ));
+        }
+        let mut filter = String::new();
+        for (idx, f) in self.0.iter().enumerate() {
+            let op = f.op.to_uppercase();
+            if let Some(child) = &f.child {
+                if LOGICAL_OPERATOR.contains(&op.as_str()) {
+                    if filter.len() > 0 {
+                        filter += " ";
+                    }
+                    filter += &child.scylladb_filter_query(&Some(&op), level + 1)?;
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a logical operator in ScyllaDB"
+                    )));
+                }
+            } else {
+                let field = f.field.as_ref().unwrap();
+                if COMPARISON_OPERATOR.contains(&op.as_str()) {
+                    if filter.len() > 0 {
+                        filter += " ";
+                    }
+                    filter += &format!("\"{}\" {} ?", field, &op);
+                    if idx < self.0.len() - 1 {
+                        if let Some(operator) = logical_operator {
+                            if filter.len() > 0 {
+                                filter += " ";
+                            }
+                            filter += operator
+                        }
+                    }
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a comparison operator in ScyllaDB"
+                    )));
+                }
+            }
+        }
+        Ok(filter)
+    }
+
+    pub fn scylladb_values(&self) -> Vec<Box<dyn Value>> {
+        let mut values = Vec::<Box<dyn Value>>::with_capacity(self.values_capacity());
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                values.push(value.to_scylladb_model())
+            }
+            if let Some(child) = &f.child {
+                values.append(&mut child.scylladb_values())
+            }
+        }
+        values
+    }
+
+    fn values_capacity(&self) -> usize {
+        let mut capacity = self.0.len();
+        for f in &self.0 {
+            if let Some(child) = &f.child {
+                capacity += child.values_capacity()
+            }
+        }
+        capacity
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct RecordFilter {
-    field: String,
+    field: Option<String>,
     op: String,
-    value: RecordColumnValue,
+    value: Option<RecordColumnValue>,
+    child: Option<RecordFilters>,
 }
 
 impl RecordFilter {
-    pub fn new(field: &str, op: &str, value: &RecordColumnValue) -> Self {
+    pub fn new(
+        field: &Option<String>,
+        op: &str,
+        value: &Option<RecordColumnValue>,
+        child: &Option<RecordFilters>,
+    ) -> Self {
         Self {
             field: field.to_owned(),
             op: op.to_owned(),
             value: value.clone(),
+            child: child.clone(),
         }
     }
 
-    pub fn field(&self) -> &str {
+    pub fn field(&self) -> &Option<String> {
         &self.field
     }
 
@@ -1044,8 +1151,34 @@ impl RecordFilter {
         &self.op
     }
 
-    pub fn value(&self) -> &RecordColumnValue {
+    pub fn value(&self) -> &Option<RecordColumnValue> {
         &self.value
+    }
+
+    pub fn child(&self) -> &Option<RecordFilters> {
+        &self.child
+    }
+}
+
+pub struct RecordOrder {
+    field: String,
+    kind: String,
+}
+
+impl RecordOrder {
+    pub fn new(field: &str, kind: &str) -> Self {
+        Self {
+            field: field.to_owned(),
+            kind: kind.to_owned(),
+        }
+    }
+
+    pub fn field(&self) -> &str {
+        &self.field
+    }
+
+    pub fn kind(&self) -> &str {
+        &self.kind
     }
 }
 

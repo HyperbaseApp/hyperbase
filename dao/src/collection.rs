@@ -4,8 +4,9 @@ use chrono::{DateTime, Utc};
 use futures::future;
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::collection::{
-        CollectionScyllaModel, SchemaFieldPropsScyllaModel, SchemaFieldScyllaKind,
+    model::{
+        collection::{CollectionScyllaModel, SchemaFieldPropsScyllaModel},
+        system::SchemaFieldScyllaKind,
     },
     query::collection::{DELETE, INSERT, SELECT, SELECT_MANY_BY_PROJECT_ID, UPDATE},
 };
@@ -104,10 +105,6 @@ impl CollectionDao {
             self._preserve.as_mut().unwrap().indexes = Some(self.indexes.clone());
         }
         self.indexes = indexes.to_owned();
-    }
-
-    pub fn new_record(&self, capacity: &Option<usize>) -> RecordDao {
-        RecordDao::new(&self.id, &None, capacity)
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {

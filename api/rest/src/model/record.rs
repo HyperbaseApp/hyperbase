@@ -1,4 +1,9 @@
 use ahash::HashMap;
+use anyhow::{Error, Result};
+use hb_dao::{
+    collection::CollectionDao,
+    record::{RecordColumnValue, RecordFilter, RecordFilters},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -104,13 +109,18 @@ impl FindManyRecordReqPath {
 
 #[derive(Deserialize)]
 pub struct FindManyRecordReqJson {
-    filter: Option<Vec<FindManyRecordFilterReqJson>>,
+    filter: Option<FindManyRecordFiltersReqJson>,
+    order: Option<Vec<FindManyRecordOrderReqJson>>,
     limit: Option<i32>,
 }
 
 impl FindManyRecordReqJson {
-    pub fn filter(&self) -> &Option<Vec<FindManyRecordFilterReqJson>> {
+    pub fn filter(&self) -> &Option<FindManyRecordFiltersReqJson> {
         &self.filter
+    }
+
+    pub fn order(&self) -> &Option<Vec<FindManyRecordOrderReqJson>> {
+        &self.order
     }
 
     pub fn limit(&self) -> &Option<i32> {
@@ -119,23 +129,78 @@ impl FindManyRecordReqJson {
 }
 
 #[derive(Deserialize)]
-pub struct FindManyRecordFilterReqJson {
-    field: String,
-    op: String,
-    value: serde_json::Value,
+pub struct FindManyRecordFiltersReqJson(Vec<FindManyRecordFilterReqJson>);
+
+impl FindManyRecordFiltersReqJson {
+    pub fn to_dao(&self, collection_data: &CollectionDao) -> Result<RecordFilters> {
+        let mut filters = Vec::<RecordFilter>::with_capacity(self.0.len());
+        for f in &self.0 {
+            if (f.field.is_some() || f.value.is_some()) && f.child.is_some() {
+                return Err(Error::msg("Wrong filter format. If 'child' field exists, then 'name' and 'value' fields must not exist"));
+            } else if f.child.is_none() && (f.field.is_none() || f.value.is_none()) {
+                return Err(Error::msg("Wrong filter format. If 'child' field does not exist, then 'name' and 'value' fields must exist"));
+            }
+            let schema_field_kind = match &f.field {
+                Some(field) => match collection_data.schema_fields().get(field) {
+                    Some(field) => Some(field.kind()),
+                    None => {
+                        return Err(Error::msg(format!(
+                            "Field '{field}' is not exist in the collection",
+                        )));
+                    }
+                },
+                None => None,
+            };
+
+            let value = if schema_field_kind.is_some() && f.value.is_some() {
+                match RecordColumnValue::from_serde_json(
+                    schema_field_kind.unwrap(),
+                    f.value.as_ref().unwrap(),
+                ) {
+                    Ok(value) => Some(value),
+                    Err(err) => {
+                        return Err(err);
+                    }
+                }
+            } else {
+                None
+            };
+            filters.push(RecordFilter::new(
+                &f.field,
+                &f.op,
+                &value,
+                &if let Some(child) = &f.child {
+                    Some(child.to_dao(collection_data)?)
+                } else {
+                    None
+                },
+            ));
+        }
+        Ok(RecordFilters::new(&filters))
+    }
 }
 
-impl FindManyRecordFilterReqJson {
+#[derive(Deserialize)]
+pub struct FindManyRecordFilterReqJson {
+    field: Option<String>,
+    op: String,
+    value: Option<serde_json::Value>,
+    child: Option<FindManyRecordFiltersReqJson>,
+}
+
+#[derive(Deserialize)]
+pub struct FindManyRecordOrderReqJson {
+    field: String,
+    kind: String,
+}
+
+impl FindManyRecordOrderReqJson {
     pub fn field(&self) -> &str {
         &self.field
     }
 
-    pub fn op(&self) -> &str {
-        &self.op
-    }
-
-    pub fn value(&self) -> &serde_json::Value {
-        &self.value
+    pub fn kind(&self) -> &str {
+        &self.kind
     }
 }
 

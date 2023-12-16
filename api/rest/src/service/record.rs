@@ -4,7 +4,7 @@ use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
     project::ProjectDao,
-    record::{RecordColumnValue, RecordDao, RecordFilter, RecordPagination},
+    record::{RecordColumnValue, RecordDao, RecordFilters, RecordOrder, RecordPagination},
     token::TokenDao,
 };
 use hb_token_jwt::kind::JwtTokenKind;
@@ -103,12 +103,12 @@ async fn insert_one(
         if !collection_data.schema_fields().contains_key(field_name) {
             return Response::error(
                 &StatusCode::BAD_REQUEST,
-                &format!("Field {field_name} is not exist in the collection"),
+                &format!("Field '{field_name}' is not exist in the collection"),
             );
         }
     }
 
-    let mut record_data = collection_data.new_record(&Some(data.len()));
+    let mut record_data = RecordDao::new(collection_data.id(), &Some(data.len()));
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if !value.is_null() {
@@ -119,7 +119,7 @@ async fn insert_one(
                         Err(err) => {
                             return Response::error(
                                 &StatusCode::BAD_REQUEST,
-                                &format!("Error in field {}: {}", field_name, err),
+                                &format!("Error in field '{}': {}", field_name, err),
                             )
                         }
                     },
@@ -131,7 +131,7 @@ async fn insert_one(
             true => {
                 return Response::error(
                     &StatusCode::BAD_REQUEST,
-                    &format!("Value for {field_name} is required"),
+                    &format!("Value for '{field_name}' is required"),
                 )
             }
             false => record_data.upsert(field_name, &RecordColumnValue::none(field_props.kind())),
@@ -289,7 +289,7 @@ async fn update_one(
         if !collection_data.schema_fields().contains_key(field_name) {
             return Response::error(
                 &StatusCode::BAD_REQUEST,
-                &format!("Field {field_name} is not exist in the collection"),
+                &format!("Field '{field_name}' is not exist in the collection"),
             );
         }
     }
@@ -305,7 +305,7 @@ async fn update_one(
                 if *field_props.required() {
                     return Response::error(
                         &StatusCode::BAD_REQUEST,
-                        &format!("Value for {field_name} is required"),
+                        &format!("Value for '{field_name}' is required"),
                     );
                 }
             }
@@ -316,7 +316,7 @@ async fn update_one(
                     Err(err) => {
                         return Response::error(
                             &StatusCode::BAD_REQUEST,
-                            &format!("Error in field {}: {}", field_name, err),
+                            &format!("Error in field '{}': {}", field_name, err),
                         )
                     }
                 },
@@ -464,49 +464,44 @@ async fn find_many(
         }
     }
 
-    let filter = match query_data.filter() {
-        Some(filter) => {
-            for f in filter {
-                if !collection_data.schema_fields().contains_key(f.field()) {
-                    return Response::error(
-                        &StatusCode::BAD_REQUEST,
-                        &format!("Field {} is not exist in the collection", f.field()),
-                    );
-                }
-            }
-            let mut filters = Vec::<RecordFilter>::with_capacity(filter.len());
-            for f in filter {
-                let schema_field_kind = match collection_data.schema_fields().get(f.field()) {
-                    Some(field) => field.kind(),
-                    None => {
+    let filters = match query_data.filter() {
+        Some(filter) => match filter.to_dao(&collection_data) {
+            Ok(filter) => filter,
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        },
+        None => RecordFilters::new(&Vec::new()),
+    };
+    let orders = match query_data.order() {
+        Some(order) => {
+            let mut orders = Vec::<RecordOrder>::with_capacity(order.len());
+            for o in order {
+                match collection_data.schema_fields().contains_key(o.field()) {
+                    true => orders.push(RecordOrder::new(o.field(), o.kind())),
+                    false => {
                         return Response::error(
                             &StatusCode::BAD_REQUEST,
-                            &format!("Field {} is not exist in the collection", f.field()),
+                            &format!("Field '{}' is not exist in the collection", o.field()),
                         );
                     }
-                };
-                let value = match RecordColumnValue::from_serde_json(schema_field_kind, f.value()) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
-                    }
-                };
-                filters.push(RecordFilter::new(f.field(), f.op(), &value));
+                }
             }
-            filters
+            orders
         }
         None => Vec::new(),
     };
-
     let pagination = RecordPagination::new(query_data.limit());
-
-    let (records_data, total) =
-        match RecordDao::db_select_many(ctx.dao().db(), &collection_data, &filter, &pagination)
-            .await
-        {
-            Ok(data) => data,
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let (records_data, total) = match RecordDao::db_select_many(
+        ctx.dao().db(),
+        &collection_data,
+        &filters,
+        &orders,
+        &pagination,
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
 
     let mut records = Vec::with_capacity(records_data.len());
     for record_data in &records_data {
