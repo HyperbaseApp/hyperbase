@@ -7,7 +7,7 @@ pub const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\
 pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
-    hb_log::info(Some("🔧"), "ScyllaDb: Setting up collections table");
+    hb_log::info(Some("🔧"), "ScyllaDB: Setting up collections table");
 
     cached_session
         .get_session()

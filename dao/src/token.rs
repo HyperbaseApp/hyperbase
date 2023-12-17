@@ -3,7 +3,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::token::TokenScyllaModel,
+    model::token::TokenModel as TokenScyllaModel,
     query::token::{DELETE, INSERT, SELECT, SELECT_BY_TOKEN, SELECT_MANY_BY_ADMIN_ID, UPDATE},
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
@@ -99,6 +99,9 @@ impl TokenDao {
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -107,6 +110,9 @@ impl TokenDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -115,6 +121,9 @@ impl TokenDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select_by_token(db, token).await?,
             )?),
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -132,6 +141,9 @@ impl TokenDao {
                 }
                 Ok(tokens_data)
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -139,12 +151,18 @@ impl TokenDao {
         self.updated_at = Utc::now();
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 

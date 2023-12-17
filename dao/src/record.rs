@@ -7,7 +7,7 @@ use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::{
-        collection::SchemaFieldPropsScyllaModel,
+        collection::SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
         system::{COMPARISON_OPERATOR, LOGICAL_OPERATOR, ORDER_TYPE},
     },
     query::{record, system::COUNT_TABLE},
@@ -89,18 +89,27 @@ impl RecordDao {
                 )
                 .await
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_drop_table(db: &Db, collection_id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_table(db, collection_id).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_check_table_existence(db: &Db, collection_id: &Uuid) -> Result<bool> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_check_table_existence(db, collection_id).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -116,6 +125,9 @@ impl RecordDao {
                 },
                 Err(err) => Err(err),
             },
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -136,6 +148,9 @@ impl RecordDao {
                 )
                 .await
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -146,6 +161,9 @@ impl RecordDao {
     ) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_columns(db, collection_id, column_names).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -166,24 +184,36 @@ impl RecordDao {
                 )
                 .await
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_create_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_create_index(db, collection_id, index).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_drop_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_index(db, collection_id, index).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -221,6 +251,9 @@ impl RecordDao {
                 }
                 Ok(Self { table_name, data })
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -228,6 +261,7 @@ impl RecordDao {
         db: &Db,
         collection_data: &CollectionDao,
         filters: &RecordFilters,
+        groups: &Vec<String>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Self>, i64)> {
@@ -248,7 +282,8 @@ impl RecordDao {
                     &table_name,
                     &columns,
                     filters,
-                    &orders,
+                    groups,
+                    orders,
                     pagination,
                 )
                 .await?;
@@ -283,12 +318,18 @@ impl RecordDao {
                     total,
                 ))
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_update(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -297,6 +338,9 @@ impl RecordDao {
             Db::ScyllaDb(db) => {
                 Self::scylladb_delete(db, &Self::new_table_name(collection_id), id).await
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -421,6 +465,7 @@ impl RecordDao {
         table_name: &str,
         columns: &Vec<&str>,
         filters: &RecordFilters,
+        groups: &Vec<String>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Vec<Option<CqlValue>>>, i64)> {
@@ -445,6 +490,7 @@ impl RecordDao {
             table_name,
             columns,
             &filter,
+            groups,
             &order,
             &pagination.limit().is_some(),
         );
@@ -1097,7 +1143,7 @@ impl RecordFilters {
     }
 
     pub fn scylladb_values(&self) -> Vec<Box<dyn Value>> {
-        let mut values = Vec::<Box<dyn Value>>::with_capacity(self.values_capacity());
+        let mut values = Vec::with_capacity(self.values_capacity());
         for f in &self.0 {
             if let Some(value) = &f.value {
                 values.push(value.to_scylladb_model())

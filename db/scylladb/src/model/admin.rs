@@ -2,7 +2,7 @@ use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
 #[derive(ValueList, FromRow)]
-pub struct AdminScyllaModel {
+pub struct AdminModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
@@ -10,7 +10,7 @@ pub struct AdminScyllaModel {
     password_hash: String,
 }
 
-impl AdminScyllaModel {
+impl AdminModel {
     pub fn new(
         id: &Uuid,
         created_at: &Timestamp,

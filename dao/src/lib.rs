@@ -1,4 +1,7 @@
+use hb_db_mysql::db::MysqlDb;
+use hb_db_postgresql::db::PostgresDb;
 use hb_db_scylladb::db::ScyllaDb;
+use hb_db_sqlite::db::SqliteDb;
 
 pub mod admin;
 pub mod admin_password_reset;
@@ -11,4 +14,7 @@ mod util;
 
 pub enum Db {
     ScyllaDb(ScyllaDb),
+    PostgresqlDb(PostgresDb),
+    MysqlDb(MysqlDb),
+    SqliteDb(SqliteDb),
 }

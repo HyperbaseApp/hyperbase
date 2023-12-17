@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
+
 [dependencies]
 hb_log = { workspace = true }
 
 argon2 = { workspace = true }
+
 
 [lints]
 workspace = true

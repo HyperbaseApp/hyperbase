@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
+
 [dependencies]
 serde = { workspace = true }
 serde_yaml = { workspace = true }
+
 
 [lints]
 workspace = true

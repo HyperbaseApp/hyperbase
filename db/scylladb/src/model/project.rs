@@ -2,7 +2,7 @@ use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
 #[derive(ValueList, FromRow)]
-pub struct ProjectScyllaModel {
+pub struct ProjectModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
@@ -10,7 +10,7 @@ pub struct ProjectScyllaModel {
     name: String,
 }
 
-impl ProjectScyllaModel {
+impl ProjectModel {
     pub fn new(
         id: &Uuid,
         created_at: &Timestamp,

@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::project::ProjectScyllaModel,
+    model::project::ProjectModel as ProjectScyllaModel,
     query::project::{DELETE, INSERT, SELECT, SELECT_MANY_BY_ADMIN_ID, UPDATE},
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
@@ -60,6 +60,9 @@ impl ProjectDao {
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -68,6 +71,9 @@ impl ProjectDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -85,6 +91,9 @@ impl ProjectDao {
                 }
                 Ok(projects_data)
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -92,12 +101,18 @@ impl ProjectDao {
         self.updated_at = Utc::now();
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 

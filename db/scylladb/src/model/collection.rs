@@ -2,27 +2,27 @@ use ahash::{HashMap, HashSet};
 use scylla::{frame::value::Timestamp, FromRow, FromUserType, IntoUserType, ValueList};
 use uuid::Uuid;
 
-use super::system::SchemaFieldScyllaKind;
+use super::system::SchemaFieldKind;
 
 #[derive(ValueList, FromRow)]
-pub struct CollectionScyllaModel {
+pub struct CollectionModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
     project_id: Uuid,
     name: String,
-    schema_fields: HashMap<String, SchemaFieldPropsScyllaModel>,
+    schema_fields: HashMap<String, SchemaFieldPropsModel>,
     indexes: Option<HashSet<String>>,
 }
 
-impl CollectionScyllaModel {
+impl CollectionModel {
     pub fn new(
         id: &Uuid,
         created_at: &Timestamp,
         updated_at: &Timestamp,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &HashMap<String, SchemaFieldPropsScyllaModel>,
+        schema_fields: &HashMap<String, SchemaFieldPropsModel>,
         indexes: &Option<HashSet<String>>,
     ) -> Self {
         Self {
@@ -56,7 +56,7 @@ impl CollectionScyllaModel {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsScyllaModel> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsModel> {
         &self.schema_fields
     }
 
@@ -66,14 +66,14 @@ impl CollectionScyllaModel {
 }
 
 #[derive(IntoUserType, FromUserType, Clone)]
-pub struct SchemaFieldPropsScyllaModel {
+pub struct SchemaFieldPropsModel {
     kind: String,
-    internal_kind: SchemaFieldScyllaKind,
+    internal_kind: SchemaFieldKind,
     required: bool,
 }
 
-impl SchemaFieldPropsScyllaModel {
-    pub fn new(kind: &str, internal_kind: &SchemaFieldScyllaKind, required: &bool) -> Self {
+impl SchemaFieldPropsModel {
+    pub fn new(kind: &str, internal_kind: &SchemaFieldKind, required: &bool) -> Self {
         Self {
             kind: kind.to_owned(),
             internal_kind: *internal_kind,
@@ -85,7 +85,7 @@ impl SchemaFieldPropsScyllaModel {
         &self.kind
     }
 
-    pub fn internal_kind(&self) -> &SchemaFieldScyllaKind {
+    pub fn internal_kind(&self) -> &SchemaFieldKind {
         &self.internal_kind
     }
 

@@ -2,7 +2,7 @@ use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
 #[derive(ValueList, FromRow)]
-pub struct RegistrationScyllaModel {
+pub struct RegistrationModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
@@ -11,7 +11,7 @@ pub struct RegistrationScyllaModel {
     code: String,
 }
 
-impl RegistrationScyllaModel {
+impl RegistrationModel {
     pub fn new(
         id: &Uuid,
         created_at: &Timestamp,

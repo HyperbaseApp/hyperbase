@@ -3,7 +3,10 @@ use hb_api_rest::{
     ApiRestServer,
 };
 use hb_dao::Db;
+use hb_db_mysql::db::MysqlDb;
+use hb_db_postgresql::db::PostgresDb;
 use hb_db_scylladb::db::ScyllaDb;
+use hb_db_sqlite::db::SqliteDb;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::Mailer;
 use hb_token_jwt::token::JwtToken;
@@ -35,15 +38,59 @@ async fn main() {
         config.mailer().sender_name(),
         config.mailer().sender_email(),
     );
-    let scylla_db = ScyllaDb::new(
-        config.db().scylla().host(),
-        config.db().scylla().port(),
-        config.db().scylla().replication_factor(),
-        config.db().scylla().prepared_statement_cache_size(),
-        config.db().scylla().table_properties().registration_ttl(),
-        config.db().scylla().table_properties().reset_password_ttl(),
-    )
-    .await;
+    let db = if let Some(scylla) = config.db().scylla() {
+        Db::ScyllaDb(
+            ScyllaDb::new(
+                scylla.host(),
+                scylla.port(),
+                scylla.replication_factor(),
+                scylla.prepared_statement_cache_size(),
+                config.auth().registration_ttl(),
+                config.auth().reset_password_ttl(),
+            )
+            .await,
+        )
+    } else if let Some(postgres) = config.db().postgres() {
+        Db::PostgresqlDb(
+            PostgresDb::new(
+                postgres.user(),
+                postgres.password(),
+                postgres.host(),
+                postgres.port(),
+                postgres.db_name(),
+                postgres.max_connections(),
+                &i64::from(*config.auth().registration_ttl()),
+                &i64::from(*config.auth().reset_password_ttl()),
+            )
+            .await,
+        )
+    } else if let Some(mysql) = config.db().mysql() {
+        Db::MysqlDb(
+            MysqlDb::new(
+                mysql.user(),
+                mysql.password(),
+                mysql.host(),
+                mysql.port(),
+                mysql.db_name(),
+                mysql.max_connections(),
+                &i64::from(*config.auth().registration_ttl()),
+                &i64::from(*config.auth().reset_password_ttl()),
+            )
+            .await,
+        )
+    } else if let Some(sqlite) = config.db().sqlite() {
+        Db::SqliteDb(
+            SqliteDb::new(
+                sqlite.path(),
+                sqlite.max_connections(),
+                &i64::from(*config.auth().registration_ttl()),
+                &i64::from(*config.auth().reset_password_ttl()),
+            )
+            .await,
+        )
+    } else {
+        panic!("No database configuration is specified")
+    };
 
     let api_rest_server = ApiRestServer::new(
         config.api().rest().host(),
@@ -52,9 +99,9 @@ async fn main() {
             HashCtx::new(argon2_hash),
             TokenCtx::new(jwt_token),
             MailerCtx::new(mailer_sender),
-            DaoCtx::new(Db::ScyllaDb(scylla_db)),
-            *config.db().scylla().table_properties().registration_ttl(),
-            *config.db().scylla().table_properties().reset_password_ttl(),
+            DaoCtx::new(db),
+            *config.auth().registration_ttl(),
+            *config.auth().reset_password_ttl(),
             *config.auth().access_token_length(),
         ),
     );

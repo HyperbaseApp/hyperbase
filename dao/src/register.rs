@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::registration::RegistrationScyllaModel,
+    model::registration::RegistrationModel as RegistrationScyllaModel,
     query::registration::{DELETE, INSERT, SELECT},
 };
 use rand::{thread_rng, Rng};
@@ -63,6 +63,9 @@ impl RegistrationDao {
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -71,12 +74,18 @@ impl RegistrationDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
     pub async fn db_delete(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 

@@ -471,9 +471,27 @@ async fn find_many(
         },
         None => RecordFilters::new(&Vec::new()),
     };
+    let groups = match query_data.group() {
+        Some(group) => {
+            let mut groups = Vec::with_capacity(group.len());
+            for field in group {
+                match collection_data.schema_fields().contains_key(field) {
+                    true => groups.push(field.to_owned()),
+                    false => {
+                        return Response::error(
+                            &StatusCode::BAD_REQUEST,
+                            &format!("Field '{field}' is not exist in the collection"),
+                        );
+                    }
+                }
+            }
+            groups
+        }
+        None => Vec::new(),
+    };
     let orders = match query_data.order() {
         Some(order) => {
-            let mut orders = Vec::<RecordOrder>::with_capacity(order.len());
+            let mut orders = Vec::with_capacity(order.len());
             for o in order {
                 match collection_data.schema_fields().contains_key(o.field()) {
                     true => orders.push(RecordOrder::new(o.field(), o.kind())),
@@ -494,6 +512,7 @@ async fn find_many(
         ctx.dao().db(),
         &collection_data,
         &filters,
+        &groups,
         &orders,
         &pagination,
     )

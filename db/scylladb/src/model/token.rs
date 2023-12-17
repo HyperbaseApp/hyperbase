@@ -3,7 +3,7 @@ use scylla::{frame::value::Timestamp, FromRow, ValueList};
 use uuid::Uuid;
 
 #[derive(ValueList, FromRow)]
-pub struct TokenScyllaModel {
+pub struct TokenModel {
     id: Uuid,
     created_at: Timestamp,
     updated_at: Timestamp,
@@ -13,7 +13,7 @@ pub struct TokenScyllaModel {
     expired_at: Option<Timestamp>,
 }
 
-impl TokenScyllaModel {
+impl TokenModel {
     pub fn new(
         id: &Uuid,
         created_at: &Timestamp,

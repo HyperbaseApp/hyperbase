@@ -1,11 +1,11 @@
 use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 
-use crate::model::collection::SchemaFieldPropsScyllaModel;
+use crate::model::collection::SchemaFieldPropsModel;
 
 pub fn create_table(
     record_table: &str,
-    columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
+    columns: &HashMap<String, SchemaFieldPropsModel>,
 ) -> String {
     format!(
         "CREATE TABLE IF NOT EXISTS \"hyperbase\".\"{}\" (\"_id\" uuid, {}, PRIMARY KEY (\"_id\")) ",
@@ -30,10 +30,7 @@ pub fn drop_index(record_table: &str, index: &str) -> String {
     format!("DROP INDEX IF EXISTS \"hyperbase\".\"{record_table}_{index}\"")
 }
 
-pub fn add_columns(
-    record_table: &str,
-    columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
-) -> String {
+pub fn add_columns(record_table: &str, columns: &HashMap<String, SchemaFieldPropsModel>) -> String {
     format!(
         "ALTER TABLE \"hyperbase\".\"{}\" ADD ({})",
         record_table,
@@ -58,7 +55,7 @@ pub fn drop_columns(record_table: &str, column_names: &HashSet<String>) -> Strin
 
 pub fn change_columns_type(
     record_table: &str,
-    columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
+    columns: &HashMap<String, SchemaFieldPropsModel>,
 ) -> String {
     format!(
         "ALTER TABLE \"hyperbase\".\"{}\" {}",
@@ -123,7 +120,8 @@ pub fn select_many(
     record_table: &str,
     columns: &Vec<&str>,
     filter: &str,
-    order: &HashMap<&str, &str>,
+    groups: &Vec<String>,
+    orders: &HashMap<&str, &str>,
     with_query_limit: &bool,
 ) -> String {
     let mut query = format!(
@@ -134,10 +132,26 @@ pub fn select_many(
     if filter.len() > 0 {
         query += &format!(" WHERE {filter}")
     }
-    if order.len() > 0 {
+    if groups.len() > 0 {
+        query += " GROUP BY";
+        let mut count = 0;
+        for group in groups {
+            if count > 0 {
+                query += ",";
+            }
+            query += &format!(" \"{group}\"");
+            count += 1;
+        }
+    }
+    if orders.len() > 0 {
         query += " ORDER BY";
-        for (field, kind) in order {
+        let mut count = 0;
+        for (field, kind) in orders {
+            if count > 0 {
+                query += ","
+            }
             query += &format!(" \"{field}\" {kind}");
+            count += 1;
         }
     }
     if *with_query_limit {

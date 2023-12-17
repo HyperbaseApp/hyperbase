@@ -15,7 +15,7 @@ pub const COMPARISON_OPERATOR: [&str; 8] =
 pub const ORDER_TYPE: [&str; 2] = ["ASC", "DESC"];
 
 #[derive(Clone, Copy)]
-pub enum SchemaFieldScyllaKind {
+pub enum SchemaFieldKind {
     Boolean,
     Tinyint,
     Smallint,
@@ -42,7 +42,7 @@ pub enum SchemaFieldScyllaKind {
     Tuple,
 }
 
-impl SchemaFieldScyllaKind {
+impl SchemaFieldKind {
     pub fn to_str(&self) -> &str {
         match self {
             Self::Boolean => "boolean",
@@ -103,7 +103,7 @@ impl SchemaFieldScyllaKind {
     }
 }
 
-impl Value for SchemaFieldScyllaKind {
+impl Value for SchemaFieldKind {
     fn serialize(&self, buf: &mut Vec<u8>) -> Result<(), ValueTooBig> {
         let kind = self.to_str();
         let str_bytes: &[u8] = kind.as_bytes();
@@ -116,7 +116,7 @@ impl Value for SchemaFieldScyllaKind {
     }
 }
 
-impl FromCqlVal<CqlValue> for SchemaFieldScyllaKind {
+impl FromCqlVal<CqlValue> for SchemaFieldKind {
     fn from_cql(cql_val: CqlValue) -> Result<Self, FromCqlValError> {
         Ok(Self::from_str(&cql_val.as_text().unwrap()).unwrap())
     }

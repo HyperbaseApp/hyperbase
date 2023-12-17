@@ -10,8 +10,8 @@ pub struct ApiRestCtx {
     token: TokenCtx,
     mailer: MailerCtx,
     dao: DaoCtx,
-    registration_ttl: i64,
-    reset_password_ttl: i64,
+    registration_ttl: u32,
+    reset_password_ttl: u32,
     access_token_length: usize,
 }
 
@@ -21,8 +21,8 @@ impl ApiRestCtx {
         token: TokenCtx,
         mailer: MailerCtx,
         dao: DaoCtx,
-        registration_ttl: i64,
-        reset_password_ttl: i64,
+        registration_ttl: u32,
+        reset_password_ttl: u32,
         access_token_length: usize,
     ) -> Self {
         Self {
@@ -52,11 +52,11 @@ impl ApiRestCtx {
         &self.dao
     }
 
-    pub fn registration_ttl(&self) -> &i64 {
+    pub fn registration_ttl(&self) -> &u32 {
         &self.registration_ttl
     }
 
-    pub fn reset_password_ttl(&self) -> &i64 {
+    pub fn reset_password_ttl(&self) -> &u32 {
         &self.reset_password_ttl
     }
 

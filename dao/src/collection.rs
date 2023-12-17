@@ -5,8 +5,11 @@ use futures::future;
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::{
-        collection::{CollectionScyllaModel, SchemaFieldPropsScyllaModel},
-        system::SchemaFieldScyllaKind,
+        collection::{
+            CollectionModel as CollectionScyllaModel,
+            SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
+        },
+        system::SchemaFieldKind as SchemaFieldScyllaKind,
     },
     query::collection::{DELETE, INSERT, SELECT, SELECT_MANY_BY_PROJECT_ID, UPDATE},
 };
@@ -118,6 +121,9 @@ impl CollectionDao {
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -126,6 +132,9 @@ impl CollectionDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -143,6 +152,9 @@ impl CollectionDao {
                 }
                 Ok(collections_data)
             }
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -236,6 +248,9 @@ impl CollectionDao {
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 
@@ -244,6 +259,9 @@ impl CollectionDao {
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
+            Db::PostgresqlDb(_) => todo!(),
+            Db::MysqlDb(_) => todo!(),
+            Db::SqliteDb(_) => todo!(),
         }
     }
 

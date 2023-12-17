@@ -99,7 +99,7 @@ async fn insert_one(
                 }
             }
         }
-        Err(_) => todo!(),
+        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
     }
     if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
         return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
@@ -257,7 +257,7 @@ async fn update_one(
                     }
                 }
             }
-            Err(_) => todo!(),
+            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
         }
         if let Err(err) = future::try_join_all(check_tables_must_exist_fut).await {
             return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());

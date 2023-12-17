@@ -6,17 +6,24 @@ members = [
     "config",
     "hash/argon2",
     "db/scylladb",
+    "db/postgresql",
+    "db/mysql",
+    "db/sqlite",
     "dao",
     "mailer",
     "token/jwt",
     "api/rest",
 ]
 
+
 [workspace.dependencies]
 hb_api_rest = { path = "./api/rest" }
 hb_config = { path = "./config" }
 hb_dao = { path = "./dao" }
+hb_db_mysql = { path = "./db/mysql" }
+hb_db_postgresql = { path = "./db/postgresql" }
 hb_db_scylladb = { path = "./db/scylladb" }
+hb_db_sqlite = { path = "./db/sqlite" }
 hb_hash_argon2 = { path = "./hash/argon2" }
 hb_log = { path = "./log" }
 hb_mailer = { path = "./mailer" }
@@ -46,11 +53,20 @@ scylla = "0.10"
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }
 serde_yaml = "0.9"
+sqlx = { version = "0.7", features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "uuid",
+    "chrono",
+    "bigdecimal",
+    "json",
+] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-uuid = { version = "1", default-features = false }
+uuid = { version = "1" }
 validator = "0.16"
+
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

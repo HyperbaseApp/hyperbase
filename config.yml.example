@@ -26,9 +26,23 @@ db:
     port: "19042"
     replication_factor: 3
     prepared_statement_cache_size: 15511
-    table_properties:
-      registration_ttl: 600 # seconds
-      reset_password_ttl: 600 # seconds
+  postgres:
+    user: "user"
+    password: "password"
+    host: "10.42.28.104"
+    port: "5432"
+    db_name: "hyperbase"
+    max_connections: 10
+  mysql:
+    user: "user"
+    password: "password"
+    host: "10.42.28.104"
+    port: "3306"
+    db_name: "hyperbase"
+    max_connections: 10
+  sqlite:
+    path: "hyperbase.db"
+    max_connections: 10
 
 api:
   rest:
@@ -37,3 +51,5 @@ api:
 
 auth:
   access_token_length: 20
+  registration_ttl: 600 # seconds
+  reset_password_ttl: 600 # seconds

@@ -18,18 +18,22 @@ impl ScyllaDb {
         port: &str,
         replication_factor: &i64,
         cache_size: &usize,
-        table_registration_ttl: &i64,
-        table_reset_password_ttl: &i64,
+        table_registration_ttl: &u32,
+        table_reset_password_ttl: &u32,
     ) -> Self {
-        hb_log::info(Some("⚡"), "ScyllaDb: Initializing component");
+        hb_log::info(Some("⚡"), "ScyllaDB: Initializing component");
 
-        let uri = format!("{}:{}", host, port);
+        let hostname = format!("{host}:{port}");
         let cached_session: CachingSession = CachingSession::from(
-            SessionBuilder::new().known_node(uri).build().await.unwrap(),
+            SessionBuilder::new()
+                .known_node(&hostname)
+                .build()
+                .await
+                .unwrap(),
             *cache_size,
         );
 
-        ScyllaDb::init(
+        Self::init(
             &cached_session,
             replication_factor,
             table_registration_ttl,
@@ -37,25 +41,7 @@ impl ScyllaDb {
         )
         .await;
 
-        ScyllaDb { cached_session }
-    }
-
-    async fn init(
-        cached_session: &CachingSession,
-        replication_factor: &i64,
-        table_registration_ttl: &i64,
-        table_reset_password_ttl: &i64,
-    ) {
-        // Create keyspace
-        keyspace::init(cached_session, replication_factor).await;
-
-        // Create tables
-        admin::init(cached_session).await;
-        token::init(cached_session).await;
-        project::init(cached_session).await;
-        collection::init(cached_session).await;
-        registration::init(cached_session, table_registration_ttl).await;
-        admin_password_reset::init(cached_session, table_reset_password_ttl).await;
+        Self { cached_session }
     }
 
     pub async fn session_query(
@@ -91,5 +77,23 @@ impl ScyllaDb {
         self.cached_session
             .execute_paged(query, values, paging_state)
             .await
+    }
+
+    async fn init(
+        cached_session: &CachingSession,
+        replication_factor: &i64,
+        table_registration_ttl: &u32,
+        table_reset_password_ttl: &u32,
+    ) {
+        // Create keyspace
+        keyspace::init(cached_session, replication_factor).await;
+
+        // Create tables
+        admin::init(cached_session).await;
+        token::init(cached_session).await;
+        project::init(cached_session).await;
+        collection::init(cached_session).await;
+        registration::init(cached_session, table_registration_ttl).await;
+        admin_password_reset::init(cached_session, table_reset_password_ttl).await;
     }
 }

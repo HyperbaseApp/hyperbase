@@ -110,6 +110,7 @@ impl FindManyRecordReqPath {
 #[derive(Deserialize)]
 pub struct FindManyRecordReqJson {
     filter: Option<FindManyRecordFiltersReqJson>,
+    group: Option<Vec<String>>,
     order: Option<Vec<FindManyRecordOrderReqJson>>,
     limit: Option<i32>,
 }
@@ -117,6 +118,10 @@ pub struct FindManyRecordReqJson {
 impl FindManyRecordReqJson {
     pub fn filter(&self) -> &Option<FindManyRecordFiltersReqJson> {
         &self.filter
+    }
+
+    pub fn group(&self) -> &Option<Vec<String>> {
+        &self.group
     }
 
     pub fn order(&self) -> &Option<Vec<FindManyRecordOrderReqJson>> {
@@ -133,7 +138,7 @@ pub struct FindManyRecordFiltersReqJson(Vec<FindManyRecordFilterReqJson>);
 
 impl FindManyRecordFiltersReqJson {
     pub fn to_dao(&self, collection_data: &CollectionDao) -> Result<RecordFilters> {
-        let mut filters = Vec::<RecordFilter>::with_capacity(self.0.len());
+        let mut filters = Vec::with_capacity(self.0.len());
         for f in &self.0 {
             if (f.field.is_some() || f.value.is_some()) && f.child.is_some() {
                 return Err(Error::msg("Wrong filter format. If 'child' field exists, then 'name' and 'value' fields must not exist"));
