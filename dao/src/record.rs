@@ -1123,7 +1123,10 @@ impl RecordFilters {
                     if filter.len() > 0 {
                         filter += " ";
                     }
-                    filter += &format!("\"{}\" {} ?", field, &op);
+                    filter += &format!("\"{}\" {}", field, &op);
+                    if f.value.is_some() {
+                        filter += " ?";
+                    }
                     if idx < self.0.len() - 1 {
                         if let Some(operator) = logical_operator {
                             if filter.len() > 0 {

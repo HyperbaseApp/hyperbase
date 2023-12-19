@@ -125,7 +125,7 @@ impl AdminPasswordResetDao {
         id: &Uuid,
     ) -> Result<AdminPasswordResetPostgresModel> {
         Ok(db
-            .fetch_one::<AdminPasswordResetPostgresModel>(
+            .fetch_one(
                 sqlx::query_as(POSTGRES_SELECT)
                     .bind(id)
                     .bind(db.table_reset_password_ttl()),
@@ -148,7 +148,7 @@ impl AdminPasswordResetDao {
 
     async fn mysqldb_select(db: &MysqlDb, id: &Uuid) -> Result<AdminPasswordResetMysqlModel> {
         Ok(db
-            .fetch_one::<AdminPasswordResetMysqlModel>(
+            .fetch_one(
                 sqlx::query_as(MYSQL_SELECT)
                     .bind(id)
                     .bind(db.table_reset_password_ttl()),
@@ -171,7 +171,7 @@ impl AdminPasswordResetDao {
 
     async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<AdminPasswordResetSqliteModel> {
         Ok(db
-            .fetch_one::<AdminPasswordResetSqliteModel>(
+            .fetch_one(
                 sqlx::query_as(SQLITE_SELECT)
                     .bind(id)
                     .bind(db.table_reset_password_ttl()),

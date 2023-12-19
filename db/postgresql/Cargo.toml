@@ -8,6 +8,9 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 [dependencies]
 hb_log = { workspace = true }
 
+ahash = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }
 

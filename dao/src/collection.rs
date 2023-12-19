@@ -2,6 +2,22 @@ use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use futures::future;
+use hb_db_mysql::{
+    db::MysqlDb,
+    model::collection::{
+        CollectionModel as CollectionMysqlModel,
+        SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
+    },
+    query::collection::{INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT},
+};
+use hb_db_postgresql::{
+    db::PostgresDb,
+    model::collection::{
+        CollectionModel as CollectionPostgresModel,
+        SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
+    },
+    query::collection::{INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT},
+};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::{
@@ -11,9 +27,21 @@ use hb_db_scylladb::{
         },
         system::SchemaFieldKind as SchemaFieldScyllaKind,
     },
-    query::collection::{DELETE, INSERT, SELECT, SELECT_MANY_BY_PROJECT_ID, UPDATE},
+    query::collection::{
+        DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
+        SELECT_MANY_BY_PROJECT_ID as SCYLLA_SELECT_MANY_BY_PROJECT_ID, UPDATE as SCYLLA_UPDATE,
+    },
+};
+use hb_db_sqlite::{
+    db::SqliteDb,
+    model::collection::{
+        CollectionModel as CollectionSqliteModel,
+        SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
+    },
+    query::collection::{INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT},
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
@@ -121,9 +149,9 @@ impl CollectionDao {
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
         }
     }
 
@@ -132,9 +160,15 @@ impl CollectionDao {
             Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
                 &Self::scylladb_select(db, id).await?,
             )?),
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
+                &Self::postgresdb_select(db, id).await?,
+            )?),
+            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
+                &Self::mysqldb_select(db, id).await?,
+            )?),
+            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
+                &Self::sqlitedb_select(db, id).await?,
+            )?),
         }
     }
 
@@ -266,13 +300,13 @@ impl CollectionDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(INSERT, &self.to_scylladb_model()).await?;
+        db.execute(SCYLLA_INSERT, &self.to_scylladb_model()).await?;
         Ok(())
     }
 
     async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<CollectionScyllaModel> {
         Ok(db
-            .execute(SELECT, [id].as_ref())
+            .execute(SCYLLA_SELECT, [id].as_ref())
             .await?
             .first_row_typed::<CollectionScyllaModel>()?)
     }
@@ -282,14 +316,14 @@ impl CollectionDao {
         project_id: &Uuid,
     ) -> Result<TypedRowIter<CollectionScyllaModel>> {
         Ok(db
-            .execute(SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
+            .execute(SCYLLA_SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
             .await?
             .rows_typed::<CollectionScyllaModel>()?)
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
-            UPDATE,
+            SCYLLA_UPDATE,
             &(
                 &self.updated_at,
                 &self.name,
@@ -307,8 +341,67 @@ impl CollectionDao {
     }
 
     async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
-        db.execute(DELETE, [id].as_ref()).await?;
+        db.execute(SCYLLA_DELETE, [id].as_ref()).await?;
         Ok(())
+    }
+
+    async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
+        db.execute(
+            sqlx::query(POSTGRES_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.project_id)
+                .bind(&self.name)
+                .bind(&serde_json::to_string(&self.schema_fields)?)
+                .bind(&serde_json::to_string(&self.indexes)?),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_select(db: &PostgresDb, id: &Uuid) -> Result<CollectionPostgresModel> {
+        Ok(db
+            .fetch_one(sqlx::query_as(POSTGRES_SELECT).bind(id))
+            .await?)
+    }
+
+    async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
+        db.execute(
+            sqlx::query(MYSQL_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.project_id)
+                .bind(&self.name)
+                .bind(&serde_json::to_string(&self.schema_fields)?)
+                .bind(&serde_json::to_string(&self.indexes)?),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_select(db: &MysqlDb, id: &Uuid) -> Result<CollectionMysqlModel> {
+        Ok(db.fetch_one(sqlx::query_as(MYSQL_SELECT).bind(id)).await?)
+    }
+
+    async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
+        db.execute(
+            sqlx::query(SQLITE_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.project_id)
+                .bind(&self.name)
+                .bind(&serde_json::to_string(&self.schema_fields)?)
+                .bind(&serde_json::to_string(&self.indexes)?),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<CollectionSqliteModel> {
+        Ok(db.fetch_one(sqlx::query_as(SQLITE_SELECT).bind(id)).await?)
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
@@ -354,9 +447,72 @@ impl CollectionDao {
             },
         )
     }
+
+    fn from_postgresdb_model(model: &CollectionPostgresModel) -> Result<Self> {
+        let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
+        for (key, value) in model.schema_fields() {
+            let value = match SchemaFieldPropsModel::from_postgresdb_model(value) {
+                Ok(value) => value,
+                Err(err) => return Err(err.into()),
+            };
+            schema_fields.insert(key.to_owned(), value);
+        }
+        Ok(Self {
+            id: *model.id(),
+            created_at: *model.created_at(),
+            updated_at: *model.updated_at(),
+            project_id: *model.project_id(),
+            name: model.name().to_owned(),
+            schema_fields,
+            indexes: model.indexes().to_owned(),
+            _preserve: None,
+        })
+    }
+
+    fn from_mysqldb_model(model: &CollectionMysqlModel) -> Result<Self> {
+        let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
+        for (key, value) in model.schema_fields() {
+            let value = match SchemaFieldPropsModel::from_mysqldb_model(value) {
+                Ok(value) => value,
+                Err(err) => return Err(err.into()),
+            };
+            schema_fields.insert(key.to_owned(), value);
+        }
+        Ok(Self {
+            id: *model.id(),
+            created_at: *model.created_at(),
+            updated_at: *model.updated_at(),
+            project_id: *model.project_id(),
+            name: model.name().to_owned(),
+            schema_fields,
+            indexes: model.indexes().to_owned(),
+            _preserve: None,
+        })
+    }
+
+    fn from_sqlitedb_model(model: &CollectionSqliteModel) -> Result<Self> {
+        let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
+        for (key, value) in model.schema_fields() {
+            let value = match SchemaFieldPropsModel::from_sqlitedb_model(value) {
+                Ok(value) => value,
+                Err(err) => return Err(err.into()),
+            };
+            schema_fields.insert(key.to_owned(), value);
+        }
+        Ok(Self {
+            id: *model.id(),
+            created_at: *model.created_at(),
+            updated_at: *model.updated_at(),
+            project_id: *model.project_id(),
+            name: model.name().to_owned(),
+            schema_fields,
+            indexes: model.indexes().to_owned(),
+            _preserve: None,
+        })
+    }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Serialize, Clone, Copy)]
 pub struct SchemaFieldPropsModel {
     kind: SchemaFieldKind,
     required: bool,
@@ -396,9 +552,42 @@ impl SchemaFieldPropsModel {
             &self.required,
         )
     }
+
+    fn from_postgresdb_model(model: &SchemaFieldPropsPostgresModel) -> Result<Self> {
+        let kind = match SchemaFieldKind::from_str(model.kind()) {
+            Ok(kind) => kind,
+            Err(err) => return Err(err.into()),
+        };
+        Ok(Self {
+            kind,
+            required: *model.required(),
+        })
+    }
+
+    fn from_mysqldb_model(model: &SchemaFieldPropsMysqlModel) -> Result<Self> {
+        let kind = match SchemaFieldKind::from_str(model.kind()) {
+            Ok(kind) => kind,
+            Err(err) => return Err(err.into()),
+        };
+        Ok(Self {
+            kind,
+            required: *model.required(),
+        })
+    }
+
+    fn from_sqlitedb_model(model: &SchemaFieldPropsSqliteModel) -> Result<Self> {
+        let kind = match SchemaFieldKind::from_str(model.kind()) {
+            Ok(kind) => kind,
+            Err(err) => return Err(err.into()),
+        };
+        Ok(Self {
+            kind,
+            required: *model.required(),
+        })
+    }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(Serialize, PartialEq, Clone, Copy)]
 pub enum SchemaFieldKind {
     Bool,      // boolean
     TinyInt,   // 8-bit signed int

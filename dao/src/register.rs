@@ -1,10 +1,13 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use hb_db_mysql::{db::MysqlDb, query::registration::INSERT as MYSQL_INSERT};
+use hb_db_postgresql::{db::PostgresDb, query::registration::INSERT as POSTGRES_INSERT};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::registration::RegistrationModel as RegistrationScyllaModel,
     query::registration::{DELETE, INSERT, SELECT},
 };
+use hb_db_sqlite::{db::SqliteDb, query::registration::INSERT as SQLITE_INSERT};
 use rand::{thread_rng, Rng};
 use scylla::frame::value::Timestamp;
 use uuid::Uuid;
@@ -63,9 +66,9 @@ impl RegistrationDao {
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
         }
     }
 
@@ -103,6 +106,48 @@ impl RegistrationDao {
 
     async fn scylladb_delete(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(DELETE, [self.id()].as_ref()).await?;
+        Ok(())
+    }
+
+    async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
+        db.execute(
+            sqlx::query(POSTGRES_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.email)
+                .bind(&self.password_hash)
+                .bind(&self.code),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
+        db.execute(
+            sqlx::query(MYSQL_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.email)
+                .bind(&self.password_hash)
+                .bind(&self.code),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
+        db.execute(
+            sqlx::query(SQLITE_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.email)
+                .bind(&self.password_hash)
+                .bind(&self.code),
+        )
+        .await?;
         Ok(())
     }
 

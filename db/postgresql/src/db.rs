@@ -1,3 +1,4 @@
+use futures::StreamExt;
 use sqlx::{
     postgres::{PgArguments, PgPoolOptions, PgQueryResult, PgRow},
     query::{Query, QueryAs},
@@ -53,6 +54,26 @@ impl PostgresDb {
         query: QueryAs<'_, Postgres, T, PgArguments>,
     ) -> Result<T, Error> {
         Ok(query.fetch_one(&self.pool).await?)
+    }
+
+    pub async fn fetch_many<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow> + 'static>(
+        &self,
+        query: QueryAs<'_, Postgres, T, PgArguments>,
+        limit: usize,
+    ) -> Result<Vec<sqlx::Either<PgQueryResult, T>>, Error> {
+        let mut stream = query.fetch_many(&self.pool);
+        let mut data = Vec::with_capacity(limit);
+        while let Some(s) = stream.next().await {
+            data.push(s?);
+        }
+        Ok(data)
+    }
+
+    pub async fn fetch_all<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow>>(
+        &self,
+        query: QueryAs<'_, Postgres, T, PgArguments>,
+    ) -> Result<Vec<T>, Error> {
+        query.fetch_all(&self.pool).await
     }
 
     pub fn table_registration_ttl(&self) -> &i64 {

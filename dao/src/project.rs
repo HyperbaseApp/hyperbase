@@ -1,10 +1,16 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use hb_db_mysql::{db::MysqlDb, query::project::INSERT as MYSQL_INSERT};
+use hb_db_postgresql::{db::PostgresDb, query::project::INSERT as POSTGRES_INSERT};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::project::ProjectModel as ProjectScyllaModel,
-    query::project::{DELETE, INSERT, SELECT, SELECT_MANY_BY_ADMIN_ID, UPDATE},
+    query::project::{
+        DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
+        SELECT_MANY_BY_ADMIN_ID as SCYLLA_SELECT_MANY_BY_ADMIN_ID, UPDATE as SCYLLA_UPDATE,
+    },
 };
+use hb_db_sqlite::{db::SqliteDb, query::project::INSERT as SQLITE_INSERT};
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use uuid::Uuid;
 
@@ -60,9 +66,9 @@ impl ProjectDao {
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
         }
     }
 
@@ -117,13 +123,13 @@ impl ProjectDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(INSERT, &self.to_scylladb_model()).await?;
+        db.execute(SCYLLA_INSERT, &self.to_scylladb_model()).await?;
         Ok(())
     }
 
     async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<ProjectScyllaModel> {
         Ok(db
-            .execute(SELECT, [id].as_ref())
+            .execute(SCYLLA_SELECT, [id].as_ref())
             .await?
             .first_row_typed::<ProjectScyllaModel>()?)
     }
@@ -133,19 +139,58 @@ impl ProjectDao {
         admin_id: &Uuid,
     ) -> Result<TypedRowIter<ProjectScyllaModel>> {
         Ok(db
-            .execute(SELECT_MANY_BY_ADMIN_ID, [admin_id].as_ref())
+            .execute(SCYLLA_SELECT_MANY_BY_ADMIN_ID, [admin_id].as_ref())
             .await?
             .rows_typed::<ProjectScyllaModel>()?)
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(UPDATE, &(&self.updated_at, &self.name, &self.id))
+        db.execute(SCYLLA_UPDATE, &(&self.updated_at, &self.name, &self.id))
             .await?;
         Ok(())
     }
 
     async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
-        db.execute(DELETE, [id].as_ref()).await?;
+        db.execute(SCYLLA_DELETE, [id].as_ref()).await?;
+        Ok(())
+    }
+
+    async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
+        db.execute(
+            sqlx::query(POSTGRES_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.admin_id)
+                .bind(&self.name),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
+        db.execute(
+            sqlx::query(MYSQL_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.admin_id)
+                .bind(&self.name),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
+        db.execute(
+            sqlx::query(SQLITE_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.admin_id)
+                .bind(&self.name),
+        )
+        .await?;
         Ok(())
     }
 

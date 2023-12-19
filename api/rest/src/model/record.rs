@@ -142,8 +142,8 @@ impl FindManyRecordFiltersReqJson {
         for f in &self.0 {
             if (f.field.is_some() || f.value.is_some()) && f.child.is_some() {
                 return Err(Error::msg("Wrong filter format. If 'child' field exists, then 'name' and 'value' fields must not exist"));
-            } else if f.child.is_none() && (f.field.is_none() || f.value.is_none()) {
-                return Err(Error::msg("Wrong filter format. If 'child' field does not exist, then 'name' and 'value' fields must exist"));
+            } else if f.child.is_none() && f.field.is_none() {
+                return Err(Error::msg("Wrong filter format. If 'child' field does not exist, then 'name' field must exist"));
             }
             let schema_field_kind = match &f.field {
                 Some(field) => match collection_data.schema_fields().get(field) {

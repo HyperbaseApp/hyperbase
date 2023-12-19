@@ -1,13 +1,17 @@
 use ahash::HashMap;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use hb_db_mysql::{db::MysqlDb, query::token::INSERT as MYSQL_INSERT};
+use hb_db_postgresql::{db::PostgresDb, query::token::INSERT as POSTGRES_INSERT};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::token::TokenModel as TokenScyllaModel,
     query::token::{DELETE, INSERT, SELECT, SELECT_BY_TOKEN, SELECT_MANY_BY_ADMIN_ID, UPDATE},
 };
+use hb_db_sqlite::{db::SqliteDb, query::token::INSERT as SQLITE_INSERT};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
+use sqlx::types::Json;
 use uuid::Uuid;
 
 use crate::{
@@ -99,9 +103,9 @@ impl TokenDao {
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
         }
     }
 
@@ -221,6 +225,51 @@ impl TokenDao {
 
     async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
         db.execute(DELETE, [id].as_ref()).await?;
+        Ok(())
+    }
+
+    async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
+        db.execute(
+            sqlx::query(POSTGRES_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.admin_id)
+                .bind(&self.token)
+                .bind(&Json(&self.rules))
+                .bind(&self.expired_at),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
+        db.execute(
+            sqlx::query(MYSQL_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.admin_id)
+                .bind(&self.token)
+                .bind(&Json(&self.rules))
+                .bind(&self.expired_at),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
+        db.execute(
+            sqlx::query(SQLITE_INSERT)
+                .bind(&self.id)
+                .bind(&self.created_at)
+                .bind(&self.updated_at)
+                .bind(&self.admin_id)
+                .bind(&self.token)
+                .bind(&Json(&self.rules))
+                .bind(&self.expired_at),
+        )
+        .await?;
         Ok(())
     }
 
