@@ -1,5 +1,6 @@
-use futures::StreamExt;
+use futures::{stream::BoxStream, StreamExt};
 use sqlx::{
+    database::HasArguments,
     postgres::{PgArguments, PgPoolOptions, PgQueryResult, PgRow},
     query::{Query, QueryAs},
     Error, Pool, Postgres,
@@ -42,11 +43,32 @@ impl PostgresDb {
         }
     }
 
+    pub async fn execute_unprepared(
+        &self,
+        query: Query<'_, Postgres, PgArguments>,
+    ) -> Result<PgQueryResult, Error> {
+        query.persistent(false).execute(&self.pool).await
+    }
+
     pub async fn execute(
         &self,
         query: Query<'_, Postgres, PgArguments>,
     ) -> Result<PgQueryResult, Error> {
         query.execute(&self.pool).await
+    }
+
+    pub fn fetch<'e>(
+        &self,
+        query: Query<'e, Postgres, <Postgres as HasArguments<'_>>::Arguments>,
+    ) -> BoxStream<'e, Result<<Postgres as sqlx::Database>::Row, Error>> {
+        query.fetch(&self.pool)
+    }
+
+    pub async fn fetch_one_unprepared<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow>>(
+        &self,
+        query: QueryAs<'_, Postgres, T, PgArguments>,
+    ) -> Result<T, Error> {
+        Ok(query.persistent(false).fetch_one(&self.pool).await?)
     }
 
     pub async fn fetch_one<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow>>(

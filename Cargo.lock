@@ -1001,7 +1001,9 @@ name = "hb_db_mysql"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "futures",
  "hb_log",
+ "itertools 0.12.0",
  "serde",
  "sqlx",
  "uuid",
@@ -1014,6 +1016,7 @@ dependencies = [
  "ahash",
  "futures",
  "hb_log",
+ "itertools 0.12.0",
  "serde",
  "sqlx",
  "uuid",
@@ -1035,7 +1038,9 @@ name = "hb_db_sqlite"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "futures",
  "hb_log",
+ "itertools 0.12.0",
  "serde",
  "sqlx",
  "uuid",

@@ -4,19 +4,31 @@ use chrono::{DateTime, Utc};
 use futures::future;
 use hb_db_mysql::{
     db::MysqlDb,
-    model::collection::{
-        CollectionModel as CollectionMysqlModel,
-        SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
+    model::{
+        collection::{
+            CollectionModel as CollectionMysqlModel,
+            SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
+        },
+        system::SchemaFieldKind as SchemaFieldMysqlKind,
     },
-    query::collection::{INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT},
+    query::collection::{
+        DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT,
+        SELECT_MANY_BY_PROJECT_ID as MYSQL_SELECT_MANY_BY_PROJECT_ID, UPDATE as MYSQL_UPDATE,
+    },
 };
 use hb_db_postgresql::{
     db::PostgresDb,
-    model::collection::{
-        CollectionModel as CollectionPostgresModel,
-        SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
+    model::{
+        collection::{
+            CollectionModel as CollectionPostgresModel,
+            SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
+        },
+        system::SchemaFieldKind as SchemaFieldPostgresKind,
     },
-    query::collection::{INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT},
+    query::collection::{
+        DELETE as POSTGRES_DELETE, INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT,
+        SELECT_MANY_BY_PROJECT_ID as POSTGRES_SELECT_MANY_BY_PROJECT_ID, UPDATE as POSTGRES_UPDATE,
+    },
 };
 use hb_db_scylladb::{
     db::ScyllaDb,
@@ -34,11 +46,17 @@ use hb_db_scylladb::{
 };
 use hb_db_sqlite::{
     db::SqliteDb,
-    model::collection::{
-        CollectionModel as CollectionSqliteModel,
-        SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
+    model::{
+        collection::{
+            CollectionModel as CollectionSqliteModel,
+            SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
+        },
+        system::SchemaFieldKind as SchemaFieldSqliteKind,
     },
-    query::collection::{INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT},
+    query::collection::{
+        DELETE as SQLITE_DELETE, INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT,
+        SELECT_MANY_BY_PROJECT_ID as SQLITE_SELECT_MANY_BY_PROJECT_ID, UPDATE as SQLITE_UPDATE,
+    },
 };
 use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
 use serde::Serialize;
@@ -178,17 +196,35 @@ impl CollectionDao {
                 let mut collections_data = Vec::new();
                 let collections = Self::scylladb_select_many_by_project_id(db, project_id).await?;
                 for collection in collections {
-                    if let Ok(model) = &collection {
-                        collections_data.push(Self::from_scylladb_model(model)?)
-                    } else if let Err(err) = collection {
-                        return Err(err.into());
-                    }
+                    collections_data.push(Self::from_scylladb_model(&collection?)?)
                 }
                 Ok(collections_data)
             }
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                let collections =
+                    Self::postgresdb_select_many_by_project_id(db, project_id).await?;
+                let mut collections_data = Vec::with_capacity(collections.len());
+                for collection in &collections {
+                    collections_data.push(Self::from_postgresdb_model(collection)?);
+                }
+                Ok(collections_data)
+            }
+            Db::MysqlDb(db) => {
+                let collections = Self::mysqldb_select_many_by_project_id(db, project_id).await?;
+                let mut collections_data = Vec::with_capacity(collections.len());
+                for collection in &collections {
+                    collections_data.push(Self::from_mysqldb_model(collection)?);
+                }
+                Ok(collections_data)
+            }
+            Db::SqliteDb(db) => {
+                let collections = Self::sqlitedb_select_many_by_project_id(db, project_id).await?;
+                let mut collections_data = Vec::with_capacity(collections.len());
+                for collection in &collections {
+                    collections_data.push(Self::from_sqlitedb_model(collection)?);
+                }
+                Ok(collections_data)
+            }
         }
     }
 
@@ -282,9 +318,9 @@ impl CollectionDao {
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_update(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_update(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_update(self, db).await,
         }
     }
 
@@ -293,9 +329,9 @@ impl CollectionDao {
 
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_delete(db, id).await,
+            Db::MysqlDb(db) => Self::mysqldb_delete(db, id).await,
+            Db::SqliteDb(db) => Self::sqlitedb_delete(db, id).await,
         }
     }
 
@@ -366,6 +402,33 @@ impl CollectionDao {
             .await?)
     }
 
+    async fn postgresdb_select_many_by_project_id(
+        db: &PostgresDb,
+        project_id: &Uuid,
+    ) -> Result<Vec<CollectionPostgresModel>> {
+        Ok(db
+            .fetch_all(sqlx::query_as(POSTGRES_SELECT_MANY_BY_PROJECT_ID).bind(project_id))
+            .await?)
+    }
+
+    async fn postgresdb_update(&self, db: &PostgresDb) -> Result<()> {
+        db.execute(
+            sqlx::query(POSTGRES_UPDATE)
+                .bind(&self.updated_at)
+                .bind(&self.name)
+                .bind(&sqlx::types::Json(&self.schema_fields))
+                .bind(&sqlx::types::Json(&self.indexes))
+                .bind(&self.id),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_delete(db: &PostgresDb, id: &Uuid) -> Result<()> {
+        db.execute(sqlx::query(POSTGRES_DELETE).bind(id)).await?;
+        Ok(())
+    }
+
     async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
         db.execute(
             sqlx::query(MYSQL_INSERT)
@@ -385,6 +448,33 @@ impl CollectionDao {
         Ok(db.fetch_one(sqlx::query_as(MYSQL_SELECT).bind(id)).await?)
     }
 
+    async fn mysqldb_select_many_by_project_id(
+        db: &MysqlDb,
+        project_id: &Uuid,
+    ) -> Result<Vec<CollectionMysqlModel>> {
+        Ok(db
+            .fetch_all(sqlx::query_as(MYSQL_SELECT_MANY_BY_PROJECT_ID).bind(project_id))
+            .await?)
+    }
+
+    async fn mysqldb_update(&self, db: &MysqlDb) -> Result<()> {
+        db.execute(
+            sqlx::query(MYSQL_UPDATE)
+                .bind(&self.updated_at)
+                .bind(&self.name)
+                .bind(&sqlx::types::Json(&self.schema_fields))
+                .bind(&sqlx::types::Json(&self.indexes))
+                .bind(&self.id),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_delete(db: &MysqlDb, id: &Uuid) -> Result<()> {
+        db.execute(sqlx::query(MYSQL_DELETE).bind(id)).await?;
+        Ok(())
+    }
+
     async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
         db.execute(
             sqlx::query(SQLITE_INSERT)
@@ -402,6 +492,33 @@ impl CollectionDao {
 
     async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<CollectionSqliteModel> {
         Ok(db.fetch_one(sqlx::query_as(SQLITE_SELECT).bind(id)).await?)
+    }
+
+    async fn sqlitedb_select_many_by_project_id(
+        db: &SqliteDb,
+        project_id: &Uuid,
+    ) -> Result<Vec<CollectionSqliteModel>> {
+        Ok(db
+            .fetch_all(sqlx::query_as(SQLITE_SELECT_MANY_BY_PROJECT_ID).bind(project_id))
+            .await?)
+    }
+
+    async fn sqlitedb_update(&self, db: &SqliteDb) -> Result<()> {
+        db.execute(
+            sqlx::query(SQLITE_UPDATE)
+                .bind(&self.updated_at)
+                .bind(&self.name)
+                .bind(&sqlx::types::Json(&self.schema_fields))
+                .bind(&sqlx::types::Json(&self.indexes))
+                .bind(&self.id),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_delete(db: &SqliteDb, id: &Uuid) -> Result<()> {
+        db.execute(sqlx::query(SQLITE_DELETE).bind(id)).await?;
+        Ok(())
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
@@ -564,6 +681,14 @@ impl SchemaFieldPropsModel {
         })
     }
 
+    pub fn to_postgresdb_model(&self) -> SchemaFieldPropsPostgresModel {
+        SchemaFieldPropsPostgresModel::new(
+            self.kind.to_str(),
+            &self.kind.to_postgresdb_model(),
+            &self.required,
+        )
+    }
+
     fn from_mysqldb_model(model: &SchemaFieldPropsMysqlModel) -> Result<Self> {
         let kind = match SchemaFieldKind::from_str(model.kind()) {
             Ok(kind) => kind,
@@ -573,6 +698,14 @@ impl SchemaFieldPropsModel {
             kind,
             required: *model.required(),
         })
+    }
+
+    pub fn to_mysqldb_model(&self) -> SchemaFieldPropsMysqlModel {
+        SchemaFieldPropsMysqlModel::new(
+            self.kind.to_str(),
+            &self.kind.to_mysqldb_model(),
+            &self.required,
+        )
     }
 
     fn from_sqlitedb_model(model: &SchemaFieldPropsSqliteModel) -> Result<Self> {
@@ -585,25 +718,34 @@ impl SchemaFieldPropsModel {
             required: *model.required(),
         })
     }
+
+    pub fn to_sqlitedb_model(&self) -> SchemaFieldPropsSqliteModel {
+        SchemaFieldPropsSqliteModel::new(
+            self.kind.to_str(),
+            &self.kind.to_sqlitedb_model(),
+            &self.required,
+        )
+    }
 }
 
 #[derive(Serialize, PartialEq, Clone, Copy)]
 pub enum SchemaFieldKind {
-    Bool,      // boolean
-    TinyInt,   // 8-bit signed int
-    SmallInt,  // 16-bit signed int
-    Int,       // 32-bit signed int
-    BigInt,    // 64-bit signed long
-    Float,     // 32-bit IEEE-754 floating point
-    Double,    // 64-bit IEEE-754 floating point
-    String,    // UTF8 encoded string
-    Bytes,     // Arbitrary bytes
-    Uuid,      // A UUID (of any version)
-    Date,      // A date (with no corresponding time value)
-    Time,      // A time (with no corresponding date value)
-    DateTime,  // A datetime
-    Timestamp, // A timestamp (date and time)
-    Json,      // A json data format
+    Bool,       // boolean
+    TinyInt,    // 8-bit signed int
+    SmallInt,   // 16-bit signed int
+    Int,        // 32-bit signed int
+    BigInt,     // 64-bit signed long
+    Float,      // 32-bit IEEE-754 floating point
+    Double,     // 64-bit IEEE-754 floating point
+    String,     // UTF8 encoded string
+    Bytes,      // Arbitrary bytes
+    Uuid,       // A UUID (of any version)
+    Date,       // A date (with no corresponding time value)
+    Time,       // A time (with no corresponding date value)
+    DateTime,   // A datetime
+    Timestamp,  // A timestamp (date and time)
+    Timestampz, // A timestamp (date and time) with timezone
+    Json,       // A json data format
 }
 
 impl SchemaFieldKind {
@@ -623,6 +765,7 @@ impl SchemaFieldKind {
             Self::Time => "time",
             Self::DateTime => "datetime",
             Self::Timestamp => "timestamp",
+            Self::Timestampz => "timestampz",
             Self::Json => "json",
         }
     }
@@ -643,6 +786,7 @@ impl SchemaFieldKind {
             "time" => Ok(Self::Time),
             "datetime" => Ok(Self::DateTime),
             "timestamp" => Ok(Self::Timestamp),
+            "timestampz" => Ok(Self::Timestampz),
             "json" => Ok(Self::Json),
             _ => Err(Error::msg("Unknown schema field kind")),
         }
@@ -662,7 +806,70 @@ impl SchemaFieldKind {
             Self::Uuid => SchemaFieldScyllaKind::Uuid,
             Self::Date => SchemaFieldScyllaKind::Date,
             Self::Time => SchemaFieldScyllaKind::Time,
-            Self::DateTime | Self::Timestamp => SchemaFieldScyllaKind::Timestamp,
+            Self::DateTime | Self::Timestamp | Self::Timestampz => SchemaFieldScyllaKind::Timestamp,
+        }
+    }
+
+    fn to_postgresdb_model(&self) -> SchemaFieldPostgresKind {
+        match self {
+            Self::Bool => SchemaFieldPostgresKind::Bool,
+            Self::TinyInt => SchemaFieldPostgresKind::Char,
+            Self::SmallInt => SchemaFieldPostgresKind::Smallint,
+            Self::Int => SchemaFieldPostgresKind::Integer,
+            Self::BigInt => SchemaFieldPostgresKind::Bigint,
+            Self::Float => SchemaFieldPostgresKind::Real,
+            Self::Double => SchemaFieldPostgresKind::DoublePrecision,
+            Self::String => SchemaFieldPostgresKind::Varchar,
+            Self::Bytes => SchemaFieldPostgresKind::Bytea,
+            Self::Uuid => SchemaFieldPostgresKind::Uuid,
+            Self::Date => SchemaFieldPostgresKind::Date,
+            Self::Time => SchemaFieldPostgresKind::Time,
+            Self::DateTime => SchemaFieldPostgresKind::Timestamp,
+            Self::Timestamp => SchemaFieldPostgresKind::Timestamp,
+            Self::Timestampz => SchemaFieldPostgresKind::Timestampz,
+            Self::Json => SchemaFieldPostgresKind::Jsonb,
+        }
+    }
+
+    fn to_mysqldb_model(&self) -> SchemaFieldMysqlKind {
+        match self {
+            Self::Bool => SchemaFieldMysqlKind::Bool,
+            Self::TinyInt => SchemaFieldMysqlKind::Tinyint,
+            Self::SmallInt => SchemaFieldMysqlKind::Smallint,
+            Self::Int => SchemaFieldMysqlKind::Int,
+            Self::BigInt => SchemaFieldMysqlKind::Bigint,
+            Self::Float => SchemaFieldMysqlKind::Float,
+            Self::Double => SchemaFieldMysqlKind::Double,
+            Self::String => SchemaFieldMysqlKind::Varchar,
+            Self::Bytes => SchemaFieldMysqlKind::Blob,
+            Self::Uuid => SchemaFieldMysqlKind::Binary16,
+            Self::Date => SchemaFieldMysqlKind::Date,
+            Self::Time => SchemaFieldMysqlKind::Time,
+            Self::DateTime => SchemaFieldMysqlKind::Datetime,
+            Self::Timestamp => SchemaFieldMysqlKind::Timestamp,
+            Self::Timestampz => SchemaFieldMysqlKind::Timestamp,
+            Self::Json => SchemaFieldMysqlKind::Json,
+        }
+    }
+
+    fn to_sqlitedb_model(&self) -> SchemaFieldSqliteKind {
+        match self {
+            Self::Bool => SchemaFieldSqliteKind::Integer,
+            Self::TinyInt => SchemaFieldSqliteKind::Integer,
+            Self::SmallInt => SchemaFieldSqliteKind::Integer,
+            Self::Int => SchemaFieldSqliteKind::Integer,
+            Self::BigInt => SchemaFieldSqliteKind::Integer,
+            Self::Float => SchemaFieldSqliteKind::Real,
+            Self::Double => SchemaFieldSqliteKind::Real,
+            Self::String => SchemaFieldSqliteKind::Text,
+            Self::Bytes => SchemaFieldSqliteKind::Blob,
+            Self::Uuid => SchemaFieldSqliteKind::Text,
+            Self::Date => SchemaFieldSqliteKind::Text,
+            Self::Time => SchemaFieldSqliteKind::Text,
+            Self::DateTime => SchemaFieldSqliteKind::Text,
+            Self::Timestamp => SchemaFieldSqliteKind::Text,
+            Self::Timestampz => SchemaFieldSqliteKind::Text,
+            Self::Json => SchemaFieldSqliteKind::Text,
         }
     }
 }

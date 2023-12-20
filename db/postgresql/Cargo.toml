@@ -10,6 +10,7 @@ hb_log = { workspace = true }
 
 ahash = { workspace = true }
 futures = { workspace = true }
+itertools = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }

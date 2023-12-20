@@ -3,18 +3,37 @@ use std::{collections::hash_map::Keys, str::FromStr};
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use bigdecimal::{num_traits::ToBytes, ToPrimitive};
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
+use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveTime};
+use futures::TryStreamExt;
+use hb_db_mysql::{
+    db::MysqlDb,
+    model::collection::SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
+    query::{record as mysql_record, system::COUNT_TABLE as MYSQL_COUNT_TABLE},
+};
+use hb_db_postgresql::{
+    db::PostgresDb,
+    model::collection::SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
+    query::{record as postgres_record, system::COUNT_TABLE as POSTGRES_COUNT_TABLE},
+};
 use hb_db_scylladb::{
     db::ScyllaDb,
     model::{
         collection::SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
-        system::{COMPARISON_OPERATOR, LOGICAL_OPERATOR, ORDER_TYPE},
+        system::{
+            COMPARISON_OPERATOR as SCYLLA_COMPARISON_OPERATOR,
+            LOGICAL_OPERATOR as SCYLLA_LOGICAL_OPERATOR, ORDER_TYPE as SCYLLA_ORDER_TYPE,
+        },
     },
-    query::{record, system::COUNT_TABLE},
+    query::{record as scylla_record, system::COUNT_TABLE as SCYLLA_COUNT_TABLE},
+};
+use hb_db_sqlite::{
+    db::SqliteDb,
+    model::collection::SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
+    query::{record as sqlite_record, system::COUNT_TABLE as SQLITE_COUNT_TABLE},
 };
 use scylla::frame::{
     response::result::CqlValue,
-    value::{Time, Timestamp, Value},
+    value::{Time as ScyllaTime, Timestamp as ScyllaTimestamp, Value as ScyllaValue},
 };
 use uuid::Uuid;
 
@@ -89,45 +108,103 @@ impl RecordDao {
                 )
                 .await
             }
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_create_table(
+                    db,
+                    collection.id(),
+                    &collection
+                        .schema_fields()
+                        .iter()
+                        .map(|(field_name, field_props)| {
+                            (field_name.clone(), field_props.to_postgresdb_model())
+                        })
+                        .collect::<HashMap<_, _>>(),
+                )
+                .await
+            }
+            Db::MysqlDb(db) => {
+                Self::mysqldb_create_table(
+                    db,
+                    collection.id(),
+                    &collection
+                        .schema_fields()
+                        .iter()
+                        .map(|(field_name, field_props)| {
+                            (field_name.clone(), field_props.to_mysqldb_model())
+                        })
+                        .collect::<HashMap<_, _>>(),
+                )
+                .await
+            }
+            Db::SqliteDb(db) => {
+                Self::sqlitedb_create_table(
+                    db,
+                    collection.id(),
+                    &collection
+                        .schema_fields()
+                        .iter()
+                        .map(|(field_name, field_props)| {
+                            (field_name.clone(), field_props.to_sqlitedb_model())
+                        })
+                        .collect::<HashMap<_, _>>(),
+                )
+                .await
+            }
         }
     }
 
     pub async fn db_drop_table(db: &Db, collection_id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_table(db, collection_id).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_drop_table(db, collection_id).await,
+            Db::MysqlDb(db) => Self::mysqldb_drop_table(db, collection_id).await,
+            Db::SqliteDb(db) => Self::sqlite_drop_table(db, collection_id).await,
         }
     }
 
     pub async fn db_check_table_existence(db: &Db, collection_id: &Uuid) -> Result<bool> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_check_table_existence(db, collection_id).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_check_table_existence(db, collection_id).await,
+            Db::MysqlDb(db) => Self::mysqldb_check_table_existence(db, collection_id).await,
+            Db::SqliteDb(db) => Self::sqlitedb_check_table_existence(db, collection_id).await,
         }
     }
 
     pub async fn db_check_table_must_exist(db: &Db, collection_id: &Uuid) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => match Self::scylladb_check_table_existence(db, collection_id).await
-            {
-                Ok(is_exist) => match is_exist {
+            Db::ScyllaDb(db) => {
+                match Self::scylladb_check_table_existence(db, collection_id).await? {
                     true => Ok(()),
                     false => Err(Error::msg(format!(
                         "Collection '{collection_id}' doesn't exist"
                     ))),
-                },
-                Err(err) => Err(err),
-            },
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+                }
+            }
+            Db::PostgresqlDb(db) => {
+                match Self::postgresdb_check_table_existence(db, collection_id).await? {
+                    true => Ok(()),
+                    false => Err(Error::msg(format!(
+                        "Collection '{collection_id}' doesn't exist"
+                    ))),
+                }
+            }
+            Db::MysqlDb(db) => {
+                match Self::mysqldb_check_table_existence(db, collection_id).await? {
+                    true => Ok(()),
+                    false => Err(Error::msg(format!(
+                        "Collection '{collection_id}' doesn't exist"
+                    ))),
+                }
+            }
+            Db::SqliteDb(db) => {
+                match Self::sqlitedb_check_table_existence(db, collection_id).await? {
+                    true => Ok(()),
+                    false => Err(Error::msg(format!(
+                        "Collection '{collection_id}' doesn't exist"
+                    ))),
+                }
+            }
         }
     }
 
@@ -148,9 +225,39 @@ impl RecordDao {
                 )
                 .await
             }
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_add_columns(
+                    db,
+                    collection_id,
+                    &columns
+                        .iter()
+                        .map(|(col, col_props)| (col.to_owned(), col_props.to_postgresdb_model()))
+                        .collect(),
+                )
+                .await
+            }
+            Db::MysqlDb(db) => {
+                Self::mysqldb_add_columns(
+                    db,
+                    collection_id,
+                    &columns
+                        .iter()
+                        .map(|(col, col_props)| (col.to_owned(), col_props.to_mysqldb_model()))
+                        .collect(),
+                )
+                .await
+            }
+            Db::SqliteDb(db) => {
+                Self::sqlitedb_add_columns(
+                    db,
+                    collection_id,
+                    &columns
+                        .iter()
+                        .map(|(col, col_props)| (col.to_owned(), col_props.to_sqlitedb_model()))
+                        .collect(),
+                )
+                .await
+            }
         }
     }
 
@@ -161,9 +268,11 @@ impl RecordDao {
     ) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_columns(db, collection_id, column_names).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_drop_columns(db, collection_id, column_names).await
+            }
+            Db::MysqlDb(db) => Self::mysqldb_drop_columns(db, collection_id, column_names).await,
+            Db::SqliteDb(db) => Self::sqlitedb_drop_columns(db, collection_id, column_names).await,
         }
     }
 
@@ -184,36 +293,66 @@ impl RecordDao {
                 )
                 .await
             }
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_change_columns_type(
+                    db,
+                    collection_id,
+                    &columns
+                        .iter()
+                        .map(|(col, col_props)| (col.to_owned(), col_props.to_postgresdb_model()))
+                        .collect(),
+                )
+                .await
+            }
+            Db::MysqlDb(db) => {
+                Self::mysqldb_change_columns_type(
+                    db,
+                    collection_id,
+                    &columns
+                        .iter()
+                        .map(|(col, col_props)| (col.to_owned(), col_props.to_mysqldb_model()))
+                        .collect(),
+                )
+                .await
+            }
+            Db::SqliteDb(db) => {
+                Self::sqlitedb_change_columns_type(
+                    db,
+                    collection_id,
+                    &columns
+                        .iter()
+                        .map(|(col, col_props)| (col.to_owned(), col_props.to_sqlitedb_model()))
+                        .collect(),
+                )
+                .await
+            }
         }
     }
 
     pub async fn db_create_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_create_index(db, collection_id, index).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_create_index(db, collection_id, index).await,
+            Db::MysqlDb(db) => Self::mysqldb_create_index(db, collection_id, index).await,
+            Db::SqliteDb(db) => Self::sqlitedb_create_index(db, collection_id, index).await,
         }
     }
 
     pub async fn db_drop_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_index(db, collection_id, index).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_drop_index(db, collection_id, index).await,
+            Db::MysqlDb(db) => Self::mysqldb_drop_index(db, collection_id, index).await,
+            Db::SqliteDb(db) => Self::sqlitedb_drop_index(db, collection_id, index).await,
         }
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
         }
     }
 
@@ -251,7 +390,23 @@ impl RecordDao {
                 }
                 Ok(Self { table_name, data })
             }
-            Db::PostgresqlDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                let table_name = Self::new_table_name(collection_data.id());
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id".to_owned());
+                let mut columns_props =
+                    Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
+                for (column, props) in collection_data.schema_fields() {
+                    columns.push(column.to_owned());
+                    columns_props.push(*props)
+                }
+                let postgresdb_data =
+                    Self::postgresdb_select(db, &table_name, &columns, id).await?;
+                todo!();
+                let mut data = HashMap::with_capacity(postgresdb_data.len());
+                Ok(Self { table_name, data })
+            }
             Db::MysqlDb(_) => todo!(),
             Db::SqliteDb(_) => todo!(),
         }
@@ -327,20 +482,18 @@ impl RecordDao {
     pub async fn db_update(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => Self::postgresdb_update(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_update(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_update(self, db).await,
         }
     }
 
     pub async fn db_delete(db: &Db, collection_id: &Uuid, id: &Uuid) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => {
-                Self::scylladb_delete(db, &Self::new_table_name(collection_id), id).await
-            }
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::ScyllaDb(db) => Self::scylladb_delete(db, collection_id, id).await,
+            Db::PostgresqlDb(db) => Self::postgresdb_delete(db, collection_id, id).await,
+            Db::MysqlDb(db) => Self::mysqldb_delete(db, collection_id, id).await,
+            Db::SqliteDb(db) => Self::sqlitedb_delete(db, collection_id, id).await,
         }
     }
 
@@ -350,7 +503,7 @@ impl RecordDao {
         schema_fields: &HashMap<String, SchemaFieldPropsScyllaModel>,
     ) -> Result<()> {
         db.session_query(
-            record::create_table(&Self::new_table_name(collection_id), schema_fields).as_str(),
+            &scylla_record::create_table(&Self::new_table_name(collection_id), schema_fields),
             &[],
         )
         .await?;
@@ -359,7 +512,7 @@ impl RecordDao {
 
     async fn scylladb_drop_table(db: &ScyllaDb, collection_id: &Uuid) -> Result<()> {
         db.session_query(
-            record::drop_table(&RecordDao::new_table_name(collection_id)).as_str(),
+            &scylla_record::drop_table(&RecordDao::new_table_name(collection_id)),
             &[],
         )
         .await?;
@@ -369,7 +522,7 @@ impl RecordDao {
     async fn scylladb_check_table_existence(db: &ScyllaDb, collection_id: &Uuid) -> Result<bool> {
         Ok(db
             .session_query(
-                COUNT_TABLE,
+                SCYLLA_COUNT_TABLE,
                 [&RecordDao::new_table_name(collection_id)].as_ref(),
             )
             .await?
@@ -384,7 +537,7 @@ impl RecordDao {
         columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
     ) -> Result<()> {
         db.session_query(
-            &record::add_columns(&Self::new_table_name(collection_id), columns),
+            &scylla_record::add_columns(&Self::new_table_name(collection_id), columns),
             &[],
         )
         .await?;
@@ -397,7 +550,7 @@ impl RecordDao {
         column_names: &HashSet<String>,
     ) -> Result<()> {
         db.session_query(
-            &record::drop_columns(&Self::new_table_name(collection_id), column_names),
+            &scylla_record::drop_columns(&Self::new_table_name(collection_id), column_names),
             &[],
         )
         .await?;
@@ -410,7 +563,7 @@ impl RecordDao {
         columns: &HashMap<String, SchemaFieldPropsScyllaModel>,
     ) -> Result<()> {
         db.session_query(
-            &record::change_columns_type(&Self::new_table_name(collection_id), columns),
+            &scylla_record::change_columns_type(&Self::new_table_name(collection_id), columns),
             &[],
         )
         .await?;
@@ -419,7 +572,7 @@ impl RecordDao {
 
     async fn scylladb_create_index(db: &ScyllaDb, collection_id: &Uuid, index: &str) -> Result<()> {
         db.session_query(
-            record::create_index(&Self::new_table_name(collection_id), index).as_str(),
+            &scylla_record::create_index(&Self::new_table_name(collection_id), index),
             &[],
         )
         .await?;
@@ -428,7 +581,7 @@ impl RecordDao {
 
     async fn scylladb_drop_index(db: &ScyllaDb, collection_id: &Uuid, index: &str) -> Result<()> {
         db.session_query(
-            &record::drop_index(&Self::new_table_name(collection_id), index),
+            &scylla_record::drop_index(&Self::new_table_name(collection_id), index),
             &[],
         )
         .await?;
@@ -442,7 +595,7 @@ impl RecordDao {
             columns.push(col.to_owned());
             values.push(val.to_scylladb_model());
         }
-        db.execute(&record::insert(&self.table_name, &columns), &values)
+        db.execute(&scylla_record::insert(&self.table_name, &columns), &values)
             .await?;
         Ok(())
     }
@@ -454,7 +607,7 @@ impl RecordDao {
         id: &Uuid,
     ) -> Result<Vec<Option<CqlValue>>> {
         Ok(db
-            .execute(&record::select(table_name, columns), [id].as_ref())
+            .execute(&scylla_record::select(table_name, columns), [id].as_ref())
             .await?
             .first_row()?
             .columns)
@@ -472,7 +625,7 @@ impl RecordDao {
         let filter = filters.scylladb_filter_query(&None, 0)?;
         let mut order = HashMap::with_capacity(orders.len());
         for o in orders {
-            if ORDER_TYPE.contains(&o.kind.as_str()) {
+            if SCYLLA_ORDER_TYPE.contains(&o.kind.as_str()) {
                 order.insert(o.field.as_str(), o.kind.as_str());
             } else {
                 return Err(Error::msg(format!(
@@ -486,7 +639,7 @@ impl RecordDao {
         if let Some(limit) = pagination.limit() {
             values.push(Box::new(limit))
         }
-        let query_select_many = record::select_many(
+        let query_select_many = scylla_record::select_many(
             table_name,
             columns,
             &filter,
@@ -494,7 +647,7 @@ impl RecordDao {
             &order,
             &pagination.limit().is_some(),
         );
-        let query_total = record::count(table_name, &filter);
+        let query_total = scylla_record::count(table_name, &filter);
         let (data, total) = tokio::try_join!(
             db.execute(&query_select_many, &values),
             db.execute(&query_total, &total_values)
@@ -521,16 +674,499 @@ impl RecordDao {
             Some(id) => values.push(id.to_scylladb_model()),
             None => return Err(Error::msg("Id is undefined")),
         }
-        db.execute(&record::update(&self.table_name, &columns), &values)
+        db.execute(&scylla_record::update(&self.table_name, &columns), &values)
             .await?;
         Ok(())
     }
 
-    async fn scylladb_delete(db: &ScyllaDb, table_name: &str, id: &Uuid) -> Result<()> {
+    async fn scylladb_delete(db: &ScyllaDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
         let mut column = HashSet::<String>::with_capacity(1);
         column.insert("_id".to_owned());
-        db.execute(&record::delete(table_name, &column), [id].as_ref())
+        db.execute(
+            &scylla_record::delete(&Self::new_table_name(collection_id), &column),
+            [id].as_ref(),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_create_table(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        schema_fields: &HashMap<String, SchemaFieldPropsPostgresModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::create_table(
+            &Self::new_table_name(collection_id),
+            schema_fields,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_drop_table(db: &PostgresDb, collection_id: &Uuid) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::drop_table(
+            &Self::new_table_name(collection_id),
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_check_table_existence(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+    ) -> Result<bool> {
+        Ok(db
+            .fetch_one_unprepared::<(i64,)>(
+                sqlx::query_as(POSTGRES_COUNT_TABLE)
+                    .bind(&RecordDao::new_table_name(collection_id)),
+            )
+            .await?
+            .0
+            > 0)
+    }
+
+    async fn postgresdb_add_columns(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsPostgresModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::add_columns(
+            &Self::new_table_name(collection_id),
+            columns,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_drop_columns(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        column_names: &HashSet<String>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::drop_columns(
+            &Self::new_table_name(collection_id),
+            column_names,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_change_columns_type(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsPostgresModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::change_columns_type(
+            &Self::new_table_name(collection_id),
+            columns,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_create_index(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::create_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_drop_index(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::drop_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
+        let mut columns = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            columns.push(col.to_owned());
+            values.push(val);
+        }
+        let sql = postgres_record::insert(&self.table_name, &columns);
+        let mut query = sqlx::query(&sql);
+        for val in values {
+            query = val.to_postgresdb_model(query);
+        }
+        db.execute(query).await?;
+        Ok(())
+    }
+
+    async fn postgresdb_select(
+        db: &PostgresDb,
+        table_name: &str,
+        columns: &Vec<String>,
+        id: &Uuid,
+    ) -> Result<Vec<sqlx::postgres::PgValue>> {
+        let sql = postgres_record::select(table_name, columns);
+        let mut rows = db.fetch(sqlx::query(&sql).bind(id));
+
+        let mut values = Vec::new();
+        for column in columns {
+            while let Some(row) = rows.try_next().await? {
+                values.push(sqlx::ValueRef::to_owned(&sqlx::Row::try_get_raw(
+                    &row,
+                    column.as_str(),
+                )?));
+            }
+        }
+
+        Ok(values)
+    }
+
+    async fn postgresdb_update(&self, db: &PostgresDb) -> Result<()> {
+        let mut columns = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            if col != "_id" {
+                columns.push(col.to_owned());
+                values.push(val);
+            }
+        }
+        match self.data.get("_id") {
+            Some(id) => values.push(id),
+            None => return Err(Error::msg("Id is undefined")),
+        }
+        let sql = postgres_record::update(&self.table_name, &columns);
+        let mut query = sqlx::query(&sql);
+        for val in values {
+            query = val.to_postgresdb_model(query);
+        }
+        db.execute(query).await?;
+        Ok(())
+    }
+
+    async fn postgresdb_delete(db: &PostgresDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
+        let mut column = HashSet::<String>::with_capacity(1);
+        column.insert("_id".to_owned());
+        db.execute(
+            sqlx::query(&postgres_record::delete(
+                &Self::new_table_name(collection_id),
+                &column,
+            ))
+            .bind(id),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_create_table(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        schema_fields: &HashMap<String, SchemaFieldPropsMysqlModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&mysql_record::create_table(
+            &Self::new_table_name(collection_id),
+            schema_fields,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_drop_table(db: &MysqlDb, collection_id: &Uuid) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&mysql_record::drop_table(
+            &Self::new_table_name(collection_id),
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_check_table_existence(db: &MysqlDb, collection_id: &Uuid) -> Result<bool> {
+        Ok(db
+            .fetch_one_unprepared::<(i64,)>(
+                sqlx::query_as(MYSQL_COUNT_TABLE).bind(&RecordDao::new_table_name(collection_id)),
+            )
+            .await?
+            .0
+            > 0)
+    }
+
+    async fn mysqldb_add_columns(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsMysqlModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&mysql_record::add_columns(
+            &Self::new_table_name(collection_id),
+            columns,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_drop_columns(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        column_names: &HashSet<String>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&mysql_record::drop_columns(
+            &Self::new_table_name(collection_id),
+            column_names,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_change_columns_type(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsMysqlModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&mysql_record::change_columns_type(
+            &Self::new_table_name(collection_id),
+            columns,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn mysqldb_create_index(db: &MysqlDb, collection_id: &Uuid, index: &str) -> Result<()> {
+        let record_table = Self::new_table_name(collection_id);
+
+        let does_index_exist =
+            db.fetch_one::<(i64,)>(sqlx::query_as(&mysql_record::count_index(
+                &record_table,
+                index,
+            )))
+            .await?
+            .0 > 0;
+
+        if !does_index_exist {
+            db.execute_unprepared(sqlx::query(&mysql_record::create_index(
+                &record_table,
+                index,
+            )))
             .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn mysqldb_drop_index(db: &MysqlDb, collection_id: &Uuid, index: &str) -> Result<()> {
+        let record_table = Self::new_table_name(collection_id);
+
+        let does_index_exist =
+            db.fetch_one::<(i64,)>(sqlx::query_as(&mysql_record::count_index(
+                &record_table,
+                index,
+            )))
+            .await?
+            .0 > 0;
+
+        if does_index_exist {
+            db.execute_unprepared(sqlx::query(&mysql_record::drop_index(
+                &Self::new_table_name(collection_id),
+                index,
+            )))
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
+        let mut columns = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            columns.push(col.to_owned());
+            values.push(val);
+        }
+        let sql = mysql_record::insert(&self.table_name, &columns);
+        let mut query = sqlx::query(&sql);
+        for val in values {
+            query = val.to_mysqldb_model(query);
+        }
+        db.execute(query).await?;
+        Ok(())
+    }
+
+    async fn mysqldb_update(&self, db: &MysqlDb) -> Result<()> {
+        let mut columns = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            if col != "_id" {
+                columns.push(col.to_owned());
+                values.push(val);
+            }
+        }
+        match self.data.get("_id") {
+            Some(id) => values.push(id),
+            None => return Err(Error::msg("Id is undefined")),
+        }
+        let sql = mysql_record::update(&self.table_name, &columns);
+        let mut query = sqlx::query(&sql);
+        for val in values {
+            query = val.to_mysqldb_model(query);
+        }
+        db.execute(query).await?;
+        Ok(())
+    }
+
+    async fn mysqldb_delete(db: &MysqlDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
+        let mut column = HashSet::<String>::with_capacity(1);
+        column.insert("_id".to_owned());
+        db.execute(
+            sqlx::query(&mysql_record::delete(
+                &Self::new_table_name(collection_id),
+                &column,
+            ))
+            .bind(id),
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_create_table(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        schema_fields: &HashMap<String, SchemaFieldPropsSqliteModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::create_table(
+            &Self::new_table_name(collection_id),
+            schema_fields,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlite_drop_table(db: &SqliteDb, collection_id: &Uuid) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::drop_table(
+            &Self::new_table_name(collection_id),
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_check_table_existence(db: &SqliteDb, collection_id: &Uuid) -> Result<bool> {
+        Ok(db
+            .fetch_one_unprepared::<(i64,)>(
+                sqlx::query_as(SQLITE_COUNT_TABLE).bind(&RecordDao::new_table_name(collection_id)),
+            )
+            .await?
+            .0
+            > 0)
+    }
+
+    async fn sqlitedb_add_columns(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsSqliteModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::add_columns(
+            &Self::new_table_name(collection_id),
+            columns,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_drop_columns(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        column_names: &HashSet<String>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::drop_columns(
+            &Self::new_table_name(collection_id),
+            column_names,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_change_columns_type(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        columns: &HashMap<String, SchemaFieldPropsSqliteModel>,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::change_columns_type(
+            &Self::new_table_name(collection_id),
+            columns,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_create_index(db: &SqliteDb, collection_id: &Uuid, index: &str) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::create_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_drop_index(db: &SqliteDb, collection_id: &Uuid, index: &str) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::drop_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
+        let mut columns = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            columns.push(col.to_owned());
+            values.push(val);
+        }
+        let sql = sqlite_record::insert(&self.table_name, &columns);
+        let mut query = sqlx::query(&sql);
+        for val in values {
+            query = val.to_sqlitedb_model(query);
+        }
+        db.execute(query).await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_update(&self, db: &SqliteDb) -> Result<()> {
+        let mut columns = Vec::with_capacity(self.data.len());
+        let mut values = Vec::with_capacity(self.data.len());
+        for (col, val) in &self.data {
+            if col != "_id" {
+                columns.push(col.to_owned());
+                values.push(val);
+            }
+        }
+        match self.data.get("_id") {
+            Some(id) => values.push(id),
+            None => return Err(Error::msg("Id is undefined")),
+        }
+        let sql = sqlite_record::update(&self.table_name, &columns);
+        let mut query = sqlx::query(&sql);
+        for val in values {
+            query = val.to_sqlitedb_model(query);
+        }
+        db.execute(query).await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_delete(db: &SqliteDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
+        let mut column = HashSet::<String>::with_capacity(1);
+        column.insert("_id".to_owned());
+        db.execute(
+            sqlx::query(&sqlite_record::delete(
+                &Self::new_table_name(collection_id),
+                &column,
+            ))
+            .bind(id),
+        )
+        .await?;
         Ok(())
     }
 }
@@ -742,7 +1378,7 @@ impl RecordColumnValue {
             SchemaFieldKind::Date => Self::Date(None),
             SchemaFieldKind::Time => Self::Time(None),
             SchemaFieldKind::DateTime => Self::DateTime(None),
-            SchemaFieldKind::Timestamp => Self::Timestamp(None),
+            SchemaFieldKind::Timestamp | SchemaFieldKind::Timestampz => Self::Timestamp(None),
             SchemaFieldKind::Json => Self::Json(None),
         }
     }
@@ -1055,7 +1691,7 @@ impl RecordColumnValue {
         }
     }
 
-    pub fn to_scylladb_model(&self) -> Box<dyn Value> {
+    pub fn to_scylladb_model(&self) -> Box<dyn ScyllaValue> {
         match self {
             Self::Boolean(data) => Box::new(*data),
             Self::TinyInteger(data) => Box::new(*data),
@@ -1069,18 +1705,97 @@ impl RecordColumnValue {
             Self::Uuid(data) => Box::new(*data),
             Self::Date(data) => Box::new(*data),
             Self::Time(data) => Box::new(match data {
-                Some(data) => Some(Time(*data - NaiveTime::MIN)),
+                Some(data) => Some(ScyllaTime(*data - NaiveTime::MIN)),
                 None => None,
             }),
             Self::DateTime(data) => Box::new(match data {
-                Some(data) => Some(Timestamp(data.signed_duration_since(DateTime::UNIX_EPOCH))),
+                Some(data) => Some(ScyllaTimestamp(
+                    data.signed_duration_since(DateTime::UNIX_EPOCH),
+                )),
                 None => None,
             }),
             Self::Timestamp(data) => Box::new(match data {
-                Some(data) => Some(Timestamp(data.signed_duration_since(DateTime::UNIX_EPOCH))),
+                Some(data) => Some(ScyllaTimestamp(
+                    data.signed_duration_since(DateTime::UNIX_EPOCH),
+                )),
                 None => None,
             }),
             Self::Json(data) => Box::new(data.to_owned()),
+        }
+    }
+
+    pub fn to_postgresdb_model<'a>(
+        &self,
+        query: sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>,
+    ) -> sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments> {
+        match self {
+            RecordColumnValue::Boolean(data) => query.bind(*data),
+            RecordColumnValue::TinyInteger(data) => query.bind(*data),
+            RecordColumnValue::SmallInteger(data) => query.bind(*data),
+            RecordColumnValue::Integer(data) => query.bind(*data),
+            RecordColumnValue::BigInteger(data) => query.bind(*data),
+            RecordColumnValue::Float(data) => query.bind(*data),
+            RecordColumnValue::Double(data) => query.bind(*data),
+            RecordColumnValue::String(data) => query.bind(data.to_owned()),
+            RecordColumnValue::Bytes(data) => query.bind(data.to_owned()),
+            RecordColumnValue::Uuid(data) => query.bind(*data),
+            RecordColumnValue::Date(data) => query.bind(*data),
+            RecordColumnValue::Time(data) => query.bind(*data),
+            RecordColumnValue::DateTime(data) => query.bind(*data),
+            RecordColumnValue::Timestamp(data) => query.bind(*data),
+            RecordColumnValue::Json(data) => query.bind(data.to_owned()),
+        }
+    }
+
+    pub fn to_mysqldb_model<'a>(
+        &self,
+        query: sqlx::query::Query<'a, sqlx::MySql, sqlx::mysql::MySqlArguments>,
+    ) -> sqlx::query::Query<'a, sqlx::MySql, sqlx::mysql::MySqlArguments> {
+        match self {
+            RecordColumnValue::Boolean(data) => query.bind(*data),
+            RecordColumnValue::TinyInteger(data) => query.bind(*data),
+            RecordColumnValue::SmallInteger(data) => query.bind(*data),
+            RecordColumnValue::Integer(data) => query.bind(*data),
+            RecordColumnValue::BigInteger(data) => query.bind(*data),
+            RecordColumnValue::Float(data) => query.bind(*data),
+            RecordColumnValue::Double(data) => query.bind(*data),
+            RecordColumnValue::String(data) => query.bind(data.to_owned()),
+            RecordColumnValue::Bytes(data) => query.bind(data.to_owned()),
+            RecordColumnValue::Uuid(data) => query.bind(*data),
+            RecordColumnValue::Date(data) => query.bind(*data),
+            RecordColumnValue::Time(data) => query.bind(*data),
+            RecordColumnValue::DateTime(data) => match data {
+                Some(data) => query.bind::<DateTime<Local>>(DateTime::from(*data)),
+                None => query.bind::<&Option<DateTime<Local>>>(&None),
+            },
+            RecordColumnValue::Timestamp(data) => match data {
+                Some(data) => query.bind::<DateTime<Local>>(DateTime::from(*data)),
+                None => query.bind::<&Option<DateTime<Local>>>(&None),
+            },
+            RecordColumnValue::Json(data) => query.bind(data.to_owned()),
+        }
+    }
+
+    pub fn to_sqlitedb_model<'a>(
+        &self,
+        query: sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>,
+    ) -> sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>> {
+        match self {
+            RecordColumnValue::Boolean(data) => query.bind(*data),
+            RecordColumnValue::TinyInteger(data) => query.bind(*data),
+            RecordColumnValue::SmallInteger(data) => query.bind(*data),
+            RecordColumnValue::Integer(data) => query.bind(*data),
+            RecordColumnValue::BigInteger(data) => query.bind(*data),
+            RecordColumnValue::Float(data) => query.bind(*data),
+            RecordColumnValue::Double(data) => query.bind(*data),
+            RecordColumnValue::String(data) => query.bind(data.to_owned()),
+            RecordColumnValue::Bytes(data) => query.bind(data.to_owned()),
+            RecordColumnValue::Uuid(data) => query.bind(*data),
+            RecordColumnValue::Date(data) => query.bind(*data),
+            RecordColumnValue::Time(data) => query.bind(*data),
+            RecordColumnValue::DateTime(data) => query.bind(*data),
+            RecordColumnValue::Timestamp(data) => query.bind(*data),
+            RecordColumnValue::Json(data) => query.bind(data.to_owned()),
         }
     }
 }
@@ -1107,7 +1822,7 @@ impl RecordFilters {
         for (idx, f) in self.0.iter().enumerate() {
             let op = f.op.to_uppercase();
             if let Some(child) = &f.child {
-                if LOGICAL_OPERATOR.contains(&op.as_str()) {
+                if SCYLLA_LOGICAL_OPERATOR.contains(&op.as_str()) {
                     if filter.len() > 0 {
                         filter += " ";
                     }
@@ -1119,7 +1834,7 @@ impl RecordFilters {
                 }
             } else {
                 let field = f.field.as_ref().unwrap();
-                if COMPARISON_OPERATOR.contains(&op.as_str()) {
+                if SCYLLA_COMPARISON_OPERATOR.contains(&op.as_str()) {
                     if filter.len() > 0 {
                         filter += " ";
                     }
@@ -1145,7 +1860,7 @@ impl RecordFilters {
         Ok(filter)
     }
 
-    pub fn scylladb_values(&self) -> Vec<Box<dyn Value>> {
+    pub fn scylladb_values(&self) -> Vec<Box<dyn ScyllaValue>> {
         let mut values = Vec::with_capacity(self.values_capacity());
         for f in &self.0 {
             if let Some(value) = &f.value {

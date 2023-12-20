@@ -1,3 +1,4 @@
+use futures::StreamExt;
 use sqlx::{
     query::{Query, QueryAs},
     sqlite::{SqliteArguments, SqlitePoolOptions, SqliteQueryResult, SqliteRow},
@@ -37,6 +38,13 @@ impl SqliteDb {
         }
     }
 
+    pub async fn execute_unprepared<'a>(
+        &self,
+        query: Query<'a, Sqlite, SqliteArguments<'a>>,
+    ) -> Result<SqliteQueryResult, Error> {
+        query.persistent(false).execute(&self.pool).await
+    }
+
     pub async fn execute<'a>(
         &self,
         query: Query<'a, Sqlite, SqliteArguments<'a>>,
@@ -44,11 +52,44 @@ impl SqliteDb {
         query.execute(&self.pool).await
     }
 
+    pub async fn fetch_one_unprepared<
+        'a,
+        T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow>,
+    >(
+        &self,
+        query: QueryAs<'a, Sqlite, T, SqliteArguments<'a>>,
+    ) -> Result<T, Error> {
+        Ok(query.persistent(false).fetch_one(&self.pool).await?)
+    }
+
     pub async fn fetch_one<'a, T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow>>(
         &self,
         query: QueryAs<'a, Sqlite, T, SqliteArguments<'a>>,
     ) -> Result<T, Error> {
         Ok(query.fetch_one(&self.pool).await?)
+    }
+
+    pub async fn fetch_many<
+        'a,
+        T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow> + 'static,
+    >(
+        &self,
+        query: QueryAs<'a, Sqlite, T, SqliteArguments<'a>>,
+        limit: usize,
+    ) -> Result<Vec<sqlx::Either<SqliteQueryResult, T>>, Error> {
+        let mut stream = query.fetch_many(&self.pool);
+        let mut data = Vec::with_capacity(limit);
+        while let Some(s) = stream.next().await {
+            data.push(s?);
+        }
+        Ok(data)
+    }
+
+    pub async fn fetch_all<'a, T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow>>(
+        &self,
+        query: QueryAs<'a, Sqlite, T, SqliteArguments<'a>>,
+    ) -> Result<Vec<T>, Error> {
+        query.fetch_all(&self.pool).await
     }
 
     pub fn table_registration_ttl(&self) -> &i64 {

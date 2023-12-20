@@ -1,3 +1,4 @@
+use futures::StreamExt;
 use sqlx::{
     mysql::{MySqlArguments, MySqlPoolOptions, MySqlQueryResult, MySqlRow},
     query::{Query, QueryAs},
@@ -41,6 +42,13 @@ impl MysqlDb {
         }
     }
 
+    pub async fn execute_unprepared(
+        &self,
+        query: Query<'_, MySql, MySqlArguments>,
+    ) -> Result<MySqlQueryResult, Error> {
+        query.persistent(false).execute(&self.pool).await
+    }
+
     pub async fn execute(
         &self,
         query: Query<'_, MySql, MySqlArguments>,
@@ -48,11 +56,38 @@ impl MysqlDb {
         query.execute(&self.pool).await
     }
 
+    pub async fn fetch_one_unprepared<T: Send + Unpin + for<'r> sqlx::FromRow<'r, MySqlRow>>(
+        &self,
+        query: QueryAs<'_, MySql, T, MySqlArguments>,
+    ) -> Result<T, Error> {
+        Ok(query.persistent(false).fetch_one(&self.pool).await?)
+    }
+
     pub async fn fetch_one<T: Send + Unpin + for<'r> sqlx::FromRow<'r, MySqlRow>>(
         &self,
         query: QueryAs<'_, MySql, T, MySqlArguments>,
     ) -> Result<T, Error> {
         Ok(query.fetch_one(&self.pool).await?)
+    }
+
+    pub async fn fetch_many<T: Send + Unpin + for<'r> sqlx::FromRow<'r, MySqlRow> + 'static>(
+        &self,
+        query: QueryAs<'_, MySql, T, MySqlArguments>,
+        limit: usize,
+    ) -> Result<Vec<sqlx::Either<MySqlQueryResult, T>>, Error> {
+        let mut stream = query.fetch_many(&self.pool);
+        let mut data = Vec::with_capacity(limit);
+        while let Some(s) = stream.next().await {
+            data.push(s?);
+        }
+        Ok(data)
+    }
+
+    pub async fn fetch_all<T: Send + Unpin + for<'r> sqlx::FromRow<'r, MySqlRow>>(
+        &self,
+        query: QueryAs<'_, MySql, T, MySqlArguments>,
+    ) -> Result<Vec<T>, Error> {
+        query.fetch_all(&self.pool).await
     }
 
     pub fn table_registration_ttl(&self) -> &i64 {

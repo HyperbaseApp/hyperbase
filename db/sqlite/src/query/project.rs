@@ -9,7 +9,7 @@ pub const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = ?";
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "SQLite: Setting up projects table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"projects\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"name\" text, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"projects\" (\"id\" text, \"created_at\" text, \"updated_at\" text, \"admin_id\" text, \"name\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();

@@ -10,7 +10,7 @@ pub const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = ?";
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "SQLite: Setting up tokens table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"token\" text, \"rules\" json, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" text, \"created_at\" text, \"updated_at\" text, \"admin_id\" text, \"token\" text, \"rules\" text, \"expired_at\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();

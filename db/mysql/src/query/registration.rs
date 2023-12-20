@@ -8,7 +8,7 @@ pub const DELETE: &str = "DELETE FROM `registrations` WHERE `id` = ?";
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up registrations table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `registrations` (`id` varchar(36), `created_at` timestamp, `updated_at` timestamp, `email` text, `password_hash` text, `code` text, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `registrations` (`id` binary(16)	, `created_at` timestamp, `updated_at` timestamp, `email` text, `password_hash` text, `code` text, PRIMARY KEY (`id`))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
