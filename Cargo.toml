@@ -49,7 +49,7 @@ lettre = { version = "0.11", default-features = false, features = [
 ] }
 num-bigint = "0.4"
 rand = "0.8"
-scylla = "0.10"
+scylla = { version = "0.11" }
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }
 serde_yaml = "0.9"

@@ -87,6 +87,14 @@ pub fn insert(record_table: &str, columns: &Vec<String>) -> String {
     format!("INSERT INTO `{record_table}` ({cols}) VALUES ({vals})")
 }
 
+pub fn select(record_table: &str, columns: &Vec<String>) -> String {
+    format!(
+        "SELECT {} FROM `{}` WHERE `_id` = ?",
+        columns.iter().map(|col| format!("`{col}`")).join(", "),
+        record_table
+    )
+}
+
 pub fn update(record_table: &str, columns: &Vec<String>) -> String {
     format!(
         "UPDATE `{}` SET {} WHERE `_id` = ?",

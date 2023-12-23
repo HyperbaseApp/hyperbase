@@ -27,13 +27,10 @@ use hb_db_sqlite::{
     },
 };
 use rand::{thread_rng, Rng};
-use scylla::frame::value::Timestamp;
+use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{
-    util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
-    Db,
-};
+use crate::{util::conversion, Db};
 
 pub struct RegistrationDao {
     id: Uuid,
@@ -209,8 +206,8 @@ impl RegistrationDao {
     fn from_scylladb_model(model: &RegistrationScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
+            created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
+            updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             email: model.email().to_owned(),
             password_hash: model.password_hash().to_owned(),
             code: model.code().to_owned(),
@@ -220,8 +217,8 @@ impl RegistrationDao {
     fn to_scylladb_model(&self) -> RegistrationScyllaModel {
         RegistrationScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
+            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
+            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.email,
             &self.password_hash,
             &self.code,

@@ -32,13 +32,13 @@ use hb_db_sqlite::{
         SELECT_MANY_BY_ADMIN_ID as SQLITE_SELECT_MANY_BY_ADMIN_ID, UPDATE as SQLITE_UPDATE,
     },
 };
-use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
+use scylla::{
+    frame::value::CqlTimestamp as ScyllaCqlTimestamp,
+    transport::session::TypedRowIter as ScyllaTypedRowIter,
+};
 use uuid::Uuid;
 
-use crate::{
-    util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
-    Db,
-};
+use crate::{util::conversion, Db};
 
 pub struct ProjectDao {
     id: Uuid,
@@ -181,7 +181,7 @@ impl ProjectDao {
     async fn scylladb_select_many_by_admin_id(
         db: &ScyllaDb,
         admin_id: &Uuid,
-    ) -> Result<TypedRowIter<ProjectScyllaModel>> {
+    ) -> Result<ScyllaTypedRowIter<ProjectScyllaModel>> {
         Ok(db
             .execute(SCYLLA_SELECT_MANY_BY_ADMIN_ID, [admin_id].as_ref())
             .await?
@@ -189,8 +189,15 @@ impl ProjectDao {
     }
 
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(SCYLLA_UPDATE, &(&self.updated_at, &self.name, &self.id))
-            .await?;
+        db.execute(
+            SCYLLA_UPDATE,
+            &(
+                &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+                &self.name,
+                &self.id,
+            ),
+        )
+        .await?;
         Ok(())
     }
 
@@ -330,8 +337,8 @@ impl ProjectDao {
     fn from_scylladb_model(model: &ProjectScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
+            created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
+            updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             admin_id: *model.admin_id(),
             name: model.name().to_owned(),
         })
@@ -340,8 +347,8 @@ impl ProjectDao {
     fn to_scylladb_model(&self) -> ProjectScyllaModel {
         ProjectScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
+            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
+            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.admin_id,
             &self.name,
         )

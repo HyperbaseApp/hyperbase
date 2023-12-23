@@ -1,10 +1,13 @@
+use std::any::type_name;
+
 use scylla::{
     cql_to_rust::{FromCqlVal, FromCqlValError},
-    frame::{
-        response::result::CqlValue,
-        value::{Value, ValueTooBig},
+    frame::response::result::{ColumnType, CqlValue},
+    serialize::{
+        value::{BuiltinSerializationError, BuiltinSerializationErrorKind, SerializeCql},
+        writers::WrittenCellProof,
+        CellWriter, SerializationError,
     },
-    BufMut,
 };
 
 pub const LOGICAL_OPERATOR: [&str; 1] = ["AND"];
@@ -16,108 +19,117 @@ pub const ORDER_TYPE: [&str; 2] = ["ASC", "DESC"];
 
 #[derive(Clone, Copy)]
 pub enum SchemaFieldKind {
-    Boolean,
-    Tinyint,
-    Smallint,
-    Int,
-    Bigint,
-    Float,
-    Double,
     Ascii,
-    Text,
-    Varchar,
+    Boolean,
     Blob,
-    Inet,
-    Uuid,
-    Timeuuid,
-    Date,
-    Time,
-    Timestamp,
-    Duration,
+    Counter,
     Decimal,
-    Varint,
+    Date,
+    Double,
+    Duration,
+    Empty,
+    Float,
+    Int,
+    BigInt,
+    Text,
+    Timestamp,
+    Inet,
     List,
-    Set,
     Map,
+    Set,
+    UserDefinedType,
+    SmallInt,
+    TinyInt,
+    Time,
+    Timeuuid,
     Tuple,
+    Uuid,
+    Varint,
 }
 
 impl SchemaFieldKind {
     pub fn to_str(&self) -> &str {
         match self {
-            Self::Boolean => "boolean",
-            Self::Tinyint => "tinyint",
-            Self::Smallint => "smallint",
-            Self::Int => "int",
-            Self::Bigint => "bigint",
-            Self::Float => "float",
-            Self::Double => "double",
             Self::Ascii => "ascii",
-            Self::Text => "text",
-            Self::Varchar => "varchar",
+            Self::Boolean => "boolean",
             Self::Blob => "blob",
-            Self::Inet => "inet",
-            Self::Uuid => "uuid",
-            Self::Timeuuid => "timeuuid",
-            Self::Date => "date",
-            Self::Time => "time",
-            Self::Timestamp => "timestamp",
-            Self::Duration => "duration",
+            Self::Counter => "counter",
             Self::Decimal => "decimal",
-            Self::Varint => "varint",
+            Self::Date => "date",
+            Self::Double => "double",
+            Self::Duration => "duration",
+            Self::Empty => "empty",
+            Self::Float => "float",
+            Self::Int => "int",
+            Self::BigInt => "bigint",
+            Self::Text => "text",
+            Self::Timestamp => "timestamp",
+            Self::Inet => "inet",
             Self::List => "list",
-            Self::Set => "set",
             Self::Map => "map",
+            Self::Set => "set",
+            Self::UserDefinedType => "userdefinedtype",
+            Self::SmallInt => "smallint",
+            Self::TinyInt => "tinyint",
+            Self::Time => "time",
+            Self::Timeuuid => "timeuuid",
             Self::Tuple => "tuple",
+            Self::Uuid => "uuid",
+            Self::Varint => "varint",
         }
     }
 
     pub fn from_str(str: &str) -> Result<Self, &str> {
         match str {
-            "boolean" => Ok(Self::Boolean),
-            "tinyint" => Ok(Self::Tinyint),
-            "smallint" => Ok(Self::Smallint),
-            "int" => Ok(Self::Int),
-            "bigint" => Ok(Self::Bigint),
-            "float" => Ok(Self::Float),
-            "double" => Ok(Self::Double),
             "ascii" => Ok(Self::Ascii),
-            "text" => Ok(Self::Text),
-            "varchar" => Ok(Self::Varchar),
+            "boolean" => Ok(Self::Boolean),
             "blob" => Ok(Self::Blob),
-            "inet" => Ok(Self::Inet),
-            "uuid" => Ok(Self::Uuid),
-            "timeuuid" => Ok(Self::Timeuuid),
-            "date" => Ok(Self::Date),
-            "time" => Ok(Self::Time),
-            "timestamp" => Ok(Self::Timestamp),
-            "duration" => Ok(Self::Duration),
+            "counter" => Ok(Self::Counter),
             "decimal" => Ok(Self::Decimal),
-            "varint" => Ok(Self::Varint),
+            "date" => Ok(Self::Date),
+            "double" => Ok(Self::Double),
+            "duration" => Ok(Self::Duration),
+            "empty" => Ok(Self::Empty),
+            "float" => Ok(Self::Float),
+            "int" => Ok(Self::Int),
+            "bigint" => Ok(Self::BigInt),
+            "text" => Ok(Self::Text),
+            "timestamp" => Ok(Self::Timestamp),
+            "inet" => Ok(Self::Inet),
             "list" => Ok(Self::List),
-            "set" => Ok(Self::Set),
             "map" => Ok(Self::Map),
+            "set" => Ok(Self::Set),
+            "userdefinedtype" => Ok(Self::UserDefinedType),
+            "smallint" => Ok(Self::SmallInt),
+            "tinyint" => Ok(Self::TinyInt),
+            "time" => Ok(Self::Time),
+            "timeuuid" => Ok(Self::Timeuuid),
             "tuple" => Ok(Self::Tuple),
+            "uuid" => Ok(Self::Uuid),
+            "varint" => Ok(Self::Varint),
             _ => Err("Unknown schema field kind"),
         }
-    }
-}
-
-impl Value for SchemaFieldKind {
-    fn serialize(&self, buf: &mut Vec<u8>) -> Result<(), ValueTooBig> {
-        let kind = self.to_str();
-        let str_bytes: &[u8] = kind.as_bytes();
-        let val_len: i32 = str_bytes.len().try_into().map_err(|_| ValueTooBig)?;
-
-        buf.put_i32(val_len);
-        buf.put(str_bytes);
-
-        Ok(())
     }
 }
 
 impl FromCqlVal<CqlValue> for SchemaFieldKind {
     fn from_cql(cql_val: CqlValue) -> Result<Self, FromCqlValError> {
         Ok(Self::from_str(&cql_val.as_text().unwrap()).unwrap())
+    }
+}
+
+impl SerializeCql for SchemaFieldKind {
+    fn serialize<'a>(
+        &self,
+        typ: &ColumnType,
+        writer: CellWriter<'a>,
+    ) -> Result<WrittenCellProof<'a>, SerializationError> {
+        writer.set_value(self.to_str().as_bytes()).map_err(|_| {
+            SerializationError::new(BuiltinSerializationError {
+                rust_name: type_name::<&str>(),
+                got: typ.clone(),
+                kind: BuiltinSerializationErrorKind::SizeOverflow,
+            })
+        })
     }
 }

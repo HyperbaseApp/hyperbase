@@ -1,11 +1,11 @@
-use scylla::{frame::value::Timestamp, FromRow, ValueList};
+use scylla::{frame::value::CqlTimestamp, FromRow, SerializeRow};
 use uuid::Uuid;
 
-#[derive(ValueList, FromRow)]
+#[derive(FromRow, SerializeRow)]
 pub struct RegistrationModel {
     id: Uuid,
-    created_at: Timestamp,
-    updated_at: Timestamp,
+    created_at: CqlTimestamp,
+    updated_at: CqlTimestamp,
     email: String,
     password_hash: String,
     code: String,
@@ -14,8 +14,8 @@ pub struct RegistrationModel {
 impl RegistrationModel {
     pub fn new(
         id: &Uuid,
-        created_at: &Timestamp,
-        updated_at: &Timestamp,
+        created_at: &CqlTimestamp,
+        updated_at: &CqlTimestamp,
         email: &str,
         password_hash: &str,
         code: &str,
@@ -38,11 +38,11 @@ impl RegistrationModel {
         &self.id
     }
 
-    pub fn created_at(&self) -> &Timestamp {
+    pub fn created_at(&self) -> &CqlTimestamp {
         &self.created_at
     }
 
-    pub fn updated_at(&self) -> &Timestamp {
+    pub fn updated_at(&self) -> &CqlTimestamp {
         &self.updated_at
     }
 

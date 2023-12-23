@@ -1,5 +1,6 @@
-use futures::StreamExt;
+use futures::{stream::BoxStream, StreamExt};
 use sqlx::{
+    database::HasArguments,
     mysql::{MySqlArguments, MySqlPoolOptions, MySqlQueryResult, MySqlRow},
     query::{Query, QueryAs},
     Error, MySql, Pool,
@@ -54,6 +55,13 @@ impl MysqlDb {
         query: Query<'_, MySql, MySqlArguments>,
     ) -> Result<MySqlQueryResult, Error> {
         query.execute(&self.pool).await
+    }
+
+    pub fn fetch<'e>(
+        &self,
+        query: Query<'e, MySql, <MySql as HasArguments<'_>>::Arguments>,
+    ) -> BoxStream<'e, Result<<MySql as sqlx::Database>::Row, Error>> {
+        query.fetch(&self.pool)
     }
 
     pub async fn fetch_one_unprepared<T: Send + Unpin + for<'r> sqlx::FromRow<'r, MySqlRow>>(

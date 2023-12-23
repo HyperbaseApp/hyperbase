@@ -1,5 +1,6 @@
-use futures::StreamExt;
+use futures::{stream::BoxStream, StreamExt};
 use sqlx::{
+    database::HasArguments,
     query::{Query, QueryAs},
     sqlite::{SqliteArguments, SqlitePoolOptions, SqliteQueryResult, SqliteRow},
     Error, Pool, Sqlite,
@@ -50,6 +51,13 @@ impl SqliteDb {
         query: Query<'a, Sqlite, SqliteArguments<'a>>,
     ) -> Result<SqliteQueryResult, Error> {
         query.execute(&self.pool).await
+    }
+
+    pub fn fetch<'e>(
+        &self,
+        query: Query<'e, Sqlite, <Sqlite as HasArguments<'e>>::Arguments>,
+    ) -> BoxStream<'e, Result<<Sqlite as sqlx::Database>::Row, Error>> {
+        query.fetch(&self.pool)
     }
 
     pub async fn fetch_one_unprepared<

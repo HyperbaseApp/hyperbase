@@ -13,12 +13,13 @@ hb_db_sqlite = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
-bigdecimal = { workspace = true }
+bigdecimal = { workspace = true, features = ["serde"] }
 chrono = { workspace = true }
 futures = { workspace = true }
+num-bigint = { workspace = true, features = ["serde"] }
 rand = { workspace = true }
 scylla = { workspace = true }
-sqlx = { workspace = true }
+sqlx = { workspace = true, features = ["bigdecimal"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

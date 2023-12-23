@@ -21,13 +21,10 @@ use hb_db_sqlite::{
     query::admin_password_reset::{INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT},
 };
 use rand::{thread_rng, Rng};
-use scylla::frame::value::Timestamp;
+use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{
-    util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
-    Db,
-};
+use crate::{util::conversion, Db};
 
 pub struct AdminPasswordResetDao {
     id: Uuid,
@@ -182,8 +179,8 @@ impl AdminPasswordResetDao {
     fn from_scylladb_model(model: &AdminPasswordResetScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
+            created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
+            updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             admin_id: *model.admin_id(),
             code: model.code().to_owned(),
         })
@@ -192,8 +189,8 @@ impl AdminPasswordResetDao {
     fn to_scylladb_model(&self) -> AdminPasswordResetScyllaModel {
         AdminPasswordResetScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
+            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
+            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.admin_id,
             &self.code,
         )

@@ -58,15 +58,14 @@ use hb_db_sqlite::{
         SELECT_MANY_BY_PROJECT_ID as SQLITE_SELECT_MANY_BY_PROJECT_ID, UPDATE as SQLITE_UPDATE,
     },
 };
-use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
+use scylla::{
+    frame::value::CqlTimestamp as ScyllaCqlTimestamp,
+    transport::session::TypedRowIter as ScyllaTypedRowIter,
+};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{
-    record::RecordDao,
-    util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
-    Db,
-};
+use crate::{record::RecordDao, util::conversion, Db};
 
 pub struct CollectionDao {
     id: Uuid,
@@ -350,7 +349,7 @@ impl CollectionDao {
     async fn scylladb_select_many_by_project_id(
         db: &ScyllaDb,
         project_id: &Uuid,
-    ) -> Result<TypedRowIter<CollectionScyllaModel>> {
+    ) -> Result<ScyllaTypedRowIter<CollectionScyllaModel>> {
         Ok(db
             .execute(SCYLLA_SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
             .await?
@@ -361,7 +360,7 @@ impl CollectionDao {
         db.execute(
             SCYLLA_UPDATE,
             &(
-                &self.updated_at,
+                &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
                 &self.name,
                 &self
                     .schema_fields
@@ -532,8 +531,8 @@ impl CollectionDao {
         }
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
+            created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
+            updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
@@ -548,8 +547,8 @@ impl CollectionDao {
     fn to_scylladb_model(&self) -> CollectionScyllaModel {
         CollectionScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
+            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
+            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.project_id,
             &self.name,
             &self
@@ -730,63 +729,66 @@ impl SchemaFieldPropsModel {
 
 #[derive(Serialize, PartialEq, Clone, Copy)]
 pub enum SchemaFieldKind {
-    Bool,       // boolean
-    TinyInt,    // 8-bit signed int
-    SmallInt,   // 16-bit signed int
-    Int,        // 32-bit signed int
-    BigInt,     // 64-bit signed long
-    Float,      // 32-bit IEEE-754 floating point
-    Double,     // 64-bit IEEE-754 floating point
-    String,     // UTF8 encoded string
-    Bytes,      // Arbitrary bytes
-    Uuid,       // A UUID (of any version)
-    Date,       // A date (with no corresponding time value)
-    Time,       // A time (with no corresponding date value)
-    DateTime,   // A datetime
-    Timestamp,  // A timestamp (date and time)
-    Timestampz, // A timestamp (date and time) with timezone
-    Json,       // A json data format
+    Boolean,   // boolean
+    TinyInt,   // 8-bit signed int
+    SmallInt,  // 16-bit signed int
+    Int,       // 32-bit signed int
+    BigInt,    // 64-bit signed long
+    Varint,    // Arbitrary-precision integer
+    Float,     // 32-bit IEEE-754 floating point
+    Double,    // 64-bit IEEE-754 floating point
+    Decimal,   // Variable-precision decimal
+    String,    // UTF8 encoded string
+    Binary,    // Arbitrary bytes
+    Uuid,      // A UUID (of any version)
+    Date,      // A date (with no corresponding time value)
+    Time,      // A time (with no corresponding date value)
+    DateTime,  // A datetime
+    Timestamp, // A timestamp (date and time)
+    Json,      // A json data format
 }
 
 impl SchemaFieldKind {
     pub fn to_str(&self) -> &str {
         match self {
-            Self::Bool => "bool",
-            Self::TinyInt => "tiny_int",
-            Self::SmallInt => "small_int",
+            Self::Boolean => "boolean",
+            Self::TinyInt => "tinyint",
+            Self::SmallInt => "smallint",
             Self::Int => "int",
-            Self::BigInt => "big_int",
+            Self::BigInt => "bigint",
+            Self::Varint => "varint",
             Self::Float => "float",
             Self::Double => "double",
+            Self::Decimal => "decimal",
             Self::String => "string",
-            Self::Bytes => "byte",
+            Self::Binary => "binary",
             Self::Uuid => "uuid",
             Self::Date => "date",
             Self::Time => "time",
             Self::DateTime => "datetime",
             Self::Timestamp => "timestamp",
-            Self::Timestampz => "timestampz",
             Self::Json => "json",
         }
     }
 
     pub fn from_str(str: &str) -> Result<Self> {
         match str {
-            "bool" => Ok(Self::Bool),
-            "tiny_int" => Ok(Self::TinyInt),
-            "small_int" => Ok(Self::SmallInt),
+            "boolean" => Ok(Self::Boolean),
+            "tinyint" => Ok(Self::TinyInt),
+            "smallint" => Ok(Self::SmallInt),
             "int" => Ok(Self::Int),
-            "big_int" => Ok(Self::BigInt),
+            "bigint" => Ok(Self::BigInt),
+            "varint" => Ok(Self::Varint),
             "float" => Ok(Self::Float),
             "double" => Ok(Self::Double),
+            "decimal" => Ok(Self::Decimal),
             "string" => Ok(Self::String),
-            "bytes" => Ok(Self::Bytes),
+            "binary" => Ok(Self::Binary),
             "uuid" => Ok(Self::Uuid),
             "date" => Ok(Self::Date),
             "time" => Ok(Self::Time),
             "datetime" => Ok(Self::DateTime),
             "timestamp" => Ok(Self::Timestamp),
-            "timestampz" => Ok(Self::Timestampz),
             "json" => Ok(Self::Json),
             _ => Err(Error::msg("Unknown schema field kind")),
         }
@@ -794,81 +796,86 @@ impl SchemaFieldKind {
 
     fn to_scylladb_model(&self) -> SchemaFieldScyllaKind {
         match self {
-            Self::Bool => SchemaFieldScyllaKind::Boolean,
-            Self::TinyInt => SchemaFieldScyllaKind::Tinyint,
-            Self::SmallInt => SchemaFieldScyllaKind::Smallint,
+            Self::Boolean => SchemaFieldScyllaKind::Boolean,
+            Self::TinyInt => SchemaFieldScyllaKind::TinyInt,
+            Self::SmallInt => SchemaFieldScyllaKind::SmallInt,
             Self::Int => SchemaFieldScyllaKind::Int,
-            Self::BigInt => SchemaFieldScyllaKind::Bigint,
+            Self::BigInt => SchemaFieldScyllaKind::BigInt,
+            Self::Varint => SchemaFieldScyllaKind::Varint,
             Self::Float => SchemaFieldScyllaKind::Float,
             Self::Double => SchemaFieldScyllaKind::Double,
+            Self::Decimal => SchemaFieldScyllaKind::Decimal,
             Self::String => SchemaFieldScyllaKind::Text,
-            Self::Bytes | Self::Json => SchemaFieldScyllaKind::Blob,
+            Self::Binary | Self::Json => SchemaFieldScyllaKind::Blob,
             Self::Uuid => SchemaFieldScyllaKind::Uuid,
             Self::Date => SchemaFieldScyllaKind::Date,
             Self::Time => SchemaFieldScyllaKind::Time,
-            Self::DateTime | Self::Timestamp | Self::Timestampz => SchemaFieldScyllaKind::Timestamp,
+            Self::DateTime | Self::Timestamp => SchemaFieldScyllaKind::Timestamp,
         }
     }
 
-    fn to_postgresdb_model(&self) -> SchemaFieldPostgresKind {
+    pub fn to_postgresdb_model(&self) -> SchemaFieldPostgresKind {
         match self {
-            Self::Bool => SchemaFieldPostgresKind::Bool,
+            Self::Boolean => SchemaFieldPostgresKind::Bool,
             Self::TinyInt => SchemaFieldPostgresKind::Char,
             Self::SmallInt => SchemaFieldPostgresKind::Smallint,
             Self::Int => SchemaFieldPostgresKind::Integer,
             Self::BigInt => SchemaFieldPostgresKind::Bigint,
+            Self::Varint => SchemaFieldPostgresKind::Numeric,
             Self::Float => SchemaFieldPostgresKind::Real,
             Self::Double => SchemaFieldPostgresKind::DoublePrecision,
+            Self::Decimal => SchemaFieldPostgresKind::Numeric,
             Self::String => SchemaFieldPostgresKind::Varchar,
-            Self::Bytes => SchemaFieldPostgresKind::Bytea,
+            Self::Binary => SchemaFieldPostgresKind::Bytea,
             Self::Uuid => SchemaFieldPostgresKind::Uuid,
             Self::Date => SchemaFieldPostgresKind::Date,
             Self::Time => SchemaFieldPostgresKind::Time,
-            Self::DateTime => SchemaFieldPostgresKind::Timestamp,
-            Self::Timestamp => SchemaFieldPostgresKind::Timestamp,
-            Self::Timestampz => SchemaFieldPostgresKind::Timestampz,
+            Self::DateTime => SchemaFieldPostgresKind::Timestampz,
+            Self::Timestamp => SchemaFieldPostgresKind::Timestampz,
             Self::Json => SchemaFieldPostgresKind::Jsonb,
         }
     }
 
     fn to_mysqldb_model(&self) -> SchemaFieldMysqlKind {
         match self {
-            Self::Bool => SchemaFieldMysqlKind::Bool,
+            Self::Boolean => SchemaFieldMysqlKind::Bool,
             Self::TinyInt => SchemaFieldMysqlKind::Tinyint,
             Self::SmallInt => SchemaFieldMysqlKind::Smallint,
             Self::Int => SchemaFieldMysqlKind::Int,
             Self::BigInt => SchemaFieldMysqlKind::Bigint,
+            Self::Varint => SchemaFieldMysqlKind::Decimal,
             Self::Float => SchemaFieldMysqlKind::Float,
             Self::Double => SchemaFieldMysqlKind::Double,
+            Self::Decimal => SchemaFieldMysqlKind::Decimal,
             Self::String => SchemaFieldMysqlKind::Varchar,
-            Self::Bytes => SchemaFieldMysqlKind::Blob,
+            Self::Binary => SchemaFieldMysqlKind::Blob,
             Self::Uuid => SchemaFieldMysqlKind::Binary16,
             Self::Date => SchemaFieldMysqlKind::Date,
             Self::Time => SchemaFieldMysqlKind::Time,
             Self::DateTime => SchemaFieldMysqlKind::Datetime,
             Self::Timestamp => SchemaFieldMysqlKind::Timestamp,
-            Self::Timestampz => SchemaFieldMysqlKind::Timestamp,
             Self::Json => SchemaFieldMysqlKind::Json,
         }
     }
 
     fn to_sqlitedb_model(&self) -> SchemaFieldSqliteKind {
         match self {
-            Self::Bool => SchemaFieldSqliteKind::Integer,
+            Self::Boolean => SchemaFieldSqliteKind::Integer,
             Self::TinyInt => SchemaFieldSqliteKind::Integer,
             Self::SmallInt => SchemaFieldSqliteKind::Integer,
             Self::Int => SchemaFieldSqliteKind::Integer,
             Self::BigInt => SchemaFieldSqliteKind::Integer,
+            Self::Varint => SchemaFieldSqliteKind::Text,
             Self::Float => SchemaFieldSqliteKind::Real,
             Self::Double => SchemaFieldSqliteKind::Real,
+            Self::Decimal => SchemaFieldSqliteKind::Text,
             Self::String => SchemaFieldSqliteKind::Text,
-            Self::Bytes => SchemaFieldSqliteKind::Blob,
+            Self::Binary => SchemaFieldSqliteKind::Blob,
             Self::Uuid => SchemaFieldSqliteKind::Text,
             Self::Date => SchemaFieldSqliteKind::Text,
             Self::Time => SchemaFieldSqliteKind::Text,
             Self::DateTime => SchemaFieldSqliteKind::Text,
             Self::Timestamp => SchemaFieldSqliteKind::Text,
-            Self::Timestampz => SchemaFieldSqliteKind::Text,
             Self::Json => SchemaFieldSqliteKind::Text,
         }
     }

@@ -38,13 +38,13 @@ use hb_db_sqlite::{
     },
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use scylla::{frame::value::Timestamp, transport::session::TypedRowIter};
+use scylla::{
+    frame::value::CqlTimestamp as ScyllaCqlTimestamp,
+    transport::session::TypedRowIter as ScyllaTypedRowIter,
+};
 use uuid::Uuid;
 
-use crate::{
-    util::conversion::{datetime_to_duration_since_epoch, duration_since_epoch_to_datetime},
-    Db,
-};
+use crate::{util::conversion, Db};
 
 pub struct TokenDao {
     id: Uuid,
@@ -263,7 +263,7 @@ impl TokenDao {
     async fn scylladb_select_many_by_admin_id(
         db: &ScyllaDb,
         admin_id: &Uuid,
-    ) -> Result<TypedRowIter<TokenScyllaModel>> {
+    ) -> Result<ScyllaTypedRowIter<TokenScyllaModel>> {
         Ok(db
             .execute(SCYLLA_SELECT_MANY_BY_ADMIN_ID, [admin_id].as_ref())
             .await?
@@ -273,7 +273,15 @@ impl TokenDao {
     async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
         db.execute(
             SCYLLA_UPDATE,
-            &(&self.updated_at, &self.rules, &self.expired_at, &self.id),
+            &(
+                &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+                &self.rules,
+                &match self.expired_at {
+                    Some(expired_at) => Some(ScyllaCqlTimestamp(expired_at.timestamp_millis())),
+                    None => None,
+                },
+                &self.id,
+            ),
         )
         .await?;
         Ok(())
@@ -445,13 +453,15 @@ impl TokenDao {
     fn from_scylladb_model(model: &TokenScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
-            created_at: duration_since_epoch_to_datetime(&model.created_at().0)?,
-            updated_at: duration_since_epoch_to_datetime(&model.updated_at().0)?,
+            created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
+            updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
             rules: model.rules().clone(),
             expired_at: match &model.expired_at() {
-                Some(expired_at) => Some(duration_since_epoch_to_datetime(&expired_at.0)?),
+                Some(expired_at) => Some(conversion::scylla_cql_timestamp_to_datetime_utc(
+                    expired_at,
+                )?),
                 None => None,
             },
         })
@@ -460,13 +470,13 @@ impl TokenDao {
     fn to_scylladb_model(&self) -> TokenScyllaModel {
         TokenScyllaModel::new(
             &self.id,
-            &Timestamp(datetime_to_duration_since_epoch(&self.created_at)),
-            &Timestamp(datetime_to_duration_since_epoch(&self.updated_at)),
+            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
+            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.admin_id,
             &self.token,
             &self.rules,
             &match &self.expired_at {
-                Some(expired_at) => Some(Timestamp(datetime_to_duration_since_epoch(expired_at))),
+                Some(expired_at) => Some(ScyllaCqlTimestamp(expired_at.timestamp_millis())),
                 None => None,
             },
         )

@@ -1,14 +1,14 @@
 use ahash::{HashMap, HashSet};
-use scylla::{frame::value::Timestamp, FromRow, FromUserType, IntoUserType, ValueList};
+use scylla::{frame::value::CqlTimestamp, FromRow, FromUserType, SerializeCql, SerializeRow};
 use uuid::Uuid;
 
 use super::system::SchemaFieldKind;
 
-#[derive(ValueList, FromRow)]
+#[derive(FromRow, SerializeRow)]
 pub struct CollectionModel {
     id: Uuid,
-    created_at: Timestamp,
-    updated_at: Timestamp,
+    created_at: CqlTimestamp,
+    updated_at: CqlTimestamp,
     project_id: Uuid,
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsModel>,
@@ -18,8 +18,8 @@ pub struct CollectionModel {
 impl CollectionModel {
     pub fn new(
         id: &Uuid,
-        created_at: &Timestamp,
-        updated_at: &Timestamp,
+        created_at: &CqlTimestamp,
+        updated_at: &CqlTimestamp,
         project_id: &Uuid,
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsModel>,
@@ -40,11 +40,11 @@ impl CollectionModel {
         &self.id
     }
 
-    pub fn created_at(&self) -> &Timestamp {
+    pub fn created_at(&self) -> &CqlTimestamp {
         &self.created_at
     }
 
-    pub fn updated_at(&self) -> &Timestamp {
+    pub fn updated_at(&self) -> &CqlTimestamp {
         &self.updated_at
     }
 
@@ -65,7 +65,7 @@ impl CollectionModel {
     }
 }
 
-#[derive(IntoUserType, FromUserType, Clone)]
+#[derive(FromUserType, SerializeCql, Clone)]
 pub struct SchemaFieldPropsModel {
     kind: String,
     internal_kind: SchemaFieldKind,

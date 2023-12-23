@@ -1,5 +1,5 @@
 use scylla::{
-    frame::value::ValueList,
+    serialize::row::SerializeRow,
     transport::{errors::QueryError, iterator::RowIterator},
     Bytes, CachingSession, QueryResult, SessionBuilder,
 };
@@ -47,7 +47,7 @@ impl ScyllaDb {
     pub async fn session_query(
         &self,
         query: &str,
-        values: impl ValueList,
+        values: impl SerializeRow,
     ) -> Result<QueryResult, QueryError> {
         self.cached_session.get_session().query(query, values).await
     }
@@ -55,7 +55,7 @@ impl ScyllaDb {
     pub async fn execute(
         &self,
         query: &str,
-        values: impl ValueList,
+        values: impl SerializeRow,
     ) -> Result<QueryResult, QueryError> {
         self.cached_session.execute(query, values).await
     }
@@ -63,7 +63,7 @@ impl ScyllaDb {
     pub async fn execute_iter(
         &self,
         query: &str,
-        values: impl ValueList,
+        values: impl SerializeRow,
     ) -> Result<RowIterator, QueryError> {
         self.cached_session.execute_iter(query, values).await
     }
@@ -71,7 +71,7 @@ impl ScyllaDb {
     pub async fn execute_paged(
         &self,
         query: &str,
-        values: impl ValueList,
+        values: impl SerializeRow,
         paging_state: Option<Bytes>,
     ) -> Result<QueryResult, QueryError> {
         self.cached_session
