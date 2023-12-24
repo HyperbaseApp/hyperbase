@@ -60,7 +60,7 @@ pub enum SchemaFieldKind {
     Citext,
     Bytea,
     Void,
-    Timestampz,
+    Timestamptz,
     Timestamp,
     Date,
     Time,
@@ -103,7 +103,7 @@ impl SchemaFieldKind {
             Self::Int8 => "int8",
             Self::Real => "real",
             Self::Float4 => "float4",
-            Self::DoublePrecision => "double_precision",
+            Self::DoublePrecision => "double precision",
             Self::Float8 => "float8",
             Self::Numeric => "numeric",
             Self::Varchar => "varchar",
@@ -112,7 +112,7 @@ impl SchemaFieldKind {
             Self::Citext => "citext",
             Self::Bytea => "bytea",
             Self::Void => "void",
-            Self::Timestampz => "timestampz",
+            Self::Timestamptz => "timestamptz",
             Self::Timestamp => "timestamp",
             Self::Date => "date",
             Self::Time => "time",
@@ -140,7 +140,7 @@ impl SchemaFieldKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, &str> {
+    pub fn from_str(str: &str) -> Result<Self, String> {
         match str {
             "bool" => Ok(Self::Bool),
             "char" => Ok(Self::Char),
@@ -155,7 +155,7 @@ impl SchemaFieldKind {
             "int8" => Ok(Self::Int8),
             "real" => Ok(Self::Real),
             "float4" => Ok(Self::Float4),
-            "double_precision" => Ok(Self::DoublePrecision),
+            "double precision" => Ok(Self::DoublePrecision),
             "float8" => Ok(Self::Float8),
             "numeric" => Ok(Self::Numeric),
             "varchar" => Ok(Self::Varchar),
@@ -164,7 +164,7 @@ impl SchemaFieldKind {
             "citext" => Ok(Self::Citext),
             "bytea" => Ok(Self::Bytea),
             "void" => Ok(Self::Void),
-            "timestampz" => Ok(Self::Timestampz),
+            "timestamptz" => Ok(Self::Timestamptz),
             "timestamp" => Ok(Self::Timestamp),
             "date" => Ok(Self::Date),
             "time" => Ok(Self::Time),
@@ -189,7 +189,7 @@ impl SchemaFieldKind {
             "ltree" => Ok(Self::Ltree),
             "lquery" => Ok(Self::Lquery),
             "citext_" => Ok(Self::Citext_),
-            _ => Err("Unknown schema field kind"),
+            _ => Err(format!("Unknown schema field kind '{str}'")),
         }
     }
 }

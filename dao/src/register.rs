@@ -146,7 +146,11 @@ impl RegistrationDao {
 
     async fn postgresdb_select(db: &PostgresDb, id: &Uuid) -> Result<RegistrationPostgresModel> {
         Ok(db
-            .fetch_one(sqlx::query_as(POSTGRES_SELECT).bind(id))
+            .fetch_one(
+                sqlx::query_as(POSTGRES_SELECT)
+                    .bind(id)
+                    .bind(db.table_registration_ttl()),
+            )
             .await?)
     }
 
@@ -171,7 +175,13 @@ impl RegistrationDao {
     }
 
     async fn mysqldb_select(db: &MysqlDb, id: &Uuid) -> Result<RegistrationMysqlModel> {
-        Ok(db.fetch_one(sqlx::query_as(MYSQL_SELECT).bind(id)).await?)
+        Ok(db
+            .fetch_one(
+                sqlx::query_as(MYSQL_SELECT)
+                    .bind(id)
+                    .bind(db.table_registration_ttl()),
+            )
+            .await?)
     }
 
     async fn mysqldb_delete(&self, db: &MysqlDb) -> Result<()> {
@@ -194,7 +204,13 @@ impl RegistrationDao {
     }
 
     async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<RegistrationSqliteModel> {
-        Ok(db.fetch_one(sqlx::query_as(SQLITE_SELECT).bind(id)).await?)
+        Ok(db
+            .fetch_one(
+                sqlx::query_as(SQLITE_SELECT)
+                    .bind(id)
+                    .bind(db.table_registration_ttl()),
+            )
+            .await?)
     }
 
     async fn sqlitedb_delete(&self, db: &SqliteDb) -> Result<()> {

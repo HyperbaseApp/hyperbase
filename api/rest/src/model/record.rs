@@ -164,7 +164,11 @@ impl FindManyRecordFiltersReqJson {
                 ) {
                     Ok(value) => Some(value),
                     Err(err) => {
-                        return Err(err);
+                        return Err(Error::msg(format!(
+                            "Error in field '{}': {}",
+                            f.field.as_ref().unwrap(),
+                            err
+                        )));
                     }
                 }
             } else {

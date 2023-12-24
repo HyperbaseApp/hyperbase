@@ -70,7 +70,7 @@ impl SchemaFieldKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, &str> {
+    pub fn from_str(str: &str) -> Result<Self, String> {
         match str {
             "char" => Ok(Self::Char),
             "varchar" => Ok(Self::Varchar),
@@ -89,7 +89,7 @@ impl SchemaFieldKind {
             "binary16" => Ok(Self::Binary16),
             "json" => Ok(Self::Json),
             "decimal" => Ok(Self::Decimal),
-            _ => Err("Unknown schema field kind"),
+            _ => Err(format!("Unknown schema field kind '{str}'")),
         }
     }
 }

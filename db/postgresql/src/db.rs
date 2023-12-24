@@ -1,6 +1,4 @@
-use futures::{stream::BoxStream, StreamExt};
 use sqlx::{
-    database::HasArguments,
     postgres::{PgArguments, PgPoolOptions, PgQueryResult, PgRow},
     query::{Query, QueryAs},
     Error, Pool, Postgres,
@@ -57,13 +55,6 @@ impl PostgresDb {
         query.execute(&self.pool).await
     }
 
-    pub fn fetch<'e>(
-        &self,
-        query: Query<'e, Postgres, <Postgres as HasArguments<'_>>::Arguments>,
-    ) -> BoxStream<'e, Result<<Postgres as sqlx::Database>::Row, Error>> {
-        query.fetch(&self.pool)
-    }
-
     pub async fn fetch_one_unprepared<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow>>(
         &self,
         query: QueryAs<'_, Postgres, T, PgArguments>,
@@ -78,23 +69,24 @@ impl PostgresDb {
         Ok(query.fetch_one(&self.pool).await?)
     }
 
-    pub async fn fetch_many<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow> + 'static>(
+    pub async fn fetch_one_row(
         &self,
-        query: QueryAs<'_, Postgres, T, PgArguments>,
-        limit: usize,
-    ) -> Result<Vec<sqlx::Either<PgQueryResult, T>>, Error> {
-        let mut stream = query.fetch_many(&self.pool);
-        let mut data = Vec::with_capacity(limit);
-        while let Some(s) = stream.next().await {
-            data.push(s?);
-        }
-        Ok(data)
+        query: Query<'_, Postgres, PgArguments>,
+    ) -> Result<PgRow, Error> {
+        Ok(query.fetch_one(&self.pool).await?)
     }
 
     pub async fn fetch_all<T: Send + Unpin + for<'r> sqlx::FromRow<'r, PgRow>>(
         &self,
         query: QueryAs<'_, Postgres, T, PgArguments>,
     ) -> Result<Vec<T>, Error> {
+        query.fetch_all(&self.pool).await
+    }
+
+    pub async fn fetch_all_rows(
+        &self,
+        query: Query<'_, Postgres, PgArguments>,
+    ) -> Result<Vec<PgRow>, Error> {
         query.fetch_all(&self.pool).await
     }
 

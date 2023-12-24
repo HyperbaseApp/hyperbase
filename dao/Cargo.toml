@@ -14,9 +14,15 @@ hb_db_sqlite = { workspace = true }
 ahash = { workspace = true }
 anyhow = { workspace = true }
 bigdecimal = { workspace = true, features = ["serde"] }
+bigdecimal_02 = { package = "bigdecimal", version = "0.2", features = [
+    "serde",
+] }
 chrono = { workspace = true }
 futures = { workspace = true }
 num-bigint = { workspace = true, features = ["serde"] }
+num-bigint_03 = { package = "num-bigint", version = "0.3", features = [
+    "serde",
+] }
 rand = { workspace = true }
 scylla = { workspace = true }
 sqlx = { workspace = true, features = ["bigdecimal"] }

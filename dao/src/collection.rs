@@ -381,6 +381,10 @@ impl CollectionDao {
     }
 
     async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
+        let mut indexes = Vec::with_capacity(self.indexes.len());
+        for index in &self.indexes {
+            indexes.push(index.as_str());
+        }
         db.execute(
             sqlx::query(POSTGRES_INSERT)
                 .bind(&self.id)
@@ -388,8 +392,8 @@ impl CollectionDao {
                 .bind(&self.updated_at)
                 .bind(&self.project_id)
                 .bind(&self.name)
-                .bind(&serde_json::to_string(&self.schema_fields)?)
-                .bind(&serde_json::to_string(&self.indexes)?),
+                .bind(&sqlx::types::Json(&self.schema_fields))
+                .bind(&indexes),
         )
         .await?;
         Ok(())
@@ -436,8 +440,8 @@ impl CollectionDao {
                 .bind(&self.updated_at)
                 .bind(&self.project_id)
                 .bind(&self.name)
-                .bind(&serde_json::to_string(&self.schema_fields)?)
-                .bind(&serde_json::to_string(&self.indexes)?),
+                .bind(&sqlx::types::Json(&self.schema_fields))
+                .bind(&sqlx::types::Json(&self.indexes)),
         )
         .await?;
         Ok(())
@@ -482,8 +486,8 @@ impl CollectionDao {
                 .bind(&self.updated_at)
                 .bind(&self.project_id)
                 .bind(&self.name)
-                .bind(&serde_json::to_string(&self.schema_fields)?)
-                .bind(&serde_json::to_string(&self.indexes)?),
+                .bind(&sqlx::types::Json(&self.schema_fields))
+                .bind(&sqlx::types::Json(&self.indexes)),
         )
         .await?;
         Ok(())
@@ -790,7 +794,7 @@ impl SchemaFieldKind {
             "datetime" => Ok(Self::DateTime),
             "timestamp" => Ok(Self::Timestamp),
             "json" => Ok(Self::Json),
-            _ => Err(Error::msg("Unknown schema field kind")),
+            _ => Err(Error::msg(format!("Unknown schema field kind '{str}'"))),
         }
     }
 
@@ -830,8 +834,8 @@ impl SchemaFieldKind {
             Self::Uuid => SchemaFieldPostgresKind::Uuid,
             Self::Date => SchemaFieldPostgresKind::Date,
             Self::Time => SchemaFieldPostgresKind::Time,
-            Self::DateTime => SchemaFieldPostgresKind::Timestampz,
-            Self::Timestamp => SchemaFieldPostgresKind::Timestampz,
+            Self::DateTime => SchemaFieldPostgresKind::Timestamptz,
+            Self::Timestamp => SchemaFieldPostgresKind::Timestamptz,
             Self::Json => SchemaFieldPostgresKind::Jsonb,
         }
     }
@@ -860,23 +864,19 @@ impl SchemaFieldKind {
 
     fn to_sqlitedb_model(&self) -> SchemaFieldSqliteKind {
         match self {
-            Self::Boolean => SchemaFieldSqliteKind::Integer,
-            Self::TinyInt => SchemaFieldSqliteKind::Integer,
-            Self::SmallInt => SchemaFieldSqliteKind::Integer,
-            Self::Int => SchemaFieldSqliteKind::Integer,
-            Self::BigInt => SchemaFieldSqliteKind::Integer,
-            Self::Varint => SchemaFieldSqliteKind::Text,
-            Self::Float => SchemaFieldSqliteKind::Real,
-            Self::Double => SchemaFieldSqliteKind::Real,
-            Self::Decimal => SchemaFieldSqliteKind::Text,
-            Self::String => SchemaFieldSqliteKind::Text,
-            Self::Binary => SchemaFieldSqliteKind::Blob,
-            Self::Uuid => SchemaFieldSqliteKind::Text,
-            Self::Date => SchemaFieldSqliteKind::Text,
-            Self::Time => SchemaFieldSqliteKind::Text,
-            Self::DateTime => SchemaFieldSqliteKind::Text,
-            Self::Timestamp => SchemaFieldSqliteKind::Text,
-            Self::Json => SchemaFieldSqliteKind::Text,
+            Self::Boolean | Self::TinyInt | Self::SmallInt | Self::Int | Self::BigInt => {
+                SchemaFieldSqliteKind::Integer
+            }
+            Self::Float | Self::Double => SchemaFieldSqliteKind::Real,
+            Self::Binary | Self::Json => SchemaFieldSqliteKind::Blob,
+            Self::String
+            | Self::Varint
+            | Self::Decimal
+            | Self::Uuid
+            | Self::Date
+            | Self::Time
+            | Self::DateTime
+            | Self::Timestamp => SchemaFieldSqliteKind::Text,
         }
     }
 }

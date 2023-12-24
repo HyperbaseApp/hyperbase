@@ -1,8 +1,8 @@
 use sqlx::{Executor, MySql, Pool};
 
 pub const INSERT: &str = "INSERT INTO `admin_password_resets` (`id`, `created_at`, `updated_at`, `admin_id`, `code`) VALUES (?, ?, ?, ?, ?)";
-pub const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `code` FROM `admin_password_resets` WHERE `id` = ? AND `updated_at` = ?";
-pub const UPDATE: &str = "UPDATE `admin_password_resets` SET `updated_at` = ?, `code` = ? WHERE `id` = ? AND `updated_at` = ?";
+pub const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `code` FROM `admin_password_resets` WHERE `id` = ? AND `updated_at` >= ?";
+pub const UPDATE: &str = "UPDATE `admin_password_resets` SET `updated_at` = ?, `code` = ? WHERE `id` = ? AND `updated_at` >= ?";
 pub const DELETE: &str = "DELETE FROM `admin_password_resets` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {

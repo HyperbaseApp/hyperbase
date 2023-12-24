@@ -4,15 +4,26 @@ use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, Timelike, Utc};
-use futures::TryStreamExt;
 use hb_db_mysql::{
     db::MysqlDb,
-    model::collection::SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
+    model::{
+        collection::SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
+        system::{
+            COMPARISON_OPERATOR as MYSQL_COMPARISON_OPERATOR,
+            LOGICAL_OPERATOR as MYSQL_LOGICAL_OPERATOR, ORDER_TYPE as MYSQL_ORDER_TYPE,
+        },
+    },
     query::{record as mysql_record, system::COUNT_TABLE as MYSQL_COUNT_TABLE},
 };
 use hb_db_postgresql::{
     db::PostgresDb,
-    model::collection::SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
+    model::{
+        collection::SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
+        system::{
+            COMPARISON_OPERATOR as POSTGRES_COMPARISON_OPERATOR,
+            LOGICAL_OPERATOR as POSTGRES_LOGICAL_OPERATOR, ORDER_TYPE as POSTGRES_ORDER_TYPE,
+        },
+    },
     query::{record as postgres_record, system::COUNT_TABLE as POSTGRES_COUNT_TABLE},
 };
 use hb_db_scylladb::{
@@ -28,7 +39,13 @@ use hb_db_scylladb::{
 };
 use hb_db_sqlite::{
     db::SqliteDb,
-    model::collection::SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
+    model::{
+        collection::SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
+        system::{
+            COMPARISON_OPERATOR as SQLITE_COMPARISON_OPERATOR,
+            LOGICAL_OPERATOR as SQLITE_LOGICAL_OPERATOR, ORDER_TYPE as SQLITE_ORDER_TYPE,
+        },
+    },
     query::{record as sqlite_record, system::COUNT_TABLE as SQLITE_COUNT_TABLE},
 };
 use num_bigint::BigInt;
@@ -371,11 +388,11 @@ impl RecordDao {
                 let mut columns_props =
                     Vec::with_capacity(collection_data.schema_fields().len() + 1);
 
-                columns.push("_id".to_owned());
+                columns.push("_id");
                 columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
 
                 for (column, props) in collection_data.schema_fields() {
-                    columns.push(column.to_owned());
+                    columns.push(column);
                     columns_props.push(*props)
                 }
 
@@ -405,49 +422,102 @@ impl RecordDao {
             Db::PostgresqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut schema_field =
-                    HashMap::with_capacity(collection_data.schema_fields().len());
-                for (field, field_props) in collection_data.schema_fields() {
-                    schema_field.insert(field.to_owned(), *field_props.kind());
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id");
+                for column in collection_data.schema_fields().keys() {
+                    columns.push(column);
                 }
 
                 let postgresdb_data =
-                    Self::postgresdb_select(db, &table_name, &schema_field, id).await?;
-                Ok(Self {
-                    table_name,
-                    data: postgresdb_data,
-                })
+                    Self::postgresdb_select(db, &table_name, &columns, id).await?;
+
+                let mut data = HashMap::with_capacity(columns.len());
+                data.insert(
+                    "_id".to_owned(),
+                    RecordColumnValue::from_postgresdb_model(
+                        &SchemaFieldKind::Uuid,
+                        "_id",
+                        &postgresdb_data,
+                    )?,
+                );
+                for (field, field_props) in collection_data.schema_fields() {
+                    data.insert(
+                        field.to_owned(),
+                        RecordColumnValue::from_postgresdb_model(
+                            field_props.kind(),
+                            field,
+                            &postgresdb_data,
+                        )?,
+                    );
+                }
+
+                Ok(Self { table_name, data })
             }
             Db::MysqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut schema_field =
-                    HashMap::with_capacity(collection_data.schema_fields().len());
-                for (field, field_props) in collection_data.schema_fields() {
-                    schema_field.insert(field.to_owned(), *field_props.kind());
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id");
+                for column in collection_data.schema_fields().keys() {
+                    columns.push(column);
                 }
 
-                let mysqldb_data = Self::mysqldb_select(db, &table_name, &schema_field, id).await?;
-                Ok(Self {
-                    table_name,
-                    data: mysqldb_data,
-                })
+                let mysqldb_data = Self::mysqldb_select(db, &table_name, &columns, id).await?;
+
+                let mut data = HashMap::with_capacity(columns.len());
+                data.insert(
+                    "_id".to_owned(),
+                    RecordColumnValue::from_mysqldb_model(
+                        &SchemaFieldKind::Uuid,
+                        "_id",
+                        &mysqldb_data,
+                    )?,
+                );
+                for (field, field_props) in collection_data.schema_fields() {
+                    data.insert(
+                        field.to_owned(),
+                        RecordColumnValue::from_mysqldb_model(
+                            field_props.kind(),
+                            field,
+                            &mysqldb_data,
+                        )?,
+                    );
+                }
+
+                Ok(Self { table_name, data })
             }
             Db::SqliteDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut schema_field =
-                    HashMap::with_capacity(collection_data.schema_fields().len());
-                for (field, field_props) in collection_data.schema_fields() {
-                    schema_field.insert(field.to_owned(), *field_props.kind());
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id");
+                for column in collection_data.schema_fields().keys() {
+                    columns.push(column);
                 }
 
-                let sqlitedb_data =
-                    Self::sqlitedb_select(db, &table_name, &schema_field, id).await?;
-                Ok(Self {
-                    table_name,
-                    data: sqlitedb_data,
-                })
+                let sqlitedb_data = Self::sqlitedb_select(db, &table_name, &columns, id).await?;
+
+                let mut data = HashMap::with_capacity(columns.len());
+                data.insert(
+                    "_id".to_owned(),
+                    RecordColumnValue::from_sqlitedb_model(
+                        &SchemaFieldKind::Uuid,
+                        "_id",
+                        &sqlitedb_data,
+                    )?,
+                );
+                for (field, field_props) in collection_data.schema_fields() {
+                    data.insert(
+                        field.to_owned(),
+                        RecordColumnValue::from_sqlitedb_model(
+                            field_props.kind(),
+                            field,
+                            &sqlitedb_data,
+                        )?,
+                    );
+                }
+
+                Ok(Self { table_name, data })
             }
         }
     }
@@ -456,7 +526,7 @@ impl RecordDao {
         db: &Db,
         collection_data: &CollectionDao,
         filters: &RecordFilters,
-        groups: &Vec<String>,
+        groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Self>, i64)> {
@@ -505,23 +575,164 @@ impl RecordDao {
                             ),
                         };
                     }
-                    data_many.push(data);
+                    data_many.push(Self {
+                        table_name: table_name.to_owned(),
+                        data,
+                    });
                 }
 
-                Ok((
-                    data_many
-                        .iter()
-                        .map(|data| Self {
-                            table_name: table_name.to_owned(),
-                            data: data.clone(),
-                        })
-                        .collect(),
-                    total,
-                ))
+                Ok((data_many, total))
             }
-            Db::PostgresqlDb(_) => todo!(),
-            Db::MysqlDb(_) => todo!(),
-            Db::SqliteDb(_) => todo!(),
+            Db::PostgresqlDb(db) => {
+                let table_name = Self::new_table_name(collection_data.id());
+
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id");
+                for column in collection_data.schema_fields().keys() {
+                    columns.push(column);
+                }
+
+                let (postgres_data_many, total) = Self::postgresdb_select_many(
+                    db,
+                    &table_name,
+                    &columns,
+                    filters,
+                    groups,
+                    orders,
+                    pagination,
+                )
+                .await?;
+
+                let mut data_many = Vec::with_capacity(postgres_data_many.len());
+                for postgres_data in &postgres_data_many {
+                    let mut data: std::collections::HashMap<_, _, ahash::RandomState> =
+                        HashMap::with_capacity(columns.len());
+                    data.insert(
+                        "_id".to_owned(),
+                        RecordColumnValue::from_postgresdb_model(
+                            &SchemaFieldKind::Uuid,
+                            "_id",
+                            postgres_data,
+                        )?,
+                    );
+                    for (field, field_props) in collection_data.schema_fields() {
+                        data.insert(
+                            field.to_owned(),
+                            RecordColumnValue::from_postgresdb_model(
+                                field_props.kind(),
+                                field,
+                                postgres_data,
+                            )?,
+                        );
+                    }
+                    data_many.push(Self {
+                        table_name: table_name.to_owned(),
+                        data,
+                    })
+                }
+
+                Ok((data_many, total))
+            }
+            Db::MysqlDb(db) => {
+                let table_name = Self::new_table_name(collection_data.id());
+
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id");
+                for column in collection_data.schema_fields().keys() {
+                    columns.push(column);
+                }
+
+                let (mysql_data_many, total) = Self::mysqldb_select_many(
+                    db,
+                    &table_name,
+                    &columns,
+                    filters,
+                    groups,
+                    orders,
+                    pagination,
+                )
+                .await?;
+
+                let mut data_many = Vec::with_capacity(mysql_data_many.len());
+                for mysql_data in &mysql_data_many {
+                    let mut data: std::collections::HashMap<_, _, ahash::RandomState> =
+                        HashMap::with_capacity(columns.len());
+                    data.insert(
+                        "_id".to_owned(),
+                        RecordColumnValue::from_mysqldb_model(
+                            &SchemaFieldKind::Uuid,
+                            "_id",
+                            mysql_data,
+                        )?,
+                    );
+                    for (field, field_props) in collection_data.schema_fields() {
+                        data.insert(
+                            field.to_owned(),
+                            RecordColumnValue::from_mysqldb_model(
+                                field_props.kind(),
+                                field,
+                                mysql_data,
+                            )?,
+                        );
+                    }
+                    data_many.push(Self {
+                        table_name: table_name.to_owned(),
+                        data,
+                    })
+                }
+
+                Ok((data_many, total))
+            }
+            Db::SqliteDb(db) => {
+                let table_name = Self::new_table_name(collection_data.id());
+
+                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                columns.push("_id");
+                for column in collection_data.schema_fields().keys() {
+                    columns.push(column);
+                }
+
+                let (sqlite_data_many, total) = Self::sqlitedb_select_many(
+                    db,
+                    &table_name,
+                    &columns,
+                    filters,
+                    groups,
+                    orders,
+                    pagination,
+                )
+                .await?;
+
+                let mut data_many = Vec::with_capacity(sqlite_data_many.len());
+                for sqlite_data in &sqlite_data_many {
+                    let mut data: std::collections::HashMap<_, _, ahash::RandomState> =
+                        HashMap::with_capacity(columns.len());
+                    data.insert(
+                        "_id".to_owned(),
+                        RecordColumnValue::from_sqlitedb_model(
+                            &SchemaFieldKind::Uuid,
+                            "_id",
+                            sqlite_data,
+                        )?,
+                    );
+                    for (field, field_props) in collection_data.schema_fields() {
+                        data.insert(
+                            field.to_owned(),
+                            RecordColumnValue::from_sqlitedb_model(
+                                field_props.kind(),
+                                field,
+                                sqlite_data,
+                            )?,
+                        );
+                    }
+                    data_many.push(Self {
+                        table_name: table_name.to_owned(),
+                        data,
+                    })
+                }
+
+                Ok((data_many, total))
+            }
         }
     }
 
@@ -638,7 +849,7 @@ impl RecordDao {
         let mut columns: Vec<_> = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            columns.push(col.to_owned());
+            columns.push(col.as_str());
             values.push(val.to_scylladb_model()?);
         }
         db.execute(&scylla_record::insert(&self.table_name, &columns), &values)
@@ -649,7 +860,7 @@ impl RecordDao {
     async fn scylladb_select(
         db: &ScyllaDb,
         table_name: &str,
-        columns: &Vec<String>,
+        columns: &Vec<&str>,
         id: &Uuid,
     ) -> Result<Vec<Option<ScyllaCqlValue>>> {
         Ok(db
@@ -664,11 +875,12 @@ impl RecordDao {
         table_name: &str,
         columns: &Vec<&str>,
         filters: &RecordFilters,
-        groups: &Vec<String>,
+        groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Vec<Option<ScyllaCqlValue>>>, i64)> {
         let filter = filters.scylladb_filter_query(&None, 0)?;
+
         let mut order = HashMap::with_capacity(orders.len());
         for o in orders {
             if SCYLLA_ORDER_TYPE.contains(&o.kind.as_str()) {
@@ -680,11 +892,13 @@ impl RecordDao {
                 )));
             }
         }
+
         let mut values = filters.scylladb_values()?;
-        let total_values = filters.scylladb_values()?;
         if let Some(limit) = pagination.limit() {
             values.push(Box::new(limit))
         }
+        let total_values = filters.scylladb_values()?;
+
         let query_select_many = scylla_record::select_many(
             table_name,
             columns,
@@ -694,10 +908,12 @@ impl RecordDao {
             &pagination.limit().is_some(),
         );
         let query_total = scylla_record::count(table_name, &filter);
+
         let (data, total) = tokio::try_join!(
             db.execute(&query_select_many, &values),
             db.execute(&query_total, &total_values)
         )?;
+
         Ok((
             data.rows()?
                 .iter()
@@ -712,7 +928,7 @@ impl RecordDao {
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
             if col != "_id" {
-                columns.push(col.to_owned());
+                columns.push(col.as_str());
                 values.push(val.to_scylladb_model()?);
             }
         }
@@ -840,11 +1056,11 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            columns.push(col.to_owned());
+            columns.push(col.as_str());
             values.push(val);
         }
-        let sql = postgres_record::insert(&self.table_name, &columns);
-        let mut query = sqlx::query(&sql);
+        let query = postgres_record::insert(&self.table_name, &columns);
+        let mut query = sqlx::query(&query);
         for val in values {
             query = val.to_postgresdb_model(query)?;
         }
@@ -855,37 +1071,63 @@ impl RecordDao {
     async fn postgresdb_select(
         db: &PostgresDb,
         table_name: &str,
-        schema_fields: &HashMap<String, SchemaFieldKind>,
+        columns: &Vec<&str>,
         id: &Uuid,
-    ) -> Result<HashMap<String, RecordColumnValue>> {
-        let mut columns = Vec::with_capacity(schema_fields.len() + 1);
+    ) -> Result<sqlx::postgres::PgRow> {
+        Ok(db
+            .fetch_one_row(sqlx::query(&postgres_record::select(table_name, columns)).bind(id))
+            .await?)
+    }
 
-        columns.push("_id".to_owned());
+    async fn postgresdb_select_many(
+        db: &PostgresDb,
+        table_name: &str,
+        columns: &Vec<&str>,
+        filters: &RecordFilters,
+        groups: &Vec<&str>,
+        orders: &Vec<RecordOrder>,
+        pagination: &RecordPagination,
+    ) -> Result<(Vec<sqlx::postgres::PgRow>, i64)> {
+        let mut argument_idx = 1;
+        let filter = filters.postgresdb_filter_query(&None, 0, &mut argument_idx)?;
 
-        for column in schema_fields.keys() {
-            columns.push(column.to_owned());
-        }
-
-        let sql = postgres_record::select(table_name, &columns);
-        let mut rows = db.fetch(sqlx::query(&sql).bind(id));
-
-        let mut values = HashMap::with_capacity(schema_fields.len() + 1);
-        if let Some(row) = rows.try_next().await? {
-            values.insert(
-                "_id".to_owned(),
-                RecordColumnValue::from_postgresdb_model(&SchemaFieldKind::Uuid, "_id", &row)?,
-            );
-        }
-        for (field, field_props) in schema_fields {
-            while let Some(row) = rows.try_next().await? {
-                values.insert(
-                    field.to_owned(),
-                    RecordColumnValue::from_postgresdb_model(field_props, field, &row)?,
-                );
+        let mut order = HashMap::with_capacity(orders.len());
+        for o in orders {
+            if POSTGRES_ORDER_TYPE.contains(&o.kind.as_str()) {
+                order.insert(o.field.as_str(), o.kind.as_str());
+            } else {
+                return Err(Error::msg(format!(
+                    "Order type '{}' is not supported",
+                    &o.kind
+                )));
             }
         }
 
-        Ok(values)
+        let query_select_many = postgres_record::select_many(
+            table_name,
+            &columns,
+            &filter,
+            groups,
+            &order,
+            &pagination.limit().is_some(),
+            &argument_idx,
+        );
+        let mut query_select_many = sqlx::query(&query_select_many);
+        let query_total = postgres_record::count(table_name, &filter);
+        let mut query_total = sqlx::query_as(&query_total);
+
+        query_select_many = filters.postgresdb_values(query_select_many)?;
+        if let Some(limit) = pagination.limit() {
+            query_select_many = query_select_many.bind(limit);
+        }
+        query_total = filters.postgresdb_values_as(query_total)?;
+
+        let (rows, total) = tokio::try_join!(
+            db.fetch_all_rows(query_select_many),
+            db.fetch_one::<(i64,)>(query_total)
+        )?;
+
+        Ok((rows, total.0))
     }
 
     async fn postgresdb_update(&self, db: &PostgresDb) -> Result<()> {
@@ -893,7 +1135,7 @@ impl RecordDao {
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
             if col != "_id" {
-                columns.push(col.to_owned());
+                columns.push(col.as_str());
                 values.push(val);
             }
         }
@@ -901,8 +1143,8 @@ impl RecordDao {
             Some(id) => values.push(id),
             None => return Err(Error::msg("Id is undefined")),
         }
-        let sql = postgres_record::update(&self.table_name, &columns);
-        let mut query = sqlx::query(&sql);
+        let query = postgres_record::update(&self.table_name, &columns);
+        let mut query = sqlx::query(&query);
         for val in values {
             query = val.to_postgresdb_model(query)?;
         }
@@ -1042,11 +1284,11 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            columns.push(col.to_owned());
+            columns.push(col.as_str());
             values.push(val);
         }
-        let sql = mysql_record::insert(&self.table_name, &columns);
-        let mut query = sqlx::query(&sql);
+        let query = mysql_record::insert(&self.table_name, &columns);
+        let mut query = sqlx::query(&query);
         for val in values {
             query = val.to_mysqldb_model(query)?;
         }
@@ -1057,37 +1299,61 @@ impl RecordDao {
     async fn mysqldb_select(
         db: &MysqlDb,
         table_name: &str,
-        schema_fields: &HashMap<String, SchemaFieldKind>,
+        columns: &Vec<&str>,
         id: &Uuid,
-    ) -> Result<HashMap<String, RecordColumnValue>> {
-        let mut columns = Vec::with_capacity(schema_fields.len() + 1);
+    ) -> Result<sqlx::mysql::MySqlRow> {
+        Ok(db
+            .fetch_one_row(sqlx::query(&mysql_record::select(table_name, columns)).bind(id))
+            .await?)
+    }
 
-        columns.push("_id".to_owned());
+    async fn mysqldb_select_many(
+        db: &MysqlDb,
+        table_name: &str,
+        columns: &Vec<&str>,
+        filters: &RecordFilters,
+        groups: &Vec<&str>,
+        orders: &Vec<RecordOrder>,
+        pagination: &RecordPagination,
+    ) -> Result<(Vec<sqlx::mysql::MySqlRow>, i64)> {
+        let filter = filters.mysqldb_filter_query(&None, 0)?;
 
-        for column in schema_fields.keys() {
-            columns.push(column.to_owned());
-        }
-
-        let sql = mysql_record::select(table_name, &columns);
-        let mut rows = db.fetch(sqlx::query(&sql).bind(id));
-
-        let mut values = HashMap::with_capacity(schema_fields.len() + 1);
-        if let Some(row) = rows.try_next().await? {
-            values.insert(
-                "_id".to_owned(),
-                RecordColumnValue::from_mysqldb_model(&SchemaFieldKind::Uuid, "_id", &row)?,
-            );
-        }
-        for (field, field_props) in schema_fields {
-            while let Some(row) = rows.try_next().await? {
-                values.insert(
-                    field.to_owned(),
-                    RecordColumnValue::from_mysqldb_model(field_props, field, &row)?,
-                );
+        let mut order = HashMap::with_capacity(orders.len());
+        for o in orders {
+            if MYSQL_ORDER_TYPE.contains(&o.kind.as_str()) {
+                order.insert(o.field.as_str(), o.kind.as_str());
+            } else {
+                return Err(Error::msg(format!(
+                    "Order type '{}' is not supported",
+                    &o.kind
+                )));
             }
         }
 
-        Ok(values)
+        let query_select_many = mysql_record::select_many(
+            table_name,
+            &columns,
+            &filter,
+            groups,
+            &order,
+            &pagination.limit().is_some(),
+        );
+        let mut query_select_many = sqlx::query(&query_select_many);
+        let query_total = mysql_record::count(table_name, &filter);
+        let mut query_total = sqlx::query_as(&query_total);
+
+        query_select_many = filters.mysqldb_values(query_select_many)?;
+        if let Some(limit) = pagination.limit() {
+            query_select_many = query_select_many.bind(limit);
+        }
+        query_total = filters.mysqldb_values_as(query_total)?;
+
+        let (rows, total) = tokio::try_join!(
+            db.fetch_all_rows(query_select_many),
+            db.fetch_one::<(i64,)>(query_total)
+        )?;
+
+        Ok((rows, total.0))
     }
 
     async fn mysqldb_update(&self, db: &MysqlDb) -> Result<()> {
@@ -1095,7 +1361,7 @@ impl RecordDao {
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
             if col != "_id" {
-                columns.push(col.to_owned());
+                columns.push(col.as_str());
                 values.push(val);
             }
         }
@@ -1103,8 +1369,8 @@ impl RecordDao {
             Some(id) => values.push(id),
             None => return Err(Error::msg("Id is undefined")),
         }
-        let sql = mysql_record::update(&self.table_name, &columns);
-        let mut query = sqlx::query(&sql);
+        let query = mysql_record::update(&self.table_name, &columns);
+        let mut query = sqlx::query(&query);
         for val in values {
             query = val.to_mysqldb_model(query)?;
         }
@@ -1218,11 +1484,11 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            columns.push(col.to_owned());
+            columns.push(col.as_str());
             values.push(val);
         }
-        let sql = sqlite_record::insert(&self.table_name, &columns);
-        let mut query = sqlx::query(&sql);
+        let query = sqlite_record::insert(&self.table_name, &columns);
+        let mut query = sqlx::query(&query);
         for val in values {
             query = val.to_sqlitedb_model(query)?;
         }
@@ -1233,37 +1499,61 @@ impl RecordDao {
     async fn sqlitedb_select(
         db: &SqliteDb,
         table_name: &str,
-        schema_fields: &HashMap<String, SchemaFieldKind>,
+        columns: &Vec<&str>,
         id: &Uuid,
-    ) -> Result<HashMap<String, RecordColumnValue>> {
-        let mut columns = Vec::with_capacity(schema_fields.len() + 1);
+    ) -> Result<sqlx::sqlite::SqliteRow> {
+        Ok(db
+            .fetch_one_row(sqlx::query(&sqlite_record::select(table_name, columns)).bind(id))
+            .await?)
+    }
 
-        columns.push("_id".to_owned());
+    async fn sqlitedb_select_many(
+        db: &SqliteDb,
+        table_name: &str,
+        columns: &Vec<&str>,
+        filters: &RecordFilters,
+        groups: &Vec<&str>,
+        orders: &Vec<RecordOrder>,
+        pagination: &RecordPagination,
+    ) -> Result<(Vec<sqlx::sqlite::SqliteRow>, i64)> {
+        let filter = filters.sqlitedb_filter_query(&None, 0)?;
 
-        for column in schema_fields.keys() {
-            columns.push(column.to_owned());
-        }
-
-        let sql = sqlite_record::select(table_name, &columns);
-        let mut rows = db.fetch(sqlx::query(&sql).bind(id));
-
-        let mut values = HashMap::with_capacity(schema_fields.len() + 1);
-        if let Some(row) = rows.try_next().await? {
-            values.insert(
-                "_id".to_owned(),
-                RecordColumnValue::from_sqlitedb_model(&SchemaFieldKind::Uuid, "_id", &row)?,
-            );
-        }
-        for (field, field_props) in schema_fields {
-            while let Some(row) = rows.try_next().await? {
-                values.insert(
-                    field.to_owned(),
-                    RecordColumnValue::from_sqlitedb_model(field_props, field, &row)?,
-                );
+        let mut order = HashMap::with_capacity(orders.len());
+        for o in orders {
+            if SQLITE_ORDER_TYPE.contains(&o.kind.as_str()) {
+                order.insert(o.field.as_str(), o.kind.as_str());
+            } else {
+                return Err(Error::msg(format!(
+                    "Order type '{}' is not supported",
+                    &o.kind
+                )));
             }
         }
 
-        Ok(values)
+        let query_select_many = sqlite_record::select_many(
+            table_name,
+            &columns,
+            &filter,
+            groups,
+            &order,
+            &pagination.limit().is_some(),
+        );
+        let mut query_select_many = sqlx::query(&query_select_many);
+        let query_total = sqlite_record::count(table_name, &filter);
+        let mut query_total = sqlx::query_as(&query_total);
+
+        query_select_many = filters.sqlitedb_values(query_select_many)?;
+        if let Some(limit) = pagination.limit() {
+            query_select_many = query_select_many.bind(limit);
+        }
+        query_total = filters.sqlitedb_values_as(query_total)?;
+
+        let (rows, total) = tokio::try_join!(
+            db.fetch_all_rows(query_select_many),
+            db.fetch_one::<(i64,)>(query_total)
+        )?;
+
+        Ok((rows, total.0))
     }
 
     async fn sqlitedb_update(&self, db: &SqliteDb) -> Result<()> {
@@ -1271,7 +1561,7 @@ impl RecordDao {
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
             if col != "_id" {
-                columns.push(col.to_owned());
+                columns.push(col.as_str());
                 values.push(val);
             }
         }
@@ -1279,8 +1569,8 @@ impl RecordDao {
             Some(id) => values.push(id),
             None => return Err(Error::msg("Id is undefined")),
         }
-        let sql = sqlite_record::update(&self.table_name, &columns);
-        let mut query = sqlx::query(&sql);
+        let query = sqlite_record::update(&self.table_name, &columns);
+        let mut query = sqlx::query(&query);
         for val in values {
             query = val.to_sqlitedb_model(query)?;
         }
@@ -1360,9 +1650,6 @@ impl RecordColumnValue {
                     Some(value) => Ok(Self::BigInteger(Some(value))),
                     None => Err(Error::msg("Wrong value type")),
                 },
-                SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
-                    &value.to_string(),
-                )?))),
                 SchemaFieldKind::Float => match value.as_f64() {
                     Some(value) => {
                         let value = value as f32;
@@ -1378,14 +1665,17 @@ impl RecordColumnValue {
                     Some(value) => Ok(Self::Double(Some(value))),
                     None => Err(Error::msg("Wrong value type")),
                 },
-                SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                    &value.to_string(),
-                )?))),
                 SchemaFieldKind::Binary => Ok(Self::Binary(Some(value.to_string().into_bytes()))),
                 SchemaFieldKind::Json => Ok(Self::Json(Some(value.to_string()))),
                 _ => return Err(Error::msg("Wrong value type")),
             },
             serde_json::Value::String(value) => match kind {
+                SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
+                    &value.to_string(),
+                )?))),
+                SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
+                    &value.to_string(),
+                )?))),
                 SchemaFieldKind::String => Ok(Self::String(Some(value.to_owned()))),
                 SchemaFieldKind::Binary => Ok(Self::Binary(Some(value.as_bytes().to_vec()))),
                 SchemaFieldKind::Uuid => match Uuid::from_str(value) {
@@ -1458,7 +1748,7 @@ impl RecordColumnValue {
                 None => Ok(serde_json::Value::Null),
             },
             Self::VarInteger(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
+                Some(data) => Ok(serde_json::json!(data.to_string())),
                 None => Ok(serde_json::Value::Null),
             },
             Self::Float(data) => match data {
@@ -1628,12 +1918,11 @@ impl RecordColumnValue {
                 Ok(Self::DateTime(Some(DateTime::from_timestamp(secs, nsecs).ok_or(Error::msg("Can't convert value with type 'timestamp' from ScyllaDB to 'datetime'. Value is out of range."))?.into())))
             },
             SchemaFieldKind::Json => Ok(Self::Json(Some(
-                value
-                    .as_text()
+                String::from_utf8( value
+                    .as_blob()
                     .ok_or(Error::msg(
                         "Incorrect internal value type. Internal value is not of type 'text'.",
-                    ))?
-                    .to_owned(),
+                    ))?.to_owned())?,
             ))),
         }
     }
@@ -1646,13 +1935,15 @@ impl RecordColumnValue {
             Self::Integer(data) => Ok(Box::new(*data)),
             Self::BigInteger(data) => Ok(Box::new(*data)),
             Self::VarInteger(data) => Ok(Box::new(match data {
-                Some(data) => Some(data.to_string()),
+                Some(data) => Some(num_bigint_03::BigInt::from_signed_bytes_be(
+                    &data.to_signed_bytes_be(),
+                )),
                 None => None,
             })),
             Self::Float(data) => Ok(Box::new(*data)),
             Self::Double(data) => Ok(Box::new(*data)),
             Self::Decimal(data) => Ok(Box::new(match data {
-                Some(data) => Some(data.to_string()),
+                Some(data) => Some(bigdecimal_02::BigDecimal::from_str(&data.to_string())?),
                 None => None,
             })),
             Self::String(data) => Ok(Box::new(data.to_owned())),
@@ -1681,7 +1972,10 @@ impl RecordColumnValue {
                 Some(data) => Some(ScyllaCqlTimestamp(data.timestamp_millis())),
                 None => None,
             })),
-            Self::Json(data) => Ok(Box::new(data.to_owned())),
+            Self::Json(data) => Ok(Box::new(match data {
+                Some(data) => Some(data.to_owned().into_bytes()),
+                None => None,
+            })),
         }
     }
 
@@ -1729,6 +2023,37 @@ impl RecordColumnValue {
         &self,
         query: sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>,
     ) -> Result<sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>> {
+        match self {
+            Self::Boolean(data) => Ok(query.bind(*data)),
+            Self::TinyInteger(data) => Ok(query.bind(*data)),
+            Self::SmallInteger(data) => Ok(query.bind(*data)),
+            Self::Integer(data) => Ok(query.bind(*data)),
+            Self::BigInteger(data) => Ok(query.bind(*data)),
+            Self::VarInteger(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                None => None,
+            })),
+            Self::Float(data) => Ok(query.bind(*data)),
+            Self::Double(data) => Ok(query.bind(*data)),
+            Self::Decimal(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                None => None,
+            })),
+            Self::String(data) => Ok(query.bind(data.to_owned())),
+            Self::Binary(data) => Ok(query.bind(data.to_owned())),
+            Self::Uuid(data) => Ok(query.bind(*data)),
+            Self::Date(data) => Ok(query.bind(*data)),
+            Self::Time(data) => Ok(query.bind(*data)),
+            Self::DateTime(data) => Ok(query.bind(*data)),
+            Self::Timestamp(data) => Ok(query.bind(*data)),
+            Self::Json(data) => Ok(query.bind(data.to_owned())),
+        }
+    }
+
+    pub fn to_postgresdb_model_as<'a, T>(
+        &self,
+        query: sqlx::query::QueryAs<'a, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+    ) -> Result<sqlx::query::QueryAs<'a, sqlx::Postgres, T, sqlx::postgres::PgArguments>> {
         match self {
             Self::Boolean(data) => Ok(query.bind(*data)),
             Self::TinyInteger(data) => Ok(query.bind(*data)),
@@ -1833,6 +2158,43 @@ impl RecordColumnValue {
         }
     }
 
+    pub fn to_mysqldb_model_as<'a, T>(
+        &self,
+        query: sqlx::query::QueryAs<'a, sqlx::MySql, T, sqlx::mysql::MySqlArguments>,
+    ) -> Result<sqlx::query::QueryAs<'a, sqlx::MySql, T, sqlx::mysql::MySqlArguments>> {
+        match self {
+            Self::Boolean(data) => Ok(query.bind(*data)),
+            Self::TinyInteger(data) => Ok(query.bind(*data)),
+            Self::SmallInteger(data) => Ok(query.bind(*data)),
+            Self::Integer(data) => Ok(query.bind(*data)),
+            Self::BigInteger(data) => Ok(query.bind(*data)),
+            Self::VarInteger(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                None => None,
+            })),
+            Self::Float(data) => Ok(query.bind(*data)),
+            Self::Double(data) => Ok(query.bind(*data)),
+            Self::Decimal(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                None => None,
+            })),
+            Self::String(data) => Ok(query.bind(data.to_owned())),
+            Self::Binary(data) => Ok(query.bind(data.to_owned())),
+            Self::Uuid(data) => Ok(query.bind(*data)),
+            Self::Date(data) => Ok(query.bind(*data)),
+            Self::Time(data) => Ok(query.bind(*data)),
+            Self::DateTime(data) => Ok(query.bind(match data {
+                Some(data) => Some(data.with_timezone(&Utc)),
+                None => None,
+            })),
+            Self::Timestamp(data) => Ok(query.bind(match data {
+                Some(data) => Some(data.with_timezone(&Utc)),
+                None => None,
+            })),
+            Self::Json(data) => Ok(query.bind(data.to_owned())),
+        }
+    }
+
     pub fn from_sqlitedb_model(
         kind: &SchemaFieldKind,
         index: &str,
@@ -1877,6 +2239,37 @@ impl RecordColumnValue {
         &self,
         query: sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>,
     ) -> Result<sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>> {
+        match self {
+            Self::Boolean(data) => Ok(query.bind(*data)),
+            Self::TinyInteger(data) => Ok(query.bind(*data)),
+            Self::SmallInteger(data) => Ok(query.bind(*data)),
+            Self::Integer(data) => Ok(query.bind(*data)),
+            Self::BigInteger(data) => Ok(query.bind(*data)),
+            Self::VarInteger(data) => Ok(query.bind(match data {
+                Some(data) => Some(data.to_string()),
+                None => None,
+            })),
+            Self::Float(data) => Ok(query.bind(*data)),
+            Self::Double(data) => Ok(query.bind(*data)),
+            Self::Decimal(data) => Ok(query.bind(match data {
+                Some(data) => Some(data.to_string()),
+                None => None,
+            })),
+            Self::String(data) => Ok(query.bind(data.to_owned())),
+            Self::Binary(data) => Ok(query.bind(data.to_owned())),
+            Self::Uuid(data) => Ok(query.bind(*data)),
+            Self::Date(data) => Ok(query.bind(*data)),
+            Self::Time(data) => Ok(query.bind(*data)),
+            Self::DateTime(data) => Ok(query.bind(*data)),
+            Self::Timestamp(data) => Ok(query.bind(*data)),
+            Self::Json(data) => Ok(query.bind(data.to_owned())),
+        }
+    }
+
+    pub fn to_sqlitedb_model_as<'a, T>(
+        &self,
+        query: sqlx::query::QueryAs<'a, sqlx::Sqlite, T, sqlx::sqlite::SqliteArguments<'a>>,
+    ) -> Result<sqlx::query::QueryAs<'a, sqlx::Sqlite, T, sqlx::sqlite::SqliteArguments<'a>>> {
         match self {
             Self::Boolean(data) => Ok(query.bind(*data)),
             Self::TinyInteger(data) => Ok(query.bind(*data)),
@@ -1976,6 +2369,267 @@ impl RecordFilters {
             }
         }
         Ok(values)
+    }
+
+    pub fn postgresdb_filter_query(
+        &self,
+        logical_operator: &Option<&str>,
+        level: usize,
+        first_argument_idx: &mut usize,
+    ) -> Result<String> {
+        let mut filter = String::new();
+        if level > 1 {
+            filter += "("
+        }
+        for (idx, f) in self.0.iter().enumerate() {
+            let op = f.op.to_uppercase();
+            if let Some(child) = &f.child {
+                if POSTGRES_LOGICAL_OPERATOR.contains(&op.as_str()) {
+                    if (level > 0 && filter.len() > 1) || (level == 0 && filter.len() > 0) {
+                        filter += " ";
+                    }
+                    filter += &child.postgresdb_filter_query(
+                        &Some(&op),
+                        level + 1,
+                        first_argument_idx,
+                    )?;
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a logical operator in PostgreSQL"
+                    )));
+                }
+            } else {
+                let field = f.field.as_ref().unwrap();
+                if POSTGRES_COMPARISON_OPERATOR.contains(&op.as_str()) {
+                    if filter.len() > 0 {
+                        filter += " ";
+                    }
+                    filter += &format!("\"{}\" {}", field, &op);
+                    if f.value.is_some() {
+                        filter += &format!(" ${}", first_argument_idx);
+                        *first_argument_idx += 1;
+                    }
+                    if idx < self.0.len() - 1 {
+                        if let Some(operator) = logical_operator {
+                            if filter.len() > 0 {
+                                filter += " ";
+                            }
+                            filter += operator
+                        }
+                    }
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a comparison operator in PostgreSQL"
+                    )));
+                }
+            }
+        }
+        if level > 1 {
+            filter += ")"
+        }
+        Ok(filter)
+    }
+
+    pub fn postgresdb_values<'a>(
+        &self,
+        query: sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>,
+    ) -> Result<sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>> {
+        let mut query = query;
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                query = value.to_postgresdb_model(query)?
+            }
+            if let Some(child) = &f.child {
+                query = child.postgresdb_values(query)?
+            }
+        }
+        Ok(query)
+    }
+
+    pub fn postgresdb_values_as<'a, T>(
+        &self,
+        query: sqlx::query::QueryAs<'a, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
+    ) -> Result<sqlx::query::QueryAs<'a, sqlx::Postgres, T, sqlx::postgres::PgArguments>> {
+        let mut query = query;
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                query = value.to_postgresdb_model_as(query)?
+            }
+            if let Some(child) = &f.child {
+                query = child.postgresdb_values_as(query)?
+            }
+        }
+        Ok(query)
+    }
+
+    pub fn mysqldb_filter_query(
+        &self,
+        logical_operator: &Option<&str>,
+        level: usize,
+    ) -> Result<String> {
+        let mut filter = String::new();
+        if level > 1 {
+            filter += "("
+        }
+        for (idx, f) in self.0.iter().enumerate() {
+            let op = f.op.to_uppercase();
+            if let Some(child) = &f.child {
+                if MYSQL_LOGICAL_OPERATOR.contains(&op.as_str()) {
+                    if (level > 0 && filter.len() > 1) || (level == 0 && filter.len() > 0) {
+                        filter += " ";
+                    }
+                    filter += &child.mysqldb_filter_query(&Some(&op), level + 1)?;
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a logical operator in MySQL"
+                    )));
+                }
+            } else {
+                let field = f.field.as_ref().unwrap();
+                if MYSQL_COMPARISON_OPERATOR.contains(&op.as_str()) {
+                    if filter.len() > 0 {
+                        filter += " ";
+                    }
+                    filter += &format!("\"{}\" {}", field, &op);
+                    if f.value.is_some() {
+                        filter += " ?";
+                    }
+                    if idx < self.0.len() - 1 {
+                        if let Some(operator) = logical_operator {
+                            if filter.len() > 0 {
+                                filter += " ";
+                            }
+                            filter += operator
+                        }
+                    }
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a comparison operator in MySQL"
+                    )));
+                }
+            }
+        }
+        if level > 1 {
+            filter += ")"
+        }
+        Ok(filter)
+    }
+
+    pub fn mysqldb_values<'a>(
+        &self,
+        query: sqlx::query::Query<'a, sqlx::MySql, sqlx::mysql::MySqlArguments>,
+    ) -> Result<sqlx::query::Query<'a, sqlx::MySql, sqlx::mysql::MySqlArguments>> {
+        let mut query = query;
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                query = value.to_mysqldb_model(query)?
+            }
+            if let Some(child) = &f.child {
+                query = child.mysqldb_values(query)?
+            }
+        }
+        Ok(query)
+    }
+
+    pub fn mysqldb_values_as<'a, T>(
+        &self,
+        query: sqlx::query::QueryAs<'a, sqlx::MySql, T, sqlx::mysql::MySqlArguments>,
+    ) -> Result<sqlx::query::QueryAs<'a, sqlx::MySql, T, sqlx::mysql::MySqlArguments>> {
+        let mut query = query;
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                query = value.to_mysqldb_model_as(query)?
+            }
+            if let Some(child) = &f.child {
+                query = child.mysqldb_values_as(query)?
+            }
+        }
+        Ok(query)
+    }
+
+    pub fn sqlitedb_filter_query(
+        &self,
+        logical_operator: &Option<&str>,
+        level: usize,
+    ) -> Result<String> {
+        let mut filter = String::new();
+        if level > 1 {
+            filter += "("
+        }
+        for (idx, f) in self.0.iter().enumerate() {
+            let op = f.op.to_uppercase();
+            if let Some(child) = &f.child {
+                if SQLITE_LOGICAL_OPERATOR.contains(&op.as_str()) {
+                    if (level > 0 && filter.len() > 1) || (level == 0 && filter.len() > 0) {
+                        filter += " ";
+                    }
+                    filter += &child.sqlitedb_filter_query(&Some(&op), level + 1)?;
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a logical operator in SQLite"
+                    )));
+                }
+            } else {
+                let field = f.field.as_ref().unwrap();
+                if SQLITE_COMPARISON_OPERATOR.contains(&op.as_str()) {
+                    if filter.len() > 0 {
+                        filter += " ";
+                    }
+                    filter += &format!("\"{}\" {}", field, &op);
+                    if f.value.is_some() {
+                        filter += &format!(" ?");
+                    }
+                    if idx < self.0.len() - 1 {
+                        if let Some(operator) = logical_operator {
+                            if filter.len() > 0 {
+                                filter += " ";
+                            }
+                            filter += operator
+                        }
+                    }
+                } else {
+                    return Err(Error::msg(format!(
+                        "Operator '{op}' is not supported as a comparison operator in SQLite"
+                    )));
+                }
+            }
+        }
+        if level > 1 {
+            filter += ")"
+        }
+        Ok(filter)
+    }
+
+    pub fn sqlitedb_values<'a>(
+        &self,
+        query: sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>,
+    ) -> Result<sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>> {
+        let mut query = query;
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                query = value.to_sqlitedb_model(query)?
+            }
+            if let Some(child) = &f.child {
+                query = child.sqlitedb_values(query)?
+            }
+        }
+        Ok(query)
+    }
+
+    pub fn sqlitedb_values_as<'a, T>(
+        &self,
+        query: sqlx::query::QueryAs<'a, sqlx::Sqlite, T, sqlx::sqlite::SqliteArguments<'a>>,
+    ) -> Result<sqlx::query::QueryAs<'a, sqlx::Sqlite, T, sqlx::sqlite::SqliteArguments<'a>>> {
+        let mut query = query;
+        for f in &self.0 {
+            if let Some(value) = &f.value {
+                query = value.to_sqlitedb_model_as(query)?
+            }
+            if let Some(child) = &f.child {
+                query = child.sqlitedb_values_as(query)?
+            }
+        }
+        Ok(query)
     }
 
     fn values_capacity(&self) -> usize {

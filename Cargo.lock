@@ -361,6 +361,7 @@ dependencies = [
  "num-bigint 0.3.3",
  "num-integer",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -1016,6 +1017,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "anyhow",
+ "bigdecimal 0.2.2",
  "bigdecimal 0.4.2",
  "chrono",
  "futures",
@@ -1023,6 +1025,7 @@ dependencies = [
  "hb_db_postgresql",
  "hb_db_scylladb",
  "hb_db_sqlite",
+ "num-bigint 0.3.3",
  "num-bigint 0.4.4",
  "rand",
  "scylla",
@@ -1038,7 +1041,6 @@ name = "hb_db_mysql"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "futures",
  "hb_log",
  "itertools 0.12.0",
  "serde",
@@ -1051,7 +1053,6 @@ name = "hb_db_postgresql"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "futures",
  "hb_log",
  "itertools 0.12.0",
  "serde",
@@ -1075,7 +1076,6 @@ name = "hb_db_sqlite"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "futures",
  "hb_log",
  "itertools 0.12.0",
  "serde",
@@ -1566,6 +1566,7 @@ dependencies = [
  "autocfg",
  "num-integer",
  "num-traits",
+ "serde",
 ]
 
 [[package]]

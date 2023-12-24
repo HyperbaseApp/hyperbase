@@ -45,14 +45,14 @@ impl SchemaFieldKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, &str> {
+    pub fn from_str(str: &str) -> Result<Self, String> {
         match str {
             "null" => Ok(Self::Null),
             "integer" => Ok(Self::Integer),
             "real" => Ok(Self::Real),
             "text" => Ok(Self::Text),
             "blob" => Ok(Self::Blob),
-            _ => Err("Unknown schema field kind"),
+            _ => Err(format!("Unknown schema field kind '{str}'")),
         }
     }
 }

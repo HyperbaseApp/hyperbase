@@ -79,7 +79,7 @@ impl SchemaFieldKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, &str> {
+    pub fn from_str(str: &str) -> Result<Self, String> {
         match str {
             "ascii" => Ok(Self::Ascii),
             "boolean" => Ok(Self::Boolean),
@@ -107,7 +107,7 @@ impl SchemaFieldKind {
             "tuple" => Ok(Self::Tuple),
             "uuid" => Ok(Self::Uuid),
             "varint" => Ok(Self::Varint),
-            _ => Err("Unknown schema field kind"),
+            _ => Err(format!("Unknown schema field kind '{str}'")),
         }
     }
 }

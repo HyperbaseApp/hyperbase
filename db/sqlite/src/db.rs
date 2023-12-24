@@ -1,6 +1,4 @@
-use futures::{stream::BoxStream, StreamExt};
 use sqlx::{
-    database::HasArguments,
     query::{Query, QueryAs},
     sqlite::{SqliteArguments, SqlitePoolOptions, SqliteQueryResult, SqliteRow},
     Error, Pool, Sqlite,
@@ -53,13 +51,6 @@ impl SqliteDb {
         query.execute(&self.pool).await
     }
 
-    pub fn fetch<'e>(
-        &self,
-        query: Query<'e, Sqlite, <Sqlite as HasArguments<'e>>::Arguments>,
-    ) -> BoxStream<'e, Result<<Sqlite as sqlx::Database>::Row, Error>> {
-        query.fetch(&self.pool)
-    }
-
     pub async fn fetch_one_unprepared<
         'a,
         T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow>,
@@ -77,26 +68,24 @@ impl SqliteDb {
         Ok(query.fetch_one(&self.pool).await?)
     }
 
-    pub async fn fetch_many<
-        'a,
-        T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow> + 'static,
-    >(
+    pub async fn fetch_one_row<'a>(
         &self,
-        query: QueryAs<'a, Sqlite, T, SqliteArguments<'a>>,
-        limit: usize,
-    ) -> Result<Vec<sqlx::Either<SqliteQueryResult, T>>, Error> {
-        let mut stream = query.fetch_many(&self.pool);
-        let mut data = Vec::with_capacity(limit);
-        while let Some(s) = stream.next().await {
-            data.push(s?);
-        }
-        Ok(data)
+        query: Query<'a, Sqlite, SqliteArguments<'a>>,
+    ) -> Result<SqliteRow, Error> {
+        Ok(query.fetch_one(&self.pool).await?)
     }
 
     pub async fn fetch_all<'a, T: Send + Unpin + for<'r> sqlx::FromRow<'r, SqliteRow>>(
         &self,
         query: QueryAs<'a, Sqlite, T, SqliteArguments<'a>>,
     ) -> Result<Vec<T>, Error> {
+        query.fetch_all(&self.pool).await
+    }
+
+    pub async fn fetch_all_rows<'a>(
+        &self,
+        query: Query<'a, Sqlite, SqliteArguments<'a>>,
+    ) -> Result<Vec<SqliteRow>, Error> {
         query.fetch_all(&self.pool).await
     }
 

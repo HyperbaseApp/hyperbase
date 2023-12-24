@@ -72,7 +72,7 @@ pub fn change_columns_type(
     )
 }
 
-pub fn insert(record_table: &str, columns: &Vec<String>) -> String {
+pub fn insert(record_table: &str, columns: &Vec<&str>) -> String {
     let mut cols = "".to_owned();
     let mut vals = "".to_owned();
     for (idx, col) in columns.iter().enumerate() {
@@ -86,7 +86,7 @@ pub fn insert(record_table: &str, columns: &Vec<String>) -> String {
     format!("INSERT INTO \"hyperbase\".\"{record_table}\" ({cols}) VALUES ({vals})")
 }
 
-pub fn select(record_table: &str, columns: &Vec<String>) -> String {
+pub fn select(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
         "SELECT {} FROM \"hyperbase\".\"{}\" WHERE \"_id\" = ?",
         columns.iter().map(|col| format!("\"{col}\"")).join(", "),
@@ -94,33 +94,11 @@ pub fn select(record_table: &str, columns: &Vec<String>) -> String {
     )
 }
 
-pub fn update(record_table: &str, columns: &Vec<String>) -> String {
-    format!(
-        "UPDATE \"hyperbase\".\"{}\" SET {} WHERE \"_id\" = ?",
-        record_table,
-        columns
-            .iter()
-            .map(|col| format!("\"{col}\" = ?"))
-            .join(", ")
-    )
-}
-
-pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
-    format!(
-        "DELETE FROM \"hyperbase\".\"{}\" WHERE {}",
-        record_table,
-        columns
-            .iter()
-            .map(|col| format!("\"{col}\" = ?"))
-            .join(", ")
-    )
-}
-
 pub fn select_many(
     record_table: &str,
     columns: &Vec<&str>,
     filter: &str,
-    groups: &Vec<String>,
+    groups: &Vec<&str>,
     orders: &HashMap<&str, &str>,
     with_query_limit: &bool,
 ) -> String {
@@ -158,6 +136,28 @@ pub fn select_many(
         query += " LIMIT ?"
     }
     query + " ALLOW FILTERING"
+}
+
+pub fn update(record_table: &str, columns: &Vec<&str>) -> String {
+    format!(
+        "UPDATE \"hyperbase\".\"{}\" SET {} WHERE \"_id\" = ?",
+        record_table,
+        columns
+            .iter()
+            .map(|col| format!("\"{col}\" = ?"))
+            .join(", ")
+    )
+}
+
+pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
+    format!(
+        "DELETE FROM \"hyperbase\".\"{}\" WHERE {}",
+        record_table,
+        columns
+            .iter()
+            .map(|col| format!("\"{col}\" = ?"))
+            .join(", ")
+    )
 }
 
 pub fn count(record_table: &str, filter: &str) -> String {

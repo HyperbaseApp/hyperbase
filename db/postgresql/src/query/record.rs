@@ -74,7 +74,7 @@ pub fn drop_index(record_table: &str, index: &str) -> String {
     format!("DROP INDEX IF EXISTS \"{record_table}_{index}\"")
 }
 
-pub fn insert(record_table: &str, columns: &Vec<String>) -> String {
+pub fn insert(record_table: &str, columns: &Vec<&str>) -> String {
     let mut cols = "".to_owned();
     let mut vals = "".to_owned();
     for (idx, col) in columns.iter().enumerate() {
@@ -88,21 +88,67 @@ pub fn insert(record_table: &str, columns: &Vec<String>) -> String {
     format!("INSERT INTO \"{record_table}\" ({cols}) VALUES ({vals})")
 }
 
-pub fn select(record_table: &str, columns: &Vec<String>) -> String {
+pub fn select(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
-        "SELECT {} FROM \"{}\" WHERE \"_id\" = ?",
+        "SELECT {} FROM \"{}\" WHERE \"_id\" = $1",
         columns.iter().map(|col| format!("\"{col}\"")).join(", "),
         record_table
     )
 }
 
-pub fn update(record_table: &str, columns: &Vec<String>) -> String {
+pub fn select_many(
+    record_table: &str,
+    columns: &Vec<&str>,
+    filter: &str,
+    groups: &Vec<&str>,
+    orders: &HashMap<&str, &str>,
+    with_query_limit: &bool,
+    argument_idx: &usize,
+) -> String {
+    let mut query = format!(
+        "SELECT {} FROM \"{}\"",
+        columns.iter().map(|col| format!("\"{col}\"")).join(", "),
+        record_table,
+    );
+    if filter.len() > 0 {
+        query += &format!(" WHERE {filter}")
+    }
+    if groups.len() > 0 {
+        query += " GROUP BY";
+        let mut count = 0;
+        for group in groups {
+            if count > 0 {
+                query += ",";
+            }
+            query += &format!(" \"{group}\"");
+            count += 1;
+        }
+    }
+    if orders.len() > 0 {
+        query += " ORDER BY";
+        let mut count = 0;
+        for (field, kind) in orders {
+            if count > 0 {
+                query += ","
+            }
+            query += &format!(" \"{field}\" {kind}");
+            count += 1;
+        }
+    }
+    if *with_query_limit {
+        query += &format!(" LIMIT ${argument_idx}")
+    }
+    query
+}
+
+pub fn update(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
-        "UPDATE \"{}\" SET {} WHERE \"_id\" = ?",
+        "UPDATE \"{}\" SET {} WHERE \"_id\" = $1",
         record_table,
         columns
             .iter()
-            .map(|col| format!("\"{col}\" = ?"))
+            .enumerate()
+            .map(|(idx, col)| format!("\"{}\" = ${}", col, idx + 2))
             .join(", ")
     )
 }
@@ -113,7 +159,16 @@ pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
         record_table,
         columns
             .iter()
-            .map(|col| format!("\"{col}\" = ?"))
+            .enumerate()
+            .map(|(idx, col)| format!("\"{}\" = ${}", col, idx + 1))
             .join(", ")
     )
+}
+
+pub fn count(record_table: &str, filter: &str) -> String {
+    let mut query = format!("SELECT COUNT(1) FROM \"{}\"", record_table);
+    if filter.len() > 0 {
+        query += &format!(" WHERE {filter}")
+    }
+    query
 }

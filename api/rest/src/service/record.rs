@@ -476,7 +476,7 @@ async fn find_many(
             let mut groups = Vec::with_capacity(group.len());
             for field in group {
                 match collection_data.schema_fields().contains_key(field) {
-                    true => groups.push(field.to_owned()),
+                    true => groups.push(field.as_str()),
                     false => {
                         return Response::error(
                             &StatusCode::BAD_REQUEST,
