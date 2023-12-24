@@ -16,7 +16,7 @@ pub struct TokenModel {
     admin_id: Uuid,
     token: String,
     rules: Json<HashMap<Uuid, i8>>, // 0: no access, 1: read only, 2: read and write
-    expired_at: Json<Option<DateTime<Utc>>>,
+    expired_at: Option<Json<DateTime<Utc>>>,
 }
 
 impl TokenModel {
@@ -26,8 +26,8 @@ impl TokenModel {
         updated_at: &DateTime<Utc>,
         admin_id: &Uuid,
         token: &str,
-        rules: &HashMap<Uuid, i8>,
-        expired_at: &Option<DateTime<Utc>>,
+        rules: &Json<HashMap<Uuid, i8>>,
+        expired_at: &Option<Json<DateTime<Utc>>>,
     ) -> Self {
         Self {
             id: *id,
@@ -35,8 +35,8 @@ impl TokenModel {
             updated_at: *updated_at,
             admin_id: *admin_id,
             token: token.to_owned(),
-            rules: Json(rules.clone()),
-            expired_at: Json(*expired_at),
+            rules: rules.clone(),
+            expired_at: *expired_at,
         }
     }
 
@@ -60,11 +60,11 @@ impl TokenModel {
         &self.token
     }
 
-    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+    pub fn rules(&self) -> &Json<HashMap<Uuid, i8>> {
         &self.rules
     }
 
-    pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
+    pub fn expired_at(&self) -> &Option<Json<DateTime<Utc>>> {
         &self.expired_at
     }
 }

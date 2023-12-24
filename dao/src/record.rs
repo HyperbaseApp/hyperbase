@@ -3,7 +3,7 @@ use std::{collections::hash_map::Keys, str::FromStr};
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, Timelike, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Timelike, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
     model::{
@@ -1609,8 +1609,8 @@ pub enum RecordColumnValue {
     Uuid(Option<Uuid>),
     Date(Option<NaiveDate>),
     Time(Option<NaiveTime>),
-    DateTime(Option<DateTime<FixedOffset>>),
-    Timestamp(Option<DateTime<FixedOffset>>),
+    DateTime(Option<DateTime<Utc>>),
+    Timestamp(Option<DateTime<Utc>>),
     Json(Option<String>),
 }
 
@@ -1691,14 +1691,14 @@ impl RecordColumnValue {
                     Err(err) => Err(err.into()),
                 },
                 SchemaFieldKind::DateTime => match DateTime::parse_from_rfc3339(value) {
-                    Ok(datetime) => Ok(Self::DateTime(Some(datetime))),
+                    Ok(datetime) => Ok(Self::DateTime(Some(datetime.with_timezone(&Utc)))),
                     Err(err) => Err(err.into()),
                 },
                 SchemaFieldKind::Timestamp => match DateTime::parse_from_rfc3339(value) {
-                    Ok(timestamp) => Ok(Self::Timestamp(Some(timestamp))),
+                    Ok(timestamp) => Ok(Self::Timestamp(Some(timestamp.with_timezone(&Utc)))),
                     Err(err) => Err(err.into()),
                 },
-                SchemaFieldKind::Json => Ok(Self::Json(Some(serde_json::json!(value).to_string()))),
+                SchemaFieldKind::Json => Ok(Self::Json(Some(value.to_owned()))),
                 _ => return Err(Error::msg("Wrong value type")),
             },
             serde_json::Value::Array(value) => match kind {
@@ -2015,7 +2015,9 @@ impl RecordColumnValue {
             SchemaFieldKind::Timestamp => {
                 Ok(Self::Timestamp(Some(sqlx::Row::try_get(value, index)?)))
             }
-            SchemaFieldKind::Json => Ok(Self::Json(Some(sqlx::Row::try_get(value, index)?))),
+            SchemaFieldKind::Json => Ok(Self::Json(Some(String::from_utf8(
+                (sqlx::Row::try_get::<sqlx::types::Json<Vec<u8>>, _>(value, index)?).0,
+            )?))),
         }
     }
 
@@ -2046,7 +2048,10 @@ impl RecordColumnValue {
             Self::Time(data) => Ok(query.bind(*data)),
             Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(data.to_owned())),
+            Self::Json(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
+                None => None,
+            })),
         }
     }
 
@@ -2077,7 +2082,10 @@ impl RecordColumnValue {
             Self::Time(data) => Ok(query.bind(*data)),
             Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(data.to_owned())),
+            Self::Json(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
+                None => None,
+            })),
         }
     }
 
@@ -2098,13 +2106,13 @@ impl RecordColumnValue {
             SchemaFieldKind::BigInt => {
                 Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?)))
             }
-            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
-                &sqlx::Row::try_get::<sqlx::types::BigDecimal, _>(value, index)?.to_string(),
-            )?))),
+            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
+                sqlx::Row::try_get::<&[u8], _>(value, index)?,
+            )))),
             SchemaFieldKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
             SchemaFieldKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
             SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                &sqlx::Row::try_get::<sqlx::types::BigDecimal, _>(value, index)?.to_string(),
+                std::str::from_utf8(sqlx::Row::try_get::<&[u8], _>(value, index)?)?,
             )?))),
             SchemaFieldKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
             SchemaFieldKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
@@ -2117,7 +2125,9 @@ impl RecordColumnValue {
             SchemaFieldKind::Timestamp => Ok(Self::DateTime(Some(
                 sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
             ))),
-            SchemaFieldKind::Json => Ok(Self::Json(Some(sqlx::Row::try_get(value, index)?))),
+            SchemaFieldKind::Json => Ok(Self::Json(Some(String::from_utf8(
+                sqlx::Row::try_get::<sqlx::types::Json<Vec<u8>>, _>(value, index)?.0,
+            )?))),
         }
     }
 
@@ -2132,13 +2142,13 @@ impl RecordColumnValue {
             Self::Integer(data) => Ok(query.bind(*data)),
             Self::BigInteger(data) => Ok(query.bind(*data)),
             Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                Some(data) => Some(data.to_signed_bytes_be()),
                 None => None,
             })),
             Self::Float(data) => Ok(query.bind(*data)),
             Self::Double(data) => Ok(query.bind(*data)),
             Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                Some(data) => Some(data.to_string().into_bytes()),
                 None => None,
             })),
             Self::String(data) => Ok(query.bind(data.to_owned())),
@@ -2146,15 +2156,12 @@ impl RecordColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.with_timezone(&Utc)),
+            Self::DateTime(data) => Ok(query.bind(*data)),
+            Self::Timestamp(data) => Ok(query.bind(*data)),
+            Self::Json(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
                 None => None,
             })),
-            Self::Timestamp(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.with_timezone(&Utc)),
-                None => None,
-            })),
-            Self::Json(data) => Ok(query.bind(data.to_owned())),
         }
     }
 
@@ -2169,13 +2176,13 @@ impl RecordColumnValue {
             Self::Integer(data) => Ok(query.bind(*data)),
             Self::BigInteger(data) => Ok(query.bind(*data)),
             Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                Some(data) => Some(data.to_signed_bytes_be()),
                 None => None,
             })),
             Self::Float(data) => Ok(query.bind(*data)),
             Self::Double(data) => Ok(query.bind(*data)),
             Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
+                Some(data) => Some(data.to_string().into_bytes()),
                 None => None,
             })),
             Self::String(data) => Ok(query.bind(data.to_owned())),
@@ -2183,15 +2190,12 @@ impl RecordColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.with_timezone(&Utc)),
+            Self::DateTime(data) => Ok(query.bind(*data)),
+            Self::Timestamp(data) => Ok(query.bind(*data)),
+            Self::Json(data) => Ok(query.bind(match data {
+                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
                 None => None,
             })),
-            Self::Timestamp(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.with_timezone(&Utc)),
-                None => None,
-            })),
-            Self::Json(data) => Ok(query.bind(data.to_owned())),
         }
     }
 
@@ -2212,13 +2216,13 @@ impl RecordColumnValue {
             SchemaFieldKind::BigInt => {
                 Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?)))
             }
-            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
-                sqlx::Row::try_get::<&str, _>(value, index)?,
-            )?))),
+            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
+                sqlx::Row::try_get::<&[u8], _>(value, index)?,
+            )))),
             SchemaFieldKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
             SchemaFieldKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
             SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                sqlx::Row::try_get::<&str, _>(value, index)?,
+                std::str::from_utf8(sqlx::Row::try_get::<&[u8], _>(value, index)?)?,
             )?))),
             SchemaFieldKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
             SchemaFieldKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
@@ -2231,7 +2235,14 @@ impl RecordColumnValue {
             SchemaFieldKind::Timestamp => {
                 Ok(Self::Timestamp(Some(sqlx::Row::try_get(value, index)?)))
             }
-            SchemaFieldKind::Json => Ok(Self::Json(Some(sqlx::Row::try_get(value, index)?))),
+            SchemaFieldKind::Json => {
+                Ok(Self::Json(Some(String::from_utf8(sqlx::Row::try_get::<
+                    Vec<u8>,
+                    _,
+                >(
+                    value, index
+                )?)?)))
+            }
         }
     }
 
@@ -2246,13 +2257,13 @@ impl RecordColumnValue {
             Self::Integer(data) => Ok(query.bind(*data)),
             Self::BigInteger(data) => Ok(query.bind(*data)),
             Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string()),
+                Some(data) => Some(data.to_signed_bytes_be()),
                 None => None,
             })),
             Self::Float(data) => Ok(query.bind(*data)),
             Self::Double(data) => Ok(query.bind(*data)),
             Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string()),
+                Some(data) => Some(data.to_string().into_bytes()),
                 None => None,
             })),
             Self::String(data) => Ok(query.bind(data.to_owned())),
@@ -2262,7 +2273,10 @@ impl RecordColumnValue {
             Self::Time(data) => Ok(query.bind(*data)),
             Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(data.to_owned())),
+            Self::Json(data) => Ok(query.bind(match data {
+                Some(data) => Some(data.to_owned().into_bytes()),
+                None => None,
+            })),
         }
     }
 
@@ -2277,13 +2291,13 @@ impl RecordColumnValue {
             Self::Integer(data) => Ok(query.bind(*data)),
             Self::BigInteger(data) => Ok(query.bind(*data)),
             Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string()),
+                Some(data) => Some(data.to_signed_bytes_be()),
                 None => None,
             })),
             Self::Float(data) => Ok(query.bind(*data)),
             Self::Double(data) => Ok(query.bind(*data)),
             Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string()),
+                Some(data) => Some(data.to_string().into_bytes()),
                 None => None,
             })),
             Self::String(data) => Ok(query.bind(data.to_owned())),
@@ -2293,7 +2307,10 @@ impl RecordColumnValue {
             Self::Time(data) => Ok(query.bind(*data)),
             Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(data.to_owned())),
+            Self::Json(data) => Ok(query.bind(match data {
+                Some(data) => Some(data.to_owned().into_bytes()),
+                None => None,
+            })),
         }
     }
 }
@@ -2318,12 +2335,17 @@ impl RecordFilters {
         }
         let mut filter = String::new();
         for (idx, f) in self.0.iter().enumerate() {
+            if idx > 0 {
+                if filter.len() > 0 {
+                    filter += " ";
+                }
+                if let Some(operator) = *logical_operator {
+                    filter += &format!("{operator} ");
+                }
+            }
             let op = f.op.to_uppercase();
             if let Some(child) = &f.child {
                 if SCYLLA_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    if filter.len() > 0 {
-                        filter += " ";
-                    }
                     filter += &child.scylladb_filter_query(&Some(&op), level + 1)?;
                 } else {
                     return Err(Error::msg(format!(
@@ -2333,20 +2355,9 @@ impl RecordFilters {
             } else {
                 let field = f.field.as_ref().unwrap();
                 if SCYLLA_COMPARISON_OPERATOR.contains(&op.as_str()) {
-                    if filter.len() > 0 {
-                        filter += " ";
-                    }
                     filter += &format!("\"{}\" {}", field, &op);
                     if f.value.is_some() {
                         filter += " ?";
-                    }
-                    if idx < self.0.len() - 1 {
-                        if let Some(operator) = logical_operator {
-                            if filter.len() > 0 {
-                                filter += " ";
-                            }
-                            filter += operator
-                        }
                     }
                 } else {
                     return Err(Error::msg(format!(
@@ -2382,12 +2393,17 @@ impl RecordFilters {
             filter += "("
         }
         for (idx, f) in self.0.iter().enumerate() {
+            if idx > 0 {
+                if filter.len() > 0 {
+                    filter += " ";
+                }
+                if let Some(operator) = *logical_operator {
+                    filter += &format!("{operator} ");
+                }
+            }
             let op = f.op.to_uppercase();
             if let Some(child) = &f.child {
                 if POSTGRES_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    if (level > 0 && filter.len() > 1) || (level == 0 && filter.len() > 0) {
-                        filter += " ";
-                    }
                     filter += &child.postgresdb_filter_query(
                         &Some(&op),
                         level + 1,
@@ -2399,23 +2415,11 @@ impl RecordFilters {
                     )));
                 }
             } else {
-                let field = f.field.as_ref().unwrap();
                 if POSTGRES_COMPARISON_OPERATOR.contains(&op.as_str()) {
-                    if filter.len() > 0 {
-                        filter += " ";
-                    }
-                    filter += &format!("\"{}\" {}", field, &op);
+                    filter += &format!("\"{}\" {}", f.field.as_ref().unwrap(), &op);
                     if f.value.is_some() {
                         filter += &format!(" ${}", first_argument_idx);
                         *first_argument_idx += 1;
-                    }
-                    if idx < self.0.len() - 1 {
-                        if let Some(operator) = logical_operator {
-                            if filter.len() > 0 {
-                                filter += " ";
-                            }
-                            filter += operator
-                        }
                     }
                 } else {
                     return Err(Error::msg(format!(
@@ -2472,12 +2476,17 @@ impl RecordFilters {
             filter += "("
         }
         for (idx, f) in self.0.iter().enumerate() {
+            if idx > 0 {
+                if filter.len() > 0 {
+                    filter += " ";
+                }
+                if let Some(operator) = *logical_operator {
+                    filter += &format!("{operator} ");
+                }
+            }
             let op = f.op.to_uppercase();
             if let Some(child) = &f.child {
                 if MYSQL_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    if (level > 0 && filter.len() > 1) || (level == 0 && filter.len() > 0) {
-                        filter += " ";
-                    }
                     filter += &child.mysqldb_filter_query(&Some(&op), level + 1)?;
                 } else {
                     return Err(Error::msg(format!(
@@ -2485,22 +2494,10 @@ impl RecordFilters {
                     )));
                 }
             } else {
-                let field = f.field.as_ref().unwrap();
                 if MYSQL_COMPARISON_OPERATOR.contains(&op.as_str()) {
-                    if filter.len() > 0 {
-                        filter += " ";
-                    }
-                    filter += &format!("\"{}\" {}", field, &op);
+                    filter += &format!("`{}` {}", f.field.as_ref().unwrap(), &op);
                     if f.value.is_some() {
                         filter += " ?";
-                    }
-                    if idx < self.0.len() - 1 {
-                        if let Some(operator) = logical_operator {
-                            if filter.len() > 0 {
-                                filter += " ";
-                            }
-                            filter += operator
-                        }
                     }
                 } else {
                     return Err(Error::msg(format!(
@@ -2557,12 +2554,17 @@ impl RecordFilters {
             filter += "("
         }
         for (idx, f) in self.0.iter().enumerate() {
+            if idx > 0 {
+                if filter.len() > 0 {
+                    filter += " ";
+                }
+                if let Some(operator) = *logical_operator {
+                    filter += &format!("{operator} ");
+                }
+            }
             let op = f.op.to_uppercase();
             if let Some(child) = &f.child {
                 if SQLITE_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    if (level > 0 && filter.len() > 1) || (level == 0 && filter.len() > 0) {
-                        filter += " ";
-                    }
                     filter += &child.sqlitedb_filter_query(&Some(&op), level + 1)?;
                 } else {
                     return Err(Error::msg(format!(
@@ -2570,22 +2572,10 @@ impl RecordFilters {
                     )));
                 }
             } else {
-                let field = f.field.as_ref().unwrap();
                 if SQLITE_COMPARISON_OPERATOR.contains(&op.as_str()) {
-                    if filter.len() > 0 {
-                        filter += " ";
-                    }
-                    filter += &format!("\"{}\" {}", field, &op);
+                    filter += &format!("`{}` {}", f.field.as_ref().unwrap(), &op);
                     if f.value.is_some() {
-                        filter += &format!(" ?");
-                    }
-                    if idx < self.0.len() - 1 {
-                        if let Some(operator) = logical_operator {
-                            if filter.len() > 0 {
-                                filter += " ";
-                            }
-                            filter += operator
-                        }
+                        filter += " ?";
                     }
                 } else {
                     return Err(Error::msg(format!(

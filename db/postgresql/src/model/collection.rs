@@ -1,5 +1,5 @@
-use ahash::{HashMap, HashSet};
-use serde::Deserialize;
+use ahash::HashMap;
+use serde::{Deserialize, Serialize};
 use sqlx::{
     prelude::FromRow,
     types::{
@@ -19,7 +19,7 @@ pub struct CollectionModel {
     project_id: Uuid,
     name: String,
     schema_fields: Json<HashMap<String, SchemaFieldPropsModel>>,
-    indexes: Json<HashSet<String>>,
+    indexes: Vec<String>,
 }
 
 impl CollectionModel {
@@ -29,8 +29,8 @@ impl CollectionModel {
         updated_at: &DateTime<Utc>,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &HashMap<String, SchemaFieldPropsModel>,
-        indexes: &HashSet<String>,
+        schema_fields: &Json<HashMap<String, SchemaFieldPropsModel>>,
+        indexes: &Vec<String>,
     ) -> Self {
         Self {
             id: *id,
@@ -38,8 +38,8 @@ impl CollectionModel {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_owned(),
-            schema_fields: Json(schema_fields.clone()),
-            indexes: Json(indexes.clone()),
+            schema_fields: schema_fields.clone(),
+            indexes: indexes.clone(),
         }
     }
 
@@ -63,16 +63,16 @@ impl CollectionModel {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsModel> {
+    pub fn schema_fields(&self) -> &Json<HashMap<String, SchemaFieldPropsModel>> {
         &self.schema_fields
     }
 
-    pub fn indexes(&self) -> &HashSet<String> {
+    pub fn indexes(&self) -> &Vec<String> {
         &self.indexes
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SchemaFieldPropsModel {
     kind: String,
     internal_kind: SchemaFieldKind,

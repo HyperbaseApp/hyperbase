@@ -9,7 +9,7 @@ use hb_db_mysql::{
             CollectionModel as CollectionMysqlModel,
             SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
         },
-        system::SchemaFieldKind as SchemaFieldMysqlKind,
+        system::SchemaFieldKind as SchemaFieldKindMysql,
     },
     query::collection::{
         DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT,
@@ -23,7 +23,7 @@ use hb_db_postgresql::{
             CollectionModel as CollectionPostgresModel,
             SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
         },
-        system::SchemaFieldKind as SchemaFieldPostgresKind,
+        system::SchemaFieldKind as SchemaFieldKindPostgres,
     },
     query::collection::{
         DELETE as POSTGRES_DELETE, INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT,
@@ -37,7 +37,7 @@ use hb_db_scylladb::{
             CollectionModel as CollectionScyllaModel,
             SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
         },
-        system::SchemaFieldKind as SchemaFieldScyllaKind,
+        system::SchemaFieldKind as SchemaFieldKindScylla,
     },
     query::collection::{
         DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
@@ -51,7 +51,7 @@ use hb_db_sqlite::{
             CollectionModel as CollectionSqliteModel,
             SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
         },
-        system::SchemaFieldKind as SchemaFieldSqliteKind,
+        system::SchemaFieldKind as SchemaFieldKindSqlite,
     },
     query::collection::{
         DELETE as SQLITE_DELETE, INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT,
@@ -381,19 +381,16 @@ impl CollectionDao {
     }
 
     async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
-        let mut indexes = Vec::with_capacity(self.indexes.len());
-        for index in &self.indexes {
-            indexes.push(index.as_str());
-        }
+        let model = self.to_postgresdb_model();
         db.execute(
             sqlx::query(POSTGRES_INSERT)
-                .bind(&self.id)
-                .bind(&self.created_at)
-                .bind(&self.updated_at)
-                .bind(&self.project_id)
-                .bind(&self.name)
-                .bind(&sqlx::types::Json(&self.schema_fields))
-                .bind(&indexes),
+                .bind(model.id())
+                .bind(model.created_at())
+                .bind(model.updated_at())
+                .bind(model.project_id())
+                .bind(model.name())
+                .bind(model.schema_fields())
+                .bind(model.indexes()),
         )
         .await?;
         Ok(())
@@ -433,15 +430,16 @@ impl CollectionDao {
     }
 
     async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
+        let model = self.to_mysqldb_model();
         db.execute(
             sqlx::query(MYSQL_INSERT)
-                .bind(&self.id)
-                .bind(&self.created_at)
-                .bind(&self.updated_at)
-                .bind(&self.project_id)
-                .bind(&self.name)
-                .bind(&sqlx::types::Json(&self.schema_fields))
-                .bind(&sqlx::types::Json(&self.indexes)),
+                .bind(model.id())
+                .bind(model.created_at())
+                .bind(model.updated_at())
+                .bind(model.project_id())
+                .bind(model.name())
+                .bind(model.schema_fields())
+                .bind(model.indexes()),
         )
         .await?;
         Ok(())
@@ -479,15 +477,16 @@ impl CollectionDao {
     }
 
     async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
+        let model = self.to_sqlitedb_model();
         db.execute(
             sqlx::query(SQLITE_INSERT)
-                .bind(&self.id)
-                .bind(&self.created_at)
-                .bind(&self.updated_at)
-                .bind(&self.project_id)
-                .bind(&self.name)
-                .bind(&sqlx::types::Json(&self.schema_fields))
-                .bind(&sqlx::types::Json(&self.indexes)),
+                .bind(model.id())
+                .bind(model.created_at())
+                .bind(model.updated_at())
+                .bind(model.project_id())
+                .bind(model.name())
+                .bind(model.schema_fields())
+                .bind(model.indexes()),
         )
         .await?;
         Ok(())
@@ -570,7 +569,7 @@ impl CollectionDao {
 
     fn from_postgresdb_model(model: &CollectionPostgresModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
-        for (key, value) in model.schema_fields() {
+        for (key, value) in &model.schema_fields().0 {
             let value = match SchemaFieldPropsModel::from_postgresdb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
@@ -584,14 +583,31 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: model.indexes().to_owned(),
+            indexes: HashSet::from_iter(model.indexes().to_owned()),
             _preserve: None,
         })
     }
 
+    fn to_postgresdb_model(&self) -> CollectionPostgresModel {
+        CollectionPostgresModel::new(
+            &self.id,
+            &self.created_at,
+            &self.updated_at,
+            &self.project_id,
+            &self.name,
+            &sqlx::types::Json(
+                self.schema_fields
+                    .iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_postgresdb_model()))
+                    .collect(),
+            ),
+            &Vec::from_iter(self.indexes.to_owned()),
+        )
+    }
+
     fn from_mysqldb_model(model: &CollectionMysqlModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
-        for (key, value) in model.schema_fields() {
+        for (key, value) in &model.schema_fields().0 {
             let value = match SchemaFieldPropsModel::from_mysqldb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
@@ -605,14 +621,31 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: model.indexes().to_owned(),
+            indexes: model.indexes().0.to_owned(),
             _preserve: None,
         })
     }
 
+    fn to_mysqldb_model(&self) -> CollectionMysqlModel {
+        CollectionMysqlModel::new(
+            &self.id,
+            &self.created_at,
+            &self.updated_at,
+            &self.project_id,
+            &self.name,
+            &sqlx::types::Json(
+                self.schema_fields
+                    .iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_mysqldb_model()))
+                    .collect(),
+            ),
+            &sqlx::types::Json(self.indexes.to_owned()),
+        )
+    }
+
     fn from_sqlitedb_model(model: &CollectionSqliteModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
-        for (key, value) in model.schema_fields() {
+        for (key, value) in &model.schema_fields().0 {
             let value = match SchemaFieldPropsModel::from_sqlitedb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
@@ -626,9 +659,26 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: model.indexes().to_owned(),
+            indexes: model.indexes().0.to_owned(),
             _preserve: None,
         })
+    }
+
+    fn to_sqlitedb_model(&self) -> CollectionSqliteModel {
+        CollectionSqliteModel::new(
+            &self.id,
+            &self.created_at,
+            &self.updated_at,
+            &self.project_id,
+            &self.name,
+            &sqlx::types::Json(
+                self.schema_fields
+                    .iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_sqlitedb_model()))
+                    .collect(),
+            ),
+            &sqlx::types::Json(self.indexes.to_owned()),
+        )
     }
 }
 
@@ -798,85 +848,80 @@ impl SchemaFieldKind {
         }
     }
 
-    fn to_scylladb_model(&self) -> SchemaFieldScyllaKind {
+    fn to_scylladb_model(&self) -> SchemaFieldKindScylla {
         match self {
-            Self::Boolean => SchemaFieldScyllaKind::Boolean,
-            Self::TinyInt => SchemaFieldScyllaKind::TinyInt,
-            Self::SmallInt => SchemaFieldScyllaKind::SmallInt,
-            Self::Int => SchemaFieldScyllaKind::Int,
-            Self::BigInt => SchemaFieldScyllaKind::BigInt,
-            Self::Varint => SchemaFieldScyllaKind::Varint,
-            Self::Float => SchemaFieldScyllaKind::Float,
-            Self::Double => SchemaFieldScyllaKind::Double,
-            Self::Decimal => SchemaFieldScyllaKind::Decimal,
-            Self::String => SchemaFieldScyllaKind::Text,
-            Self::Binary | Self::Json => SchemaFieldScyllaKind::Blob,
-            Self::Uuid => SchemaFieldScyllaKind::Uuid,
-            Self::Date => SchemaFieldScyllaKind::Date,
-            Self::Time => SchemaFieldScyllaKind::Time,
-            Self::DateTime | Self::Timestamp => SchemaFieldScyllaKind::Timestamp,
+            Self::Boolean => SchemaFieldKindScylla::Boolean,
+            Self::TinyInt => SchemaFieldKindScylla::TinyInt,
+            Self::SmallInt => SchemaFieldKindScylla::SmallInt,
+            Self::Int => SchemaFieldKindScylla::Int,
+            Self::BigInt => SchemaFieldKindScylla::BigInt,
+            Self::Varint => SchemaFieldKindScylla::Varint,
+            Self::Float => SchemaFieldKindScylla::Float,
+            Self::Double => SchemaFieldKindScylla::Double,
+            Self::Decimal => SchemaFieldKindScylla::Decimal,
+            Self::String => SchemaFieldKindScylla::Text,
+            Self::Binary | Self::Json => SchemaFieldKindScylla::Blob,
+            Self::Uuid => SchemaFieldKindScylla::Uuid,
+            Self::Date => SchemaFieldKindScylla::Date,
+            Self::Time => SchemaFieldKindScylla::Time,
+            Self::DateTime | Self::Timestamp => SchemaFieldKindScylla::Timestamp,
         }
     }
 
-    pub fn to_postgresdb_model(&self) -> SchemaFieldPostgresKind {
+    pub fn to_postgresdb_model(&self) -> SchemaFieldKindPostgres {
         match self {
-            Self::Boolean => SchemaFieldPostgresKind::Bool,
-            Self::TinyInt => SchemaFieldPostgresKind::Char,
-            Self::SmallInt => SchemaFieldPostgresKind::Smallint,
-            Self::Int => SchemaFieldPostgresKind::Integer,
-            Self::BigInt => SchemaFieldPostgresKind::Bigint,
-            Self::Varint => SchemaFieldPostgresKind::Numeric,
-            Self::Float => SchemaFieldPostgresKind::Real,
-            Self::Double => SchemaFieldPostgresKind::DoublePrecision,
-            Self::Decimal => SchemaFieldPostgresKind::Numeric,
-            Self::String => SchemaFieldPostgresKind::Varchar,
-            Self::Binary => SchemaFieldPostgresKind::Bytea,
-            Self::Uuid => SchemaFieldPostgresKind::Uuid,
-            Self::Date => SchemaFieldPostgresKind::Date,
-            Self::Time => SchemaFieldPostgresKind::Time,
-            Self::DateTime => SchemaFieldPostgresKind::Timestamptz,
-            Self::Timestamp => SchemaFieldPostgresKind::Timestamptz,
-            Self::Json => SchemaFieldPostgresKind::Jsonb,
+            Self::Boolean => SchemaFieldKindPostgres::Bool,
+            Self::TinyInt => SchemaFieldKindPostgres::Char,
+            Self::SmallInt => SchemaFieldKindPostgres::Smallint,
+            Self::Int => SchemaFieldKindPostgres::Integer,
+            Self::BigInt => SchemaFieldKindPostgres::Bigint,
+            Self::Varint => SchemaFieldKindPostgres::Numeric,
+            Self::Float => SchemaFieldKindPostgres::Real,
+            Self::Double => SchemaFieldKindPostgres::DoublePrecision,
+            Self::Decimal => SchemaFieldKindPostgres::Numeric,
+            Self::String => SchemaFieldKindPostgres::Varchar,
+            Self::Binary => SchemaFieldKindPostgres::Bytea,
+            Self::Uuid => SchemaFieldKindPostgres::Uuid,
+            Self::Date => SchemaFieldKindPostgres::Date,
+            Self::Time => SchemaFieldKindPostgres::Time,
+            Self::DateTime | Self::Timestamp => SchemaFieldKindPostgres::Timestamptz,
+            Self::Json => SchemaFieldKindPostgres::Jsonb,
         }
     }
 
-    fn to_mysqldb_model(&self) -> SchemaFieldMysqlKind {
+    fn to_mysqldb_model(&self) -> SchemaFieldKindMysql {
         match self {
-            Self::Boolean => SchemaFieldMysqlKind::Bool,
-            Self::TinyInt => SchemaFieldMysqlKind::Tinyint,
-            Self::SmallInt => SchemaFieldMysqlKind::Smallint,
-            Self::Int => SchemaFieldMysqlKind::Int,
-            Self::BigInt => SchemaFieldMysqlKind::Bigint,
-            Self::Varint => SchemaFieldMysqlKind::Decimal,
-            Self::Float => SchemaFieldMysqlKind::Float,
-            Self::Double => SchemaFieldMysqlKind::Double,
-            Self::Decimal => SchemaFieldMysqlKind::Decimal,
-            Self::String => SchemaFieldMysqlKind::Varchar,
-            Self::Binary => SchemaFieldMysqlKind::Blob,
-            Self::Uuid => SchemaFieldMysqlKind::Binary16,
-            Self::Date => SchemaFieldMysqlKind::Date,
-            Self::Time => SchemaFieldMysqlKind::Time,
-            Self::DateTime => SchemaFieldMysqlKind::Datetime,
-            Self::Timestamp => SchemaFieldMysqlKind::Timestamp,
-            Self::Json => SchemaFieldMysqlKind::Json,
+            Self::Boolean => SchemaFieldKindMysql::Bool,
+            Self::TinyInt => SchemaFieldKindMysql::Tinyint,
+            Self::SmallInt => SchemaFieldKindMysql::Smallint,
+            Self::Int => SchemaFieldKindMysql::Int,
+            Self::BigInt => SchemaFieldKindMysql::Bigint,
+            Self::Binary | Self::Varint | Self::Decimal => SchemaFieldKindMysql::Blob,
+            Self::Float => SchemaFieldKindMysql::Float,
+            Self::Double => SchemaFieldKindMysql::Double,
+            Self::String => SchemaFieldKindMysql::Text,
+            Self::Uuid => SchemaFieldKindMysql::Binary16,
+            Self::Date => SchemaFieldKindMysql::Date,
+            Self::Time => SchemaFieldKindMysql::Time,
+            Self::DateTime => SchemaFieldKindMysql::Datetime,
+            Self::Timestamp => SchemaFieldKindMysql::Timestamp,
+            Self::Json => SchemaFieldKindMysql::Json,
         }
     }
 
-    fn to_sqlitedb_model(&self) -> SchemaFieldSqliteKind {
+    fn to_sqlitedb_model(&self) -> SchemaFieldKindSqlite {
         match self {
-            Self::Boolean | Self::TinyInt | Self::SmallInt | Self::Int | Self::BigInt => {
-                SchemaFieldSqliteKind::Integer
+            Self::Boolean => SchemaFieldKindSqlite::Boolean,
+            Self::TinyInt | Self::SmallInt | Self::Int => SchemaFieldKindSqlite::Integer,
+            Self::BigInt => SchemaFieldKindSqlite::Bigint,
+            Self::Binary | Self::Varint | Self::Decimal | Self::Uuid | Self::Json => {
+                SchemaFieldKindSqlite::Blob
             }
-            Self::Float | Self::Double => SchemaFieldSqliteKind::Real,
-            Self::Binary | Self::Json => SchemaFieldSqliteKind::Blob,
-            Self::String
-            | Self::Varint
-            | Self::Decimal
-            | Self::Uuid
-            | Self::Date
-            | Self::Time
-            | Self::DateTime
-            | Self::Timestamp => SchemaFieldSqliteKind::Text,
+            Self::Float | Self::Double => SchemaFieldKindSqlite::Real,
+            Self::String => SchemaFieldKindSqlite::Text,
+            Self::Date => SchemaFieldKindSqlite::Date,
+            Self::Time => SchemaFieldKindSqlite::Time,
+            Self::DateTime | Self::Timestamp => SchemaFieldKindSqlite::Datetime,
         }
     }
 }

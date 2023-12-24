@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const LOGICAL_OPERATOR: [&str; 2] = ["AND", "OR"];
 
@@ -36,7 +36,7 @@ pub const COMPARISON_OPERATOR: [&str; 29] = [
 
 pub const ORDER_TYPE: [&str; 2] = ["ASC", "DESC"];
 
-#[derive(Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum SchemaFieldKind {
     Bool,
     Char,
@@ -91,7 +91,7 @@ impl SchemaFieldKind {
     pub fn to_str(&self) -> &str {
         match self {
             Self::Bool => "bool",
-            Self::Char => "char",
+            Self::Char => "\"char\"",
             Self::Smallint => "smallint",
             Self::Smallserial => "smallserial",
             Self::Int2 => "int2",

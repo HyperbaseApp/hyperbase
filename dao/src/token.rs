@@ -489,7 +489,7 @@ impl TokenDao {
             updated_at: *model.updated_at(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().clone(),
+            rules: model.rules().0.clone(),
             expired_at: *model.expired_at(),
         })
     }
@@ -501,7 +501,7 @@ impl TokenDao {
             updated_at: *model.updated_at(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().clone(),
+            rules: model.rules().0.clone(),
             expired_at: *model.expired_at(),
         })
     }
@@ -513,8 +513,11 @@ impl TokenDao {
             updated_at: *model.updated_at(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().clone(),
-            expired_at: *model.expired_at(),
+            rules: model.rules().0.clone(),
+            expired_at: match model.expired_at() {
+                Some(expired_at) => Some(expired_at.0),
+                None => None,
+            },
         })
     }
 }

@@ -545,9 +545,6 @@ async fn find_many(
     Response::data(
         &StatusCode::OK,
         &Some(PaginationRes::new(&records_data.len(), &total)),
-        &records
-            .iter()
-            .map(|record| RecordResJson::new(record))
-            .collect::<Vec<_>>(),
+        &records,
     )
 }
