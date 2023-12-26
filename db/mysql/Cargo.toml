@@ -12,7 +12,7 @@ ahash = { workspace = true }
 itertools = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, features = ["mysql"] }
-uuid = { workspace = true, features = ["v4", "fast-rng"] }
+uuid = { workspace = true }
 
 
 [lints]

@@ -11,7 +11,7 @@ hb_log = { workspace = true }
 ahash = { workspace = true }
 itertools = { workspace = true }
 scylla = { workspace = true }
-uuid = { workspace = true, features = ["v4", "fast-rng"] }
+uuid = { workspace = true }
 
 
 [lints]

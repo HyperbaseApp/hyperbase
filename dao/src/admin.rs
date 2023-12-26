@@ -49,7 +49,7 @@ impl AdminDao {
     pub fn new(email: &str, password_hash: &str) -> Self {
         let now = Utc::now();
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             created_at: now,
             updated_at: now,
             email: email.to_owned(),

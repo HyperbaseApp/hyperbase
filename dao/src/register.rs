@@ -3,13 +3,17 @@ use chrono::{DateTime, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
     model::registration::RegistrationModel as RegistrationMysqlModel,
-    query::registration::{DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT},
+    query::registration::{
+        DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT,
+        SELECT_BY_EMAIL as MYSQL_SELECT_BY_EMAIL, UPDATE as MYSQL_UPDATE,
+    },
 };
 use hb_db_postgresql::{
     db::PostgresDb,
     model::registration::RegistrationModel as RegistrationPostgresModel,
     query::registration::{
         DELETE as POSTGRES_DELETE, INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT,
+        SELECT_BY_EMAIL as POSTGRES_SELECT_BY_EMAIL, UPDATE as POSTGRES_UPDATE,
     },
 };
 use hb_db_scylladb::{
@@ -17,6 +21,7 @@ use hb_db_scylladb::{
     model::registration::RegistrationModel as RegistrationScyllaModel,
     query::registration::{
         DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
+        SELECT_BY_EMAIL as SCYLLA_SELECT_BY_EMAIL, UPDATE as SCYLLA_UPDATE,
     },
 };
 use hb_db_sqlite::{
@@ -24,6 +29,7 @@ use hb_db_sqlite::{
     model::registration::RegistrationModel as RegistrationSqliteModel,
     query::registration::{
         DELETE as SQLITE_DELETE, INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT,
+        SELECT_BY_EMAIL as SQLITE_SELECT_BY_EMAIL, UPDATE as SQLITE_UPDATE,
     },
 };
 use rand::{thread_rng, Rng};
@@ -45,7 +51,7 @@ impl RegistrationDao {
     pub fn new(email: &str, password_hash: &str) -> Self {
         let now = Utc::now();
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             created_at: now,
             updated_at: now,
             email: email.to_owned(),
@@ -78,6 +84,10 @@ impl RegistrationDao {
         &self.code
     }
 
+    pub fn regenerate_code(&mut self) {
+        self.code = thread_rng().gen_range(100000..=999999).to_string();
+    }
+
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
@@ -104,6 +114,33 @@ impl RegistrationDao {
         }
     }
 
+    pub async fn db_select_by_email(db: &Db, email: &str) -> Result<Self> {
+        match db {
+            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
+                &Self::scylladb_select_by_email(db, email).await?,
+            )?),
+            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
+                &Self::postgresdb_select_by_email(db, email).await?,
+            )?),
+            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
+                &Self::mysqldb_select_by_email(db, email).await?,
+            )?),
+            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
+                &Self::sqlitedb_select_by_email(db, email).await?,
+            )?),
+        }
+    }
+
+    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
+        self.updated_at = Utc::now();
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
+            Db::PostgresqlDb(db) => Self::postgresdb_update(self, db).await,
+            Db::MysqlDb(db) => Self::mysqldb_update(self, db).await,
+            Db::SqliteDb(db) => Self::sqlitedb_update(self, db).await,
+        }
+    }
+
     pub async fn db_delete(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_delete(self, db).await,
@@ -123,6 +160,29 @@ impl RegistrationDao {
             .execute(SCYLLA_SELECT, [id].as_ref())
             .await?
             .first_row_typed::<RegistrationScyllaModel>()?)
+    }
+
+    async fn scylladb_select_by_email(
+        db: &ScyllaDb,
+        email: &str,
+    ) -> Result<RegistrationScyllaModel> {
+        Ok(db
+            .execute(SCYLLA_SELECT_BY_EMAIL, [email].as_ref())
+            .await?
+            .first_row_typed::<RegistrationScyllaModel>()?)
+    }
+
+    async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
+        db.execute(
+            SCYLLA_UPDATE,
+            &(
+                &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+                &self.code,
+                &self.id,
+            ),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn scylladb_delete(&self, db: &ScyllaDb) -> Result<()> {
@@ -155,6 +215,33 @@ impl RegistrationDao {
                 .unwrap()
             }))
             .await?)
+    }
+
+    async fn postgresdb_select_by_email(
+        db: &PostgresDb,
+        email: &str,
+    ) -> Result<RegistrationPostgresModel> {
+        Ok(db
+            .fetch_one(sqlx::query_as(POSTGRES_SELECT_BY_EMAIL).bind(email).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_registration_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
+            .await?)
+    }
+
+    async fn postgresdb_update(&self, db: &PostgresDb) -> Result<()> {
+        db.execute(
+            sqlx::query(POSTGRES_UPDATE)
+                .bind(&self.updated_at)
+                .bind(&self.code)
+                .bind(&self.id),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn postgresdb_delete(&self, db: &PostgresDb) -> Result<()> {
@@ -190,6 +277,30 @@ impl RegistrationDao {
             .await?)
     }
 
+    async fn mysqldb_select_by_email(db: &MysqlDb, email: &str) -> Result<RegistrationMysqlModel> {
+        Ok(db
+            .fetch_one(sqlx::query_as(MYSQL_SELECT_BY_EMAIL).bind(email).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_registration_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
+            .await?)
+    }
+
+    async fn mysqldb_update(&self, db: &MysqlDb) -> Result<()> {
+        db.execute(
+            sqlx::query(MYSQL_UPDATE)
+                .bind(&self.updated_at)
+                .bind(&self.code)
+                .bind(&self.id),
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn mysqldb_delete(&self, db: &MysqlDb) -> Result<()> {
         db.execute(sqlx::query(MYSQL_DELETE).bind(&self.id)).await?;
         Ok(())
@@ -220,6 +331,33 @@ impl RegistrationDao {
                 .unwrap()
             }))
             .await?)
+    }
+
+    async fn sqlitedb_select_by_email(
+        db: &SqliteDb,
+        email: &str,
+    ) -> Result<RegistrationSqliteModel> {
+        Ok(db
+            .fetch_one(sqlx::query_as(SQLITE_SELECT_BY_EMAIL).bind(email).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_registration_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
+            .await?)
+    }
+
+    async fn sqlitedb_update(&self, db: &SqliteDb) -> Result<()> {
+        db.execute(
+            sqlx::query(SQLITE_UPDATE)
+                .bind(&self.updated_at)
+                .bind(&self.code)
+                .bind(&self.id),
+        )
+        .await?;
+        Ok(())
     }
 
     async fn sqlitedb_delete(&self, db: &SqliteDb) -> Result<()> {

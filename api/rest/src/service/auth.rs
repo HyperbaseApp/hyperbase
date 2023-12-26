@@ -100,7 +100,10 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    if let Ok(_) = AdminDao::db_select_by_email(ctx.dao().db(), data.email()).await {
+    if AdminDao::db_select_by_email(ctx.dao().db(), data.email())
+        .await
+        .is_ok()
+    {
         return Response::error(&StatusCode::BAD_REQUEST, "Account has been registered");
     };
 
@@ -113,11 +116,24 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
     };
 
-    let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
-
-    if let Err(err) = registration_data.db_insert(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
+    let registration_data = match RegistrationDao::db_select_by_email(ctx.dao().db(), data.email())
+        .await
+    {
+        Ok(mut registration_data) => {
+            registration_data.regenerate_code();
+            if let Err(err) = registration_data.db_update(ctx.dao().db()).await {
+                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+            }
+            registration_data
+        }
+        Err(_) => {
+            let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
+            if let Err(err) = registration_data.db_insert(ctx.dao().db()).await {
+                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+            }
+            registration_data
+        }
+    };
 
     if let Err(err) = ctx.mailer().sender().send(MailPayload::new(
         data.email(),

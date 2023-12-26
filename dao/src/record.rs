@@ -79,7 +79,7 @@ impl RecordDao {
         });
         data.insert(
             "_id".to_owned(),
-            RecordColumnValue::Uuid(Some(Uuid::new_v4())),
+            RecordColumnValue::Uuid(Some(Uuid::now_v7())),
         );
 
         Self {
