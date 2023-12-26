@@ -156,6 +156,27 @@ impl CollectionDao {
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
+        if let Db::MysqlDb(_) = db {
+            for index in &self.indexes {
+                if let Some(field) = self.schema_fields.get(index) {
+                    match &field.kind {
+                        SchemaFieldKind::Binary
+                        | SchemaFieldKind::Varint
+                        | SchemaFieldKind::Decimal
+                        | SchemaFieldKind::String
+                        | SchemaFieldKind::Json => {
+                            return Err(Error::msg(format!(
+                                "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
+                                index,
+                                field.kind.to_str()
+                            )))
+                        }
+                        _ => (),
+                    };
+                }
+            }
+        }
+
         RecordDao::db_create_table(db, self).await?;
 
         let mut create_indexes_fut = Vec::with_capacity(self.indexes.len());
@@ -228,6 +249,27 @@ impl CollectionDao {
     }
 
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
+        if let Db::MysqlDb(_) = db {
+            for index in &self.indexes {
+                if let Some(field) = self.schema_fields.get(index) {
+                    match &field.kind {
+                        SchemaFieldKind::Binary
+                        | SchemaFieldKind::Varint
+                        | SchemaFieldKind::Decimal
+                        | SchemaFieldKind::String
+                        | SchemaFieldKind::Json => {
+                            return Err(Error::msg(format!(
+                                "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
+                                index,
+                                field.kind.to_str()
+                            )))
+                        }
+                        _ => (),
+                    };
+                }
+            }
+        }
+
         let is_preserve_schema_fields_exist = self
             ._preserve
             .as_ref()
@@ -412,13 +454,14 @@ impl CollectionDao {
     }
 
     async fn postgresdb_update(&self, db: &PostgresDb) -> Result<()> {
+        let model = self.to_postgresdb_model();
         db.execute(
             sqlx::query(POSTGRES_UPDATE)
-                .bind(&self.updated_at)
-                .bind(&self.name)
-                .bind(&sqlx::types::Json(&self.schema_fields))
-                .bind(&sqlx::types::Json(&self.indexes))
-                .bind(&self.id),
+                .bind(model.updated_at())
+                .bind(model.name())
+                .bind(model.schema_fields())
+                .bind(model.indexes())
+                .bind(model.id()),
         )
         .await?;
         Ok(())
@@ -459,13 +502,14 @@ impl CollectionDao {
     }
 
     async fn mysqldb_update(&self, db: &MysqlDb) -> Result<()> {
+        let model = self.to_mysqldb_model();
         db.execute(
             sqlx::query(MYSQL_UPDATE)
-                .bind(&self.updated_at)
-                .bind(&self.name)
-                .bind(&sqlx::types::Json(&self.schema_fields))
-                .bind(&sqlx::types::Json(&self.indexes))
-                .bind(&self.id),
+                .bind(model.updated_at())
+                .bind(model.name())
+                .bind(model.schema_fields())
+                .bind(model.indexes())
+                .bind(model.id()),
         )
         .await?;
         Ok(())
@@ -506,13 +550,14 @@ impl CollectionDao {
     }
 
     async fn sqlitedb_update(&self, db: &SqliteDb) -> Result<()> {
+        let model = self.to_sqlitedb_model();
         db.execute(
             sqlx::query(SQLITE_UPDATE)
-                .bind(&self.updated_at)
-                .bind(&self.name)
-                .bind(&sqlx::types::Json(&self.schema_fields))
-                .bind(&sqlx::types::Json(&self.indexes))
-                .bind(&self.id),
+                .bind(model.updated_at())
+                .bind(model.name())
+                .bind(model.schema_fields())
+                .bind(model.indexes())
+                .bind(model.id()),
         )
         .await?;
         Ok(())

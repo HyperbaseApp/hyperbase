@@ -3,7 +3,7 @@ use std::{collections::hash_map::Keys, str::FromStr};
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use bigdecimal::BigDecimal;
-use chrono::{DateTime, NaiveDate, NaiveTime, Timelike, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
     model::{
@@ -51,10 +51,7 @@ use hb_db_sqlite::{
 use num_bigint::BigInt;
 use scylla::{
     frame::{
-        response::result::CqlValue as ScyllaCqlValue,
-        value::{
-            CqlDate as ScyllaCqlDate, CqlTime as ScyllaCqlTime, CqlTimestamp as ScyllaCqlTimestamp,
-        },
+        response::result::CqlValue as ScyllaCqlValue, value::CqlTimestamp as ScyllaCqlTimestamp,
     },
     serialize::value::SerializeCql,
 };
@@ -62,6 +59,10 @@ use uuid::Uuid;
 
 use crate::{
     collection::{CollectionDao, SchemaFieldKind, SchemaFieldPropsModel},
+    util::conversion::{
+        self, naivedate_to_scylla_cql_date, naivetime_to_scylla_cql_time,
+        scylla_cql_date_to_naivedate, scylla_cql_time_to_naivetime,
+    },
     Db,
 };
 
@@ -881,10 +882,10 @@ impl RecordDao {
     ) -> Result<(Vec<Vec<Option<ScyllaCqlValue>>>, i64)> {
         let filter = filters.scylladb_filter_query(&None, 0)?;
 
-        let mut order = HashMap::with_capacity(orders.len());
+        let mut order = Vec::with_capacity(orders.len());
         for o in orders {
-            if SCYLLA_ORDER_TYPE.contains(&o.kind.as_str()) {
-                order.insert(o.field.as_str(), o.kind.as_str());
+            if SCYLLA_ORDER_TYPE.contains(&o.kind.to_uppercase().as_str()) {
+                order.push((o.field.as_str(), o.kind.as_str()));
             } else {
                 return Err(Error::msg(format!(
                     "Order type '{}' is not supported",
@@ -1091,10 +1092,10 @@ impl RecordDao {
         let mut argument_idx = 1;
         let filter = filters.postgresdb_filter_query(&None, 0, &mut argument_idx)?;
 
-        let mut order = HashMap::with_capacity(orders.len());
+        let mut order = Vec::with_capacity(orders.len());
         for o in orders {
-            if POSTGRES_ORDER_TYPE.contains(&o.kind.as_str()) {
-                order.insert(o.field.as_str(), o.kind.as_str());
+            if POSTGRES_ORDER_TYPE.contains(&o.kind.to_uppercase().as_str()) {
+                order.push((o.field.as_str(), o.kind.as_str()));
             } else {
                 return Err(Error::msg(format!(
                     "Order type '{}' is not supported",
@@ -1318,10 +1319,10 @@ impl RecordDao {
     ) -> Result<(Vec<sqlx::mysql::MySqlRow>, i64)> {
         let filter = filters.mysqldb_filter_query(&None, 0)?;
 
-        let mut order = HashMap::with_capacity(orders.len());
+        let mut order = Vec::with_capacity(orders.len());
         for o in orders {
-            if MYSQL_ORDER_TYPE.contains(&o.kind.as_str()) {
-                order.insert(o.field.as_str(), o.kind.as_str());
+            if MYSQL_ORDER_TYPE.contains(&o.kind.to_uppercase().as_str()) {
+                order.push((o.field.as_str(), o.kind.as_str()));
             } else {
                 return Err(Error::msg(format!(
                     "Order type '{}' is not supported",
@@ -1518,10 +1519,10 @@ impl RecordDao {
     ) -> Result<(Vec<sqlx::sqlite::SqliteRow>, i64)> {
         let filter = filters.sqlitedb_filter_query(&None, 0)?;
 
-        let mut order = HashMap::with_capacity(orders.len());
+        let mut order = Vec::with_capacity(orders.len());
         for o in orders {
-            if SQLITE_ORDER_TYPE.contains(&o.kind.as_str()) {
-                order.insert(o.field.as_str(), o.kind.as_str());
+            if SQLITE_ORDER_TYPE.contains(&o.kind.to_uppercase().as_str()) {
+                order.push((o.field.as_str(), o.kind.as_str()));
             } else {
                 return Err(Error::msg(format!(
                     "Order type '{}' is not supported",
@@ -1593,7 +1594,7 @@ impl RecordDao {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum RecordColumnValue {
     Boolean(Option<bool>),
     TinyInteger(Option<i8>),
@@ -1893,37 +1894,42 @@ impl RecordColumnValue {
             SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(value.as_uuid().ok_or(Error::msg(
                 "Incorrect internal value type. Internal value is not of type 'uuid'.",
             ))?))),
-            SchemaFieldKind::Date => Ok(Self::Date(Some(
-                NaiveDate::from_yo_opt(1970, 1)
-                    .unwrap()
-                    .checked_add_signed(chrono::Duration::days(value.as_cql_date().ok_or(Error::msg("Incorrect internal value type. Internal value is not of type 'date'."))?.0 as i64 - (1 << 31)))
-                    .ok_or(Error::msg("Can't convert value with type 'date' from ScyllaDB to 'date'. Value is out of range."))?,
-            ))),
+            SchemaFieldKind::Date => {
+                let date = value.as_cql_date().ok_or(Error::msg(
+                    "Incorrect internal value type. Internal value is not of type 'date'.",
+                ))?;
+                Ok(Self::Date(Some(scylla_cql_date_to_naivedate(&date)?)))
+            }
             SchemaFieldKind::Time => {
-                let nanoseconds_since_midnight = value.as_cql_time().ok_or(Error::msg("Incorrect internal value type. Internal value is not of type 'time'."))?.0;
-                let secs = nanoseconds_since_midnight/10_i64.pow(9);
-                let nano = nanoseconds_since_midnight - (secs*10_i64.pow(9));
-                Ok(Self::Time(Some(NaiveTime::from_num_seconds_from_midnight_opt(u32::try_from(secs)?,u32::try_from( nano)?).ok_or(Error::msg("Can't convert value with type 'time' from ScyllaDB to 'time'. Value is out of range."))?)))
-            },
+                let time = value.as_cql_time().ok_or(Error::msg(
+                    "Incorrect internal value type. Internal value is not of type 'time'.",
+                ))?;
+                Ok(Self::Time(Some(scylla_cql_time_to_naivetime(&time)?)))
+            }
             SchemaFieldKind::DateTime => {
-                let milliseconds_since_epoch = value.as_cql_timestamp().ok_or(Error::msg("Incorrect internal value type. Internal value is not of type 'timestamp'."))?.0;
-                let secs = milliseconds_since_epoch/10_i64.pow(3);
-                let nsecs = u32::try_from((milliseconds_since_epoch - secs*10_i64.pow(3)) *10_i64.pow(6))?;
-                Ok(Self::DateTime(Some(DateTime::from_timestamp(secs, nsecs).ok_or(Error::msg("Can't convert value with type 'timestamp' from ScyllaDB to 'datetime'. Value is out of range."))?.into())))
-            },
+                let timestamp = value.as_cql_timestamp().ok_or(Error::msg(
+                    "Incorrect internal value type. Internal value is not of type 'timestamp'.",
+                ))?;
+                Ok(Self::DateTime(Some(
+                    conversion::scylla_cql_timestamp_to_datetime_utc(&timestamp)?,
+                )))
+            }
             SchemaFieldKind::Timestamp => {
-                let milliseconds_since_epoch = value.as_cql_timestamp().ok_or(Error::msg("Incorrect internal value type. Internal value is not of type 'timestamp'."))?.0;
-                let secs = milliseconds_since_epoch/10_i64.pow(3);
-                let nsecs = u32::try_from((milliseconds_since_epoch - secs*10_i64.pow(3)) *10_i64.pow(6))?;
-                Ok(Self::DateTime(Some(DateTime::from_timestamp(secs, nsecs).ok_or(Error::msg("Can't convert value with type 'timestamp' from ScyllaDB to 'datetime'. Value is out of range."))?.into())))
-            },
-            SchemaFieldKind::Json => Ok(Self::Json(Some(
-                String::from_utf8( value
+                let timestamp = value.as_cql_timestamp().ok_or(Error::msg(
+                    "Incorrect internal value type. Internal value is not of type 'timestamp'.",
+                ))?;
+                Ok(Self::DateTime(Some(
+                    conversion::scylla_cql_timestamp_to_datetime_utc(&timestamp)?,
+                )))
+            }
+            SchemaFieldKind::Json => Ok(Self::Json(Some(String::from_utf8(
+                value
                     .as_blob()
                     .ok_or(Error::msg(
                         "Incorrect internal value type. Internal value is not of type 'text'.",
-                    ))?.to_owned())?,
-            ))),
+                    ))?
+                    .to_owned(),
+            )?))),
         }
     }
 
@@ -1950,18 +1956,11 @@ impl RecordColumnValue {
             Self::Binary(data) => Ok(Box::new(data.to_owned())),
             Self::Uuid(data) => Ok(Box::new(*data)),
             Self::Date(data) => Ok(Box::new(match data {
-                Some(data) => Some(ScyllaCqlDate(u32::try_from(
-                    (1 << 31)
-                        + data
-                            .signed_duration_since(NaiveDate::from_yo_opt(1970, 1).unwrap())
-                            .num_days(),
-                )?)),
+                Some(data) => Some(naivedate_to_scylla_cql_date(data)?),
                 None => None,
             })),
             Self::Time(data) => Ok(Box::new(match data {
-                Some(data) => Some(ScyllaCqlTime(
-                    i64::from(data.num_seconds_from_midnight()) * 10_i64.pow(9),
-                )),
+                Some(data) => Some(naivetime_to_scylla_cql_time(data)?),
                 None => None,
             })),
             Self::DateTime(data) => Ok(Box::new(match data {
@@ -2315,7 +2314,7 @@ impl RecordColumnValue {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RecordFilters(Vec<RecordFilter>);
 
 impl RecordFilters {
@@ -2633,7 +2632,7 @@ impl RecordFilters {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RecordFilter {
     field: Option<String>,
     op: String,

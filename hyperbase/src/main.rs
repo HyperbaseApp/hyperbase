@@ -100,9 +100,10 @@ async fn main() {
             TokenCtx::new(jwt_token),
             MailerCtx::new(mailer_sender),
             DaoCtx::new(db),
+            *config.auth().admin_registration(),
+            *config.auth().access_token_length(),
             *config.auth().registration_ttl(),
             *config.auth().reset_password_ttl(),
-            *config.auth().access_token_length(),
         ),
     );
 

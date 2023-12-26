@@ -45,7 +45,10 @@ async fn insert_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let project_data = ProjectDao::new(token_claim.id(), data.name());
@@ -89,7 +92,10 @@ async fn find_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
@@ -140,7 +146,10 @@ async fn update_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let mut project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
@@ -200,7 +209,10 @@ async fn delete_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
@@ -245,7 +257,10 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let projects_data =

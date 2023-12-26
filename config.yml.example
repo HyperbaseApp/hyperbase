@@ -50,6 +50,7 @@ api:
     port: "8080"
 
 auth:
+  admin_registration: true
   access_token_length: 20
   registration_ttl: 600 # seconds
   reset_password_ttl: 600 # seconds

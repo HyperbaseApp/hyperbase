@@ -122,11 +122,14 @@ impl AdminPasswordResetDao {
         id: &Uuid,
     ) -> Result<AdminPasswordResetPostgresModel> {
         Ok(db
-            .fetch_one(
-                sqlx::query_as(POSTGRES_SELECT)
-                    .bind(id)
-                    .bind(db.table_reset_password_ttl()),
-            )
+            .fetch_one(sqlx::query_as(POSTGRES_SELECT).bind(id).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_reset_password_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
             .await?)
     }
 
@@ -145,11 +148,14 @@ impl AdminPasswordResetDao {
 
     async fn mysqldb_select(db: &MysqlDb, id: &Uuid) -> Result<AdminPasswordResetMysqlModel> {
         Ok(db
-            .fetch_one(
-                sqlx::query_as(MYSQL_SELECT)
-                    .bind(id)
-                    .bind(db.table_reset_password_ttl()),
-            )
+            .fetch_one(sqlx::query_as(MYSQL_SELECT).bind(id).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_reset_password_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
             .await?)
     }
 
@@ -168,11 +174,14 @@ impl AdminPasswordResetDao {
 
     async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<AdminPasswordResetSqliteModel> {
         Ok(db
-            .fetch_one(
-                sqlx::query_as(SQLITE_SELECT)
-                    .bind(id)
-                    .bind(db.table_reset_password_ttl()),
-            )
+            .fetch_one(sqlx::query_as(SQLITE_SELECT).bind(id).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_reset_password_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
             .await?)
     }
 

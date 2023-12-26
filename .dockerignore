@@ -1,4 +1,11 @@
 /.cargo
 /.env
+/.git
+/.gitignore
+/Cargo.lock
+/LICENSE
+/README.md
 /config.yml
+/config.yml.example
+/docs
 /target

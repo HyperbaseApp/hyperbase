@@ -72,7 +72,7 @@ impl CollectionModel {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SchemaFieldPropsModel {
     kind: String,
     internal_kind: SchemaFieldKind,

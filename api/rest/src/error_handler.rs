@@ -1,5 +1,5 @@
 use actix_web::{
-    body::{to_bytes, MessageBody},
+    body::{to_bytes, BodySize, MessageBody},
     dev::ServiceResponse,
     http::header,
     middleware::ErrorHandlerResponse,
@@ -24,7 +24,11 @@ pub fn default_error_handler<B: MessageBody>(
 
     let status_code = res.status();
     let body = executor::block_on(async {
-        match to_bytes(res.into_body()).await {
+        let res = res.into_body();
+        if res.size() == BodySize::None || res.size() == BodySize::Sized(0) {
+            return status_code.to_string();
+        }
+        match to_bytes(res).await {
             Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
                 Ok(str) => str,
                 Err(err) => err.to_string(),

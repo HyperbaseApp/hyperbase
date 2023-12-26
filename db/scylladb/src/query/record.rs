@@ -99,7 +99,7 @@ pub fn select_many(
     columns: &Vec<&str>,
     filter: &str,
     groups: &Vec<&str>,
-    orders: &HashMap<&str, &str>,
+    orders: &Vec<(&str, &str)>,
     with_query_limit: &bool,
 ) -> String {
     let mut query = format!(

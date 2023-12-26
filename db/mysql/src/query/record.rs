@@ -24,11 +24,15 @@ pub fn drop_table(record_table: &str) -> String {
 
 pub fn add_columns(record_table: &str, columns: &HashMap<String, SchemaFieldPropsModel>) -> String {
     format!(
-        "ALTER TABLE `{}` ADD ({})",
+        "ALTER TABLE `{}` {}",
         record_table,
         columns
             .iter()
-            .map(|(col, col_props)| format!("`{}` {}", col, col_props.internal_kind().to_str()))
+            .map(|(col, col_props)| format!(
+                "ADD COLUMN `{}` {}",
+                col,
+                col_props.internal_kind().to_str()
+            ))
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -36,9 +40,12 @@ pub fn add_columns(record_table: &str, columns: &HashMap<String, SchemaFieldProp
 
 pub fn drop_columns(record_table: &str, column_names: &HashSet<String>) -> String {
     format!(
-        "ALTER TABLE `{}` DROP ({})",
+        "ALTER TABLE `{}` {}",
         record_table,
-        &column_names.iter().map(|col| format!("`{col}`")).join(", ")
+        &column_names
+            .iter()
+            .map(|col| format!("DROP COLUMN `{col}`"))
+            .join(", ")
     )
 }
 
@@ -66,11 +73,11 @@ pub fn count_index(record_table: &str, index: &str) -> String {
 }
 
 pub fn create_index(record_table: &str, index: &str) -> String {
-    format!("CREATE INDEX IF NOT EXISTS '{record_table}_{index}' ON `{record_table}` ('{index}')")
+    format!("CREATE INDEX `{record_table}_{index}` ON `{record_table}` (`{index}`)")
 }
 
 pub fn drop_index(record_table: &str, index: &str) -> String {
-    format!("DROP INDEX IF EXISTS `{record_table}_{index}`")
+    format!("DROP INDEX `{record_table}_{index}`")
 }
 
 pub fn insert(record_table: &str, columns: &Vec<&str>) -> String {
@@ -100,7 +107,7 @@ pub fn select_many(
     columns: &Vec<&str>,
     filter: &str,
     groups: &Vec<&str>,
-    orders: &HashMap<&str, &str>,
+    orders: &Vec<(&str, &str)>,
     with_query_limit: &bool,
 ) -> String {
     let mut query = format!(

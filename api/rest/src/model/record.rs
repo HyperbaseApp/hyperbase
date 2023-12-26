@@ -1,7 +1,7 @@
 use ahash::HashMap;
 use anyhow::{Error, Result};
 use hb_dao::{
-    collection::CollectionDao,
+    collection::{CollectionDao, SchemaFieldKind},
     record::{RecordColumnValue, RecordFilter, RecordFilters},
 };
 use serde::{Deserialize, Serialize};
@@ -149,9 +149,13 @@ impl FindManyRecordFiltersReqJson {
                 Some(field) => match collection_data.schema_fields().get(field) {
                     Some(field) => Some(field.kind()),
                     None => {
-                        return Err(Error::msg(format!(
-                            "Field '{field}' is not exist in the collection",
-                        )));
+                        if field == "_id" {
+                            Some(&SchemaFieldKind::Uuid)
+                        } else {
+                            return Err(Error::msg(format!(
+                                "Field '{field}' is not exist in the collection",
+                            )));
+                        }
                     }
                 },
                 None => None,

@@ -1,0 +1,6 @@
+[book]
+authors = ["Muhammad Naufal Hilmy Makarim"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Hyperbase Documentation"

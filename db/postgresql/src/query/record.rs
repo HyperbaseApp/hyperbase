@@ -24,11 +24,15 @@ pub fn drop_table(record_table: &str) -> String {
 
 pub fn add_columns(record_table: &str, columns: &HashMap<String, SchemaFieldPropsModel>) -> String {
     format!(
-        "ALTER TABLE \"{}\" ADD ({})",
+        "ALTER TABLE \"{}\" {}",
         record_table,
         columns
             .iter()
-            .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.internal_kind().to_str()))
+            .map(|(col, col_props)| format!(
+                "ADD COLUMN \"{}\" {}",
+                col,
+                col_props.internal_kind().to_str()
+            ))
             .collect::<Vec<_>>()
             .join(", ")
     )
@@ -36,11 +40,11 @@ pub fn add_columns(record_table: &str, columns: &HashMap<String, SchemaFieldProp
 
 pub fn drop_columns(record_table: &str, column_names: &HashSet<String>) -> String {
     format!(
-        "ALTER TABLE \"{}\" DROP ({})",
+        "ALTER TABLE \"{}\" {}",
         record_table,
         &column_names
             .iter()
-            .map(|col| format!("\"{col}\""))
+            .map(|col| format!("DROP COLUMN \"{col}\""))
             .join(", ")
     )
 }
@@ -101,7 +105,7 @@ pub fn select_many(
     columns: &Vec<&str>,
     filter: &str,
     groups: &Vec<&str>,
-    orders: &HashMap<&str, &str>,
+    orders: &Vec<(&str, &str)>,
     with_query_limit: &bool,
     argument_idx: &usize,
 ) -> String {
@@ -143,13 +147,14 @@ pub fn select_many(
 
 pub fn update(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
-        "UPDATE \"{}\" SET {} WHERE \"_id\" = $1",
+        "UPDATE \"{}\" SET {} WHERE \"_id\" = ${}",
         record_table,
         columns
             .iter()
             .enumerate()
-            .map(|(idx, col)| format!("\"{}\" = ${}", col, idx + 2))
-            .join(", ")
+            .map(|(idx, col)| format!("\"{}\" = ${}", col, idx + 1))
+            .join(", "),
+        columns.len() + 1
     )
 }
 

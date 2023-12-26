@@ -26,7 +26,7 @@ pub const COMPARISON_OPERATOR: [&str; 19] = [
 
 pub const ORDER_TYPE: [&str; 2] = ["ASC", "DESC"];
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum SchemaFieldKind {
     Tinyint1,
     Boolean,

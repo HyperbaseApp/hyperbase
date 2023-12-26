@@ -146,11 +146,14 @@ impl RegistrationDao {
 
     async fn postgresdb_select(db: &PostgresDb, id: &Uuid) -> Result<RegistrationPostgresModel> {
         Ok(db
-            .fetch_one(
-                sqlx::query_as(POSTGRES_SELECT)
-                    .bind(id)
-                    .bind(db.table_registration_ttl()),
-            )
+            .fetch_one(sqlx::query_as(POSTGRES_SELECT).bind(id).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_registration_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
             .await?)
     }
 
@@ -176,11 +179,14 @@ impl RegistrationDao {
 
     async fn mysqldb_select(db: &MysqlDb, id: &Uuid) -> Result<RegistrationMysqlModel> {
         Ok(db
-            .fetch_one(
-                sqlx::query_as(MYSQL_SELECT)
-                    .bind(id)
-                    .bind(db.table_registration_ttl()),
-            )
+            .fetch_one(sqlx::query_as(MYSQL_SELECT).bind(id).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_registration_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
             .await?)
     }
 
@@ -205,11 +211,14 @@ impl RegistrationDao {
 
     async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<RegistrationSqliteModel> {
         Ok(db
-            .fetch_one(
-                sqlx::query_as(SQLITE_SELECT)
-                    .bind(id)
-                    .bind(db.table_registration_ttl()),
-            )
+            .fetch_one(sqlx::query_as(SQLITE_SELECT).bind(id).bind(&{
+                let now = Utc::now();
+                DateTime::from_timestamp(
+                    now.timestamp() - db.table_registration_ttl(),
+                    now.timestamp_subsec_nanos(),
+                )
+                .unwrap()
+            }))
             .await?)
     }
 

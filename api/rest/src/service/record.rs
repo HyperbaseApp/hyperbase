@@ -63,11 +63,21 @@ async fn insert_one(
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
         },
     };
 
@@ -127,15 +137,14 @@ async fn insert_one(
                 continue;
             }
         }
-        match field_props.required() {
-            true => {
-                return Response::error(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Value for '{field_name}' is required"),
-                )
-            }
-            false => record_data.upsert(field_name, &RecordColumnValue::none(field_props.kind())),
-        };
+        if *field_props.required() {
+            return Response::error(
+                &StatusCode::BAD_REQUEST,
+                &format!("Value for '{field_name}' is required"),
+            );
+        } else {
+            record_data.upsert(field_name, &RecordColumnValue::none(field_props.kind()));
+        }
     }
 
     if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
@@ -174,11 +183,21 @@ async fn find_one(
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
         },
     };
 
@@ -249,11 +268,21 @@ async fn update_one(
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
         },
     };
 
@@ -360,11 +389,21 @@ async fn delete_one(
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
         },
     };
 
@@ -428,11 +467,21 @@ async fn find_many(
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
         },
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
         },
     };
 
@@ -475,14 +524,15 @@ async fn find_many(
         Some(group) => {
             let mut groups = Vec::with_capacity(group.len());
             for field in group {
-                match collection_data.schema_fields().contains_key(field) {
-                    true => groups.push(field.as_str()),
-                    false => {
-                        return Response::error(
-                            &StatusCode::BAD_REQUEST,
-                            &format!("Field '{field}' is not exist in the collection"),
-                        );
-                    }
+                if collection_data.schema_fields().contains_key(field) {
+                    groups.push(field.as_str());
+                } else if field == "_id" {
+                    groups.push(field.as_str());
+                } else {
+                    return Response::error(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Field '{field}' is not exist in the collection"),
+                    );
                 }
             }
             groups
@@ -493,14 +543,15 @@ async fn find_many(
         Some(order) => {
             let mut orders = Vec::with_capacity(order.len());
             for o in order {
-                match collection_data.schema_fields().contains_key(o.field()) {
-                    true => orders.push(RecordOrder::new(o.field(), o.kind())),
-                    false => {
-                        return Response::error(
-                            &StatusCode::BAD_REQUEST,
-                            &format!("Field '{}' is not exist in the collection", o.field()),
-                        );
-                    }
+                if collection_data.schema_fields().contains_key(o.field()) {
+                    orders.push(RecordOrder::new(o.field(), o.kind()));
+                } else if o.field() == "_id" {
+                    orders.push(RecordOrder::new(o.field(), o.kind()));
+                } else {
+                    return Response::error(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Field '{}' is not exist in the collection", o.field()),
+                    );
                 }
             }
             orders

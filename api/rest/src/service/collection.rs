@@ -67,7 +67,10 @@ async fn insert_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
@@ -84,6 +87,12 @@ async fn insert_one(
 
     let mut schema_fields = HashMap::with_capacity(data.schema_fields().len());
     for (key, value) in data.schema_fields().iter() {
+        if key.is_empty() {
+            return Response::error(
+                &StatusCode::BAD_REQUEST,
+                &format!("Field name in schema_fields can't be empty string"),
+            );
+        }
         if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
             return Response::error(
                 &StatusCode::BAD_REQUEST,
@@ -116,6 +125,12 @@ async fn insert_one(
 
     if let Some(indexes) = data.indexes() {
         for index in indexes {
+            if index.is_empty() {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Field name in indexes can't be empty string"),
+                );
+            }
             match schema_fields.get(index) {
                 Some(field) => {
                     if !field.required() {
@@ -203,7 +218,10 @@ async fn find_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let (project_data, collection_data) = match tokio::try_join!(
@@ -276,7 +294,10 @@ async fn update_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let (project_data, mut collection_data) = match tokio::try_join!(
@@ -305,6 +326,12 @@ async fn update_one(
     if let Some(schema_field) = data.schema_fields() {
         let mut schema_fields = HashMap::with_capacity(schema_field.len());
         for (key, value) in schema_field.iter() {
+            if key.is_empty() {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Field name in schema_fields can't be empty string"),
+                );
+            }
             if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
                 return Response::error(
                     &StatusCode::BAD_REQUEST,
@@ -344,6 +371,12 @@ async fn update_one(
 
     if let Some(indexes) = data.indexes() {
         for index in indexes {
+            if index.is_empty() {
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Field name in indexes can't be empty string"),
+                );
+            }
             match collection_data.schema_fields().get(index) {
                 Some(field) => {
                     if !field.required() {
@@ -424,7 +457,10 @@ async fn delete_one(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let (project_data, collection_data) = match tokio::try_join!(
@@ -480,7 +516,10 @@ async fn find_many(
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
     }
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {

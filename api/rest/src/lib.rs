@@ -38,7 +38,7 @@ impl ApiRestServer {
                 .wrap(Logger::new(logger_format()))
                 .wrap(ErrorHandlers::new().default_handler(default_error_handler))
                 .app_data(self.context.clone())
-                .service(web::scope("/api/rest").configure(config))
+                .configure(config)
         })
         .bind(self.address)
         .unwrap()

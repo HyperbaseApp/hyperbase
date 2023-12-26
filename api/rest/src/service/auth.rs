@@ -53,12 +53,18 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
     match token_claim.kind() {
         JwtTokenKind::User => {
             if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                );
             }
         }
         JwtTokenKind::Token => {
             if let Err(err) = TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+                return Response::error(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                );
             }
         }
     }
@@ -86,6 +92,10 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
 }
 
 async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) -> HttpResponse {
+    if !ctx.admin_registration() {
+        return Response::error(&StatusCode::BAD_REQUEST, "Admin registration is disabled");
+    }
+
     if let Err(err) = data.validate() {
         return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
     }
@@ -132,6 +142,10 @@ async fn verify_registration(
     ctx: web::Data<ApiRestCtx>,
     data: web::Json<VerifyRegistrationReqJson>,
 ) -> HttpResponse {
+    if !ctx.admin_registration() {
+        return Response::error(&StatusCode::BAD_REQUEST, "Admin registration is disabled");
+    }
+
     let registration_data = match RegistrationDao::db_select(ctx.dao().db(), data.id()).await {
         Ok(data) => data,
         Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
