@@ -13,7 +13,6 @@ pub fn create_table(
         columns
             .iter()
             .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.internal_kind().to_str()))
-            .collect::<Vec<_>>()
             .join(", ")
     )
 }
@@ -37,7 +36,6 @@ pub fn add_columns(record_table: &str, columns: &HashMap<String, SchemaFieldProp
         columns
             .iter()
             .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.internal_kind().to_str()))
-            .collect::<Vec<_>>()
             .join(", ")
     )
 }
@@ -67,7 +65,6 @@ pub fn change_columns_type(
                 col,
                 col_props.internal_kind().to_str()
             ))
-            .collect::<Vec<_>>()
             .join(", ")
     )
 }
