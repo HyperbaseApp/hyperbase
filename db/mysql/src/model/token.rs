@@ -1,4 +1,5 @@
 use ahash::HashMap;
+use serde::{Deserialize, Serialize};
 use sqlx::{
     types::{
         chrono::{DateTime, Utc},
@@ -15,7 +16,7 @@ pub struct TokenModel {
     updated_at: DateTime<Utc>,
     admin_id: Uuid,
     token: String,
-    rules: Json<HashMap<Uuid, i8>>, // 0: no access, 1: read only, 2: read and write
+    rules: Json<HashMap<Uuid, TokenRuleMethodModel>>,
     expired_at: Option<DateTime<Utc>>,
 }
 
@@ -26,7 +27,7 @@ impl TokenModel {
         updated_at: &DateTime<Utc>,
         admin_id: &Uuid,
         token: &str,
-        rules: &Json<HashMap<Uuid, i8>>,
+        rules: &Json<HashMap<Uuid, TokenRuleMethodModel>>,
         expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -60,11 +61,58 @@ impl TokenModel {
         &self.token
     }
 
-    pub fn rules(&self) -> &Json<HashMap<Uuid, i8>> {
+    pub fn rules(&self) -> &Json<HashMap<Uuid, TokenRuleMethodModel>> {
         &self.rules
     }
 
     pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct TokenRuleMethodModel {
+    find_one: bool,
+    find_many: bool,
+    insert: bool,
+    update: bool,
+    delete: bool,
+}
+
+impl TokenRuleMethodModel {
+    pub fn new(
+        find_one: &bool,
+        find_many: &bool,
+        insert: &bool,
+        update: &bool,
+        delete: &bool,
+    ) -> Self {
+        Self {
+            find_one: *find_one,
+            find_many: *find_many,
+            insert: *insert,
+            update: *update,
+            delete: *delete,
+        }
+    }
+
+    pub fn find_one(&self) -> &bool {
+        &self.find_one
+    }
+
+    pub fn find_many(&self) -> &bool {
+        &self.find_many
+    }
+
+    pub fn insert(&self) -> &bool {
+        &self.insert
+    }
+
+    pub fn update(&self) -> &bool {
+        &self.update
+    }
+
+    pub fn delete(&self) -> &bool {
+        &self.delete
     }
 }

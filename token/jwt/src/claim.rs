@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::kind::JwtTokenKind;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Claim {
     id: Uuid,
     kind: JwtTokenKind,

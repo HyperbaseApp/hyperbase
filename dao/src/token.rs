@@ -1,9 +1,11 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
-    model::token::TokenModel as TokenMysqlModel,
+    model::token::{
+        TokenModel as TokenMysqlModel, TokenRuleMethodModel as TokenRuleMethodMysqlModel,
+    },
     query::token::{
         DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT,
         SELECT_BY_TOKEN as MYSQL_SELECT_BY_TOKEN,
@@ -12,7 +14,9 @@ use hb_db_mysql::{
 };
 use hb_db_postgresql::{
     db::PostgresDb,
-    model::token::TokenModel as TokenPostgresModel,
+    model::token::{
+        TokenModel as TokenPostgresModel, TokenRuleMethodModel as TokenRuleMethodPostgresModel,
+    },
     query::token::{
         DELETE as POSTGRES_DELETE, INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT,
         SELECT_BY_TOKEN as POSTGRES_SELECT_BY_TOKEN,
@@ -21,7 +25,9 @@ use hb_db_postgresql::{
 };
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::token::TokenModel as TokenScyllaModel,
+    model::token::{
+        TokenModel as TokenScyllaModel, TokenRuleMethodModel as TokenRuleMethodScyllaModel,
+    },
     query::token::{
         DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
         SELECT_BY_TOKEN as SCYLLA_SELECT_BY_TOKEN,
@@ -30,7 +36,9 @@ use hb_db_scylladb::{
 };
 use hb_db_sqlite::{
     db::SqliteDb,
-    model::token::TokenModel as TokenSqliteModel,
+    model::token::{
+        TokenModel as TokenSqliteModel, TokenRuleMethodModel as TokenRuleMethodSqliteModel,
+    },
     query::token::{
         DELETE as SQLITE_DELETE, INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT,
         SELECT_BY_TOKEN as SQLITE_SELECT_BY_TOKEN,
@@ -42,6 +50,7 @@ use scylla::{
     frame::value::CqlTimestamp as ScyllaCqlTimestamp,
     transport::session::TypedRowIter as ScyllaTypedRowIter,
 };
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -52,7 +61,7 @@ pub struct TokenDao {
     updated_at: DateTime<Utc>,
     admin_id: Uuid,
     token: String,
-    rules: HashMap<Uuid, i8>,
+    rules: HashMap<Uuid, TokenRuleMethod>,
     expired_at: Option<DateTime<Utc>>,
 }
 
@@ -60,7 +69,7 @@ impl TokenDao {
     pub fn new(
         admin_id: &Uuid,
         token_length: &usize,
-        rules: &HashMap<Uuid, i8>,
+        rules: &HashMap<Uuid, TokenRuleMethod>,
         expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         let now = Utc::now();
@@ -99,7 +108,7 @@ impl TokenDao {
         &self.token
     }
 
-    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+    pub fn rules(&self) -> &HashMap<Uuid, TokenRuleMethod> {
         &self.rules
     }
 
@@ -107,11 +116,7 @@ impl TokenDao {
         &self.expired_at
     }
 
-    pub fn upsert_rule(&mut self, collection_id: &Uuid, rule: &i8) {
-        self.rules.insert(*collection_id, *rule);
-    }
-
-    pub fn set_rules(&mut self, rules: &HashMap<Uuid, i8>) {
+    pub fn set_rules(&mut self, rules: &HashMap<Uuid, TokenRuleMethod>) {
         self.rules = rules.clone();
     }
 
@@ -119,12 +124,39 @@ impl TokenDao {
         self.expired_at = *expired_at;
     }
 
-    pub fn is_allow_write(&self, collection_id: &Uuid) -> bool {
-        self.is_allow(&2, collection_id)
+    pub fn is_allow_find_one(&self, collection_id: &Uuid) -> bool {
+        match self.rules.get(collection_id) {
+            Some(rules) => rules.find_one,
+            None => false,
+        }
     }
 
-    pub fn is_allow_read(&self, collection_id: &Uuid) -> bool {
-        self.is_allow(&1, collection_id)
+    pub fn is_allow_find_many(&self, collection_id: &Uuid) -> bool {
+        match self.rules.get(collection_id) {
+            Some(rules) => rules.find_many,
+            None => false,
+        }
+    }
+
+    pub fn is_allow_insert(&self, collection_id: &Uuid) -> bool {
+        match self.rules.get(collection_id) {
+            Some(rules) => rules.insert,
+            None => false,
+        }
+    }
+
+    pub fn is_allow_update(&self, collection_id: &Uuid) -> bool {
+        match self.rules.get(collection_id) {
+            Some(rules) => rules.update,
+            None => false,
+        }
+    }
+
+    pub fn is_allow_delete(&self, collection_id: &Uuid) -> bool {
+        match self.rules.get(collection_id) {
+            Some(rules) => rules.delete,
+            None => false,
+        }
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -138,71 +170,66 @@ impl TokenDao {
 
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
-            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
-                &Self::scylladb_select(db, id).await?,
+            Db::ScyllaDb(scylla_db) => Ok(Self::from_scylladb_model(
+                &Self::scylladb_select(scylla_db, id).await?,
             )?),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
-                &Self::postgresdb_select(db, id).await?,
-            )?),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
-                &Self::mysqldb_select(db, id).await?,
-            )?),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
-                &Self::sqlitedb_select(db, id).await?,
-            )?),
+            Db::PostgresqlDb(postgres_db) => Ok(Self::from_postgresdb_model(
+                &Self::postgresdb_select(postgres_db, id).await?,
+            )),
+            Db::MysqlDb(mysql_db) => Ok(Self::from_mysqldb_model(
+                &Self::mysqldb_select(mysql_db, id).await?,
+            )),
+            Db::SqliteDb(sqlite_db) => Ok(Self::from_sqlitedb_model(
+                &Self::sqlitedb_select(sqlite_db, id).await?,
+            )),
         }
     }
 
     pub async fn db_select_by_token(db: &Db, token: &str) -> Result<Self> {
         match db {
-            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
-                &Self::scylladb_select_by_token(db, token).await?,
+            Db::ScyllaDb(scylla_db) => Ok(Self::from_scylladb_model(
+                &Self::scylladb_select_by_token(scylla_db, token).await?,
             )?),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
-                &Self::postgresdb_select_by_token(db, token).await?,
-            )?),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
-                &Self::mysqldb_select_by_token(db, token).await?,
-            )?),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
-                &Self::sqlitedb_select_by_token(db, token).await?,
-            )?),
+            Db::PostgresqlDb(postgres_db) => Ok(Self::from_postgresdb_model(
+                &Self::postgresdb_select_by_token(postgres_db, token).await?,
+            )),
+            Db::MysqlDb(mysql_db) => Ok(Self::from_mysqldb_model(
+                &Self::mysqldb_select_by_token(mysql_db, token).await?,
+            )),
+            Db::SqliteDb(sqlite_db) => Ok(Self::from_sqlitedb_model(
+                &Self::sqlitedb_select_by_token(sqlite_db, token).await?,
+            )),
         }
     }
 
     pub async fn db_select_many_by_admin_id(db: &Db, admin_id: &Uuid) -> Result<Vec<Self>> {
         match db {
-            Db::ScyllaDb(db) => {
+            Db::ScyllaDb(scylla_db) => {
                 let mut tokens_data = Vec::new();
-                let tokens = Self::scylladb_select_many_by_admin_id(db, admin_id).await?;
-                for token in tokens {
+                for token in Self::scylladb_select_many_by_admin_id(scylla_db, admin_id).await? {
                     tokens_data.push(Self::from_scylladb_model(&token?)?);
                 }
                 Ok(tokens_data)
             }
-            Db::PostgresqlDb(db) => {
-                let tokens = Self::postgresdb_select_many_by_admin_id(db, admin_id).await?;
-                let mut tokens_data = Vec::with_capacity(tokens.len());
-                for token in &tokens {
-                    tokens_data.push(Self::from_postgresdb_model(token)?);
-                }
-                Ok(tokens_data)
-            }
-            Db::MysqlDb(db) => {
-                let tokens = Self::mysqldb_select_many_by_admin_id(db, admin_id).await?;
-                let mut tokens_data = Vec::with_capacity(tokens.len());
-                for token in &tokens {
-                    tokens_data.push(Self::from_mysqldb_model(token)?);
-                }
-                Ok(tokens_data)
-            }
-            Db::SqliteDb(db) => {
-                let tokens = Self::sqlitedb_select_many_by_admin_id(db, admin_id).await?;
-                let mut tokens_data = Vec::with_capacity(tokens.len());
-                for token in &tokens {
-                    tokens_data.push(Self::from_sqlitedb_model(token)?);
-                }
-                Ok(tokens_data)
+            Db::PostgresqlDb(postgres_db) => Ok(Self::postgresdb_select_many_by_admin_id(
+                postgres_db,
+                admin_id,
+            )
+            .await?
+            .iter()
+            .map(|data| Self::from_postgresdb_model(data))
+            .collect()),
+            Db::MysqlDb(mysql_db) => Ok(Self::mysqldb_select_many_by_admin_id(mysql_db, admin_id)
+                .await?
+                .iter()
+                .map(|data| Self::from_mysqldb_model(data))
+                .collect()),
+            Db::SqliteDb(sqlite_db) => {
+                Ok(Self::sqlitedb_select_many_by_admin_id(sqlite_db, admin_id)
+                    .await?
+                    .iter()
+                    .map(|data| Self::from_sqlitedb_model(data))
+                    .collect())
             }
         }
     }
@@ -224,21 +251,6 @@ impl TokenDao {
             Db::MysqlDb(db) => Self::mysqldb_delete(db, id).await,
             Db::SqliteDb(db) => Self::sqlitedb_delete(db, id).await,
         }
-    }
-
-    fn is_allow(&self, rule: &i8, collection_id: &Uuid) -> bool {
-        if let Some(collection_rule) = self.rules.get(collection_id) {
-            if collection_rule >= rule {
-                if let Some(expired_at) = self.expired_at {
-                    if expired_at > Utc::now() {
-                        return true;
-                    }
-                } else {
-                    return true;
-                }
-            }
-        }
-        false
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
@@ -275,7 +287,11 @@ impl TokenDao {
             SCYLLA_UPDATE,
             &(
                 &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
-                &self.rules,
+                &self
+                    .rules
+                    .iter()
+                    .map(|(collection_id, rules)| (collection_id, rules.to_scylladb_model()))
+                    .collect::<HashMap<_, _>>(),
                 &match self.expired_at {
                     Some(expired_at) => Some(ScyllaCqlTimestamp(expired_at.timestamp_millis())),
                     None => None,
@@ -457,7 +473,15 @@ impl TokenDao {
             updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().clone(),
+            rules: match model.rules() {
+                Some(rules) => rules
+                    .iter()
+                    .map(|(collection_id, rules)| {
+                        (*collection_id, TokenRuleMethod::from_scylladb_model(rules))
+                    })
+                    .collect(),
+                None => HashMap::new(),
+            },
             expired_at: match &model.expired_at() {
                 Some(expired_at) => Some(conversion::scylla_cql_timestamp_to_datetime_utc(
                     expired_at,
@@ -474,7 +498,12 @@ impl TokenDao {
             &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.admin_id,
             &self.token,
-            &self.rules,
+            &Some(
+                self.rules
+                    .iter()
+                    .map(|(collection_id, rules)| (*collection_id, rules.to_scylladb_model()))
+                    .collect(),
+            ),
             &match &self.expired_at {
                 Some(expired_at) => Some(ScyllaCqlTimestamp(expired_at.timestamp_millis())),
                 None => None,
@@ -482,42 +511,160 @@ impl TokenDao {
         )
     }
 
-    fn from_postgresdb_model(model: &TokenPostgresModel) -> Result<Self> {
-        Ok(Self {
+    fn from_postgresdb_model(model: &TokenPostgresModel) -> Self {
+        Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().0.clone(),
+            rules: model
+                .rules()
+                .iter()
+                .map(|(collection_id, rules)| {
+                    (
+                        *collection_id,
+                        TokenRuleMethod::from_postgresdb_model(rules),
+                    )
+                })
+                .collect(),
             expired_at: *model.expired_at(),
-        })
+        }
     }
 
-    fn from_mysqldb_model(model: &TokenMysqlModel) -> Result<Self> {
-        Ok(Self {
+    fn from_mysqldb_model(model: &TokenMysqlModel) -> Self {
+        Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().0.clone(),
+            rules: model
+                .rules()
+                .iter()
+                .map(|(collection_id, rules)| {
+                    (*collection_id, TokenRuleMethod::from_mysqldb_model(rules))
+                })
+                .collect(),
             expired_at: *model.expired_at(),
-        })
+        }
     }
 
-    fn from_sqlitedb_model(model: &TokenSqliteModel) -> Result<Self> {
-        Ok(Self {
+    fn from_sqlitedb_model(model: &TokenSqliteModel) -> Self {
+        Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
-            rules: model.rules().0.clone(),
+            rules: model
+                .rules()
+                .iter()
+                .map(|(collection_id, rules)| {
+                    (*collection_id, TokenRuleMethod::from_sqlitedb_model(rules))
+                })
+                .collect(),
             expired_at: match model.expired_at() {
                 Some(expired_at) => Some(expired_at.0),
                 None => None,
             },
-        })
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct TokenRuleMethod {
+    find_one: bool,
+    find_many: bool,
+    insert: bool,
+    update: bool,
+    delete: bool,
+}
+
+impl TokenRuleMethod {
+    pub fn new(
+        find_one: &bool,
+        find_many: &bool,
+        insert: &bool,
+        update: &bool,
+        delete: &bool,
+    ) -> Self {
+        Self {
+            find_one: *find_one,
+            find_many: *find_many,
+            insert: *insert,
+            update: *update,
+            delete: *delete,
+        }
+    }
+
+    pub fn find_one(&self) -> &bool {
+        &self.find_one
+    }
+
+    pub fn find_many(&self) -> &bool {
+        &self.find_many
+    }
+
+    pub fn insert(&self) -> &bool {
+        &self.insert
+    }
+
+    pub fn update(&self) -> &bool {
+        &self.update
+    }
+
+    pub fn delete(&self) -> &bool {
+        &self.delete
+    }
+
+    pub fn from_scylladb_model(model: &TokenRuleMethodScyllaModel) -> Self {
+        Self {
+            find_one: *model.find_one(),
+            find_many: *model.find_many(),
+            insert: *model.insert(),
+            update: *model.update(),
+            delete: *model.delete(),
+        }
+    }
+
+    pub fn to_scylladb_model(&self) -> TokenRuleMethodScyllaModel {
+        TokenRuleMethodScyllaModel::new(
+            &self.find_one,
+            &self.find_many,
+            &self.insert,
+            &self.update,
+            &self.delete,
+        )
+    }
+
+    pub fn from_postgresdb_model(model: &TokenRuleMethodPostgresModel) -> Self {
+        Self {
+            find_one: *model.find_one(),
+            find_many: *model.find_many(),
+            insert: *model.insert(),
+            update: *model.update(),
+            delete: *model.delete(),
+        }
+    }
+
+    pub fn from_mysqldb_model(model: &TokenRuleMethodMysqlModel) -> Self {
+        Self {
+            find_one: *model.find_one(),
+            find_many: *model.find_many(),
+            insert: *model.insert(),
+            update: *model.update(),
+            delete: *model.delete(),
+        }
+    }
+
+    pub fn from_sqlitedb_model(model: &TokenRuleMethodSqliteModel) -> Self {
+        Self {
+            find_one: *model.find_one(),
+            find_many: *model.find_many(),
+            insert: *model.insert(),
+            update: *model.update(),
+            delete: *model.delete(),
+        }
     }
 }

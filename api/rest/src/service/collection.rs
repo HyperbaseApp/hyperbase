@@ -2,8 +2,9 @@ use actix_web::{http::StatusCode, web, HttpResponse};
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use hb_dao::{
     admin::AdminDao,
-    collection::{CollectionDao, SchemaFieldKind, SchemaFieldPropsModel},
+    collection::{CollectionDao, SchemaFieldProps},
     project::ProjectDao,
+    value::ColumnKind,
 };
 use hb_token_jwt::kind::JwtTokenKind;
 
@@ -13,7 +14,7 @@ use crate::{
         collection::{
             CollectionResJson, DeleteCollectionResJson, DeleteOneCollectionReqPath,
             FindManyCollectionReqPath, FindOneCollectionReqPath, InsertOneCollectionReqJson,
-            InsertOneCollectionReqPath, SchemaFieldPropsModelJson, UpdateOneCollectionReqJson,
+            InsertOneCollectionReqPath, SchemaFieldPropsJson, UpdateOneCollectionReqJson,
             UpdateOneCollectionReqPath,
         },
         PaginationRes, Response, TokenReqHeader,
@@ -51,23 +52,23 @@ async fn insert_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
         );
@@ -75,11 +76,11 @@ async fn insert_one(
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
@@ -88,13 +89,13 @@ async fn insert_one(
     let mut schema_fields = HashMap::with_capacity(data.schema_fields().len());
     for (key, value) in data.schema_fields().iter() {
         if key.is_empty() {
-            return Response::error(
+            return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Field name in schema_fields can't be empty string"),
             );
         }
         if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
-            return Response::error(
+            return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Field '{key}' should only have lowercase English letters and an optional underscore (_) after the first character"),
             );
@@ -102,7 +103,7 @@ async fn insert_one(
         if let Some(indexes) = data.indexes() {
             if let Some(field_name) = indexes.get(key) {
                 if !value.required().unwrap_or(false) {
-                    return Response::error(
+                    return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
                         &format!(
                             "Field '{field_name}' must be required because it is in the indexes"
@@ -113,10 +114,12 @@ async fn insert_one(
         }
         schema_fields.insert(
             key.to_string(),
-            SchemaFieldPropsModel::new(
-                &match SchemaFieldKind::from_str(value.kind()) {
+            SchemaFieldProps::new(
+                &match ColumnKind::from_str(value.kind()) {
                     Ok(kind) => kind,
-                    Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+                    Err(err) => {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                    }
                 },
                 &value.required().unwrap_or(false),
             ),
@@ -126,7 +129,7 @@ async fn insert_one(
     if let Some(indexes) = data.indexes() {
         for index in indexes {
             if index.is_empty() {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Field name in indexes can't be empty string"),
                 );
@@ -134,7 +137,7 @@ async fn insert_one(
             match schema_fields.get(index) {
                 Some(field) => {
                     if !field.required() {
-                        return Response::error(
+                        return Response::error_raw(
                             &StatusCode::BAD_REQUEST,
                             &format!(
                                 "Field '{index}' must be required because it is in the indexes"
@@ -143,7 +146,7 @@ async fn insert_one(
                     }
                 }
                 None => {
-                    return Response::error(
+                    return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
                         &format!("Field '{index}' is not exist in the schema fields"),
                     )
@@ -162,10 +165,12 @@ async fn insert_one(
         },
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
     if let Err(err) = collection_data.db_insert(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -183,10 +188,7 @@ async fn insert_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldPropsModelJson::new(
-                            value.kind().to_str(),
-                            &Some(*value.required()),
-                        ),
+                        SchemaFieldPropsJson::new(value.kind().to_str(), &Some(*value.required())),
                     )
                 })
                 .collect(),
@@ -202,23 +204,23 @@ async fn find_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
         );
@@ -229,18 +231,18 @@ async fn find_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
     Response::data(
@@ -258,10 +260,7 @@ async fn find_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldPropsModelJson::new(
-                            value.kind().to_str(),
-                            &Some(*value.required()),
-                        ),
+                        SchemaFieldPropsJson::new(value.kind().to_str(), &Some(*value.required())),
                     )
                 })
                 .collect(),
@@ -278,23 +277,23 @@ async fn update_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
         );
@@ -305,18 +304,18 @@ async fn update_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
     if let Some(name) = data.name() {
@@ -327,13 +326,13 @@ async fn update_one(
         let mut schema_fields = HashMap::with_capacity(schema_field.len());
         for (key, value) in schema_field.iter() {
             if key.is_empty() {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Field name in schema_fields can't be empty string"),
                 );
             }
             if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Field '{key}' should only have lowercase English letters and an optional underscore (_) after the first character"),
                 );
@@ -341,7 +340,7 @@ async fn update_one(
             if let Some(indexes) = data.indexes() {
                 if let Some(field_name) = indexes.get(key) {
                     if !value.required().unwrap_or(false) {
-                        return Response::error(
+                        return Response::error_raw(
                             &StatusCode::BAD_REQUEST,
                             &format!(
                                 "Field '{field_name}' must be required because it is in the indexes"
@@ -352,11 +351,11 @@ async fn update_one(
             }
             schema_fields.insert(
                 key.to_owned(),
-                SchemaFieldPropsModel::new(
-                    &match SchemaFieldKind::from_str(value.kind()) {
+                SchemaFieldProps::new(
+                    &match ColumnKind::from_str(value.kind()) {
                         Ok(kind) => kind,
                         Err(err) => {
-                            return Response::error(
+                            return Response::error_raw(
                                 &StatusCode::INTERNAL_SERVER_ERROR,
                                 &err.to_string(),
                             )
@@ -372,7 +371,7 @@ async fn update_one(
     if let Some(indexes) = data.indexes() {
         for index in indexes {
             if index.is_empty() {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Field name in indexes can't be empty string"),
                 );
@@ -380,7 +379,7 @@ async fn update_one(
             match collection_data.schema_fields().get(index) {
                 Some(field) => {
                     if !field.required() {
-                        return Response::error(
+                        return Response::error_raw(
                             &StatusCode::BAD_REQUEST,
                             &format!(
                                 "Field '{index}' must be required because it is in the indexes"
@@ -389,7 +388,7 @@ async fn update_one(
                     }
                 }
                 None => {
-                    return Response::error(
+                    return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
                         &format!(
                             "Field '{index}' is in indexes but not exist in the schema fields"
@@ -403,7 +402,7 @@ async fn update_one(
 
     if !data.is_all_none() {
         if let Err(err) = collection_data.db_update(ctx.dao().db()).await {
-            return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
     }
 
@@ -422,10 +421,7 @@ async fn update_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldPropsModelJson::new(
-                            value.kind().to_str(),
-                            &Some(*value.required()),
-                        ),
+                        SchemaFieldPropsJson::new(value.kind().to_str(), &Some(*value.required())),
                     )
                 })
                 .collect(),
@@ -441,23 +437,23 @@ async fn delete_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
         );
@@ -468,22 +464,22 @@ async fn delete_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
     if let Err(err) = CollectionDao::db_delete(ctx.dao().db(), path.collection_id()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -500,23 +496,23 @@ async fn find_many(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
         );
@@ -524,11 +520,11 @@ async fn find_many(
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if project_data.admin_id() != token_claim.id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
@@ -541,7 +537,7 @@ async fn find_many(
     .await
     {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     Response::data(
@@ -565,7 +561,7 @@ async fn find_many(
                         .map(|(key, value)| {
                             (
                                 key.to_owned(),
-                                SchemaFieldPropsModelJson::new(
+                                SchemaFieldPropsJson::new(
                                     value.kind().to_str(),
                                     &Some(*value.required()),
                                 ),

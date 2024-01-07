@@ -1,5 +1,5 @@
 use ahash::HashMap;
-use scylla::{frame::value::CqlTimestamp, FromRow, SerializeRow};
+use scylla::{frame::value::CqlTimestamp, FromRow, FromUserType, SerializeCql, SerializeRow};
 use uuid::Uuid;
 
 #[derive(FromRow, SerializeRow)]
@@ -9,7 +9,7 @@ pub struct TokenModel {
     updated_at: CqlTimestamp,
     admin_id: Uuid,
     token: String,
-    rules: HashMap<Uuid, i8>, // 0: no access, 1: read only, 2: read and write
+    rules: Option<HashMap<Uuid, TokenRuleMethodModel>>,
     expired_at: Option<CqlTimestamp>,
 }
 
@@ -20,7 +20,7 @@ impl TokenModel {
         updated_at: &CqlTimestamp,
         admin_id: &Uuid,
         token: &str,
-        rules: &HashMap<Uuid, i8>,
+        rules: &Option<HashMap<Uuid, TokenRuleMethodModel>>,
         expired_at: &Option<CqlTimestamp>,
     ) -> Self {
         Self {
@@ -54,11 +54,58 @@ impl TokenModel {
         &self.token
     }
 
-    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+    pub fn rules(&self) -> &Option<HashMap<Uuid, TokenRuleMethodModel>> {
         &self.rules
     }
 
     pub fn expired_at(&self) -> &Option<CqlTimestamp> {
         &self.expired_at
+    }
+}
+
+#[derive(FromUserType, SerializeCql, Clone)]
+pub struct TokenRuleMethodModel {
+    find_one: bool,
+    find_many: bool,
+    insert: bool,
+    update: bool,
+    delete: bool,
+}
+
+impl TokenRuleMethodModel {
+    pub fn new(
+        find_one: &bool,
+        find_many: &bool,
+        insert: &bool,
+        update: &bool,
+        delete: &bool,
+    ) -> Self {
+        Self {
+            find_one: *find_one,
+            find_many: *find_many,
+            insert: *insert,
+            update: *update,
+            delete: *delete,
+        }
+    }
+
+    pub fn find_one(&self) -> &bool {
+        &self.find_one
+    }
+
+    pub fn find_many(&self) -> &bool {
+        &self.find_many
+    }
+
+    pub fn insert(&self) -> &bool {
+        &self.insert
+    }
+
+    pub fn update(&self) -> &bool {
+        &self.update
+    }
+
+    pub fn delete(&self) -> &bool {
+        &self.delete
     }
 }

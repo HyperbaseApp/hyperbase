@@ -1,3 +1,3 @@
-mod claim;
-pub mod token;
+pub mod claim;
 pub mod kind;
+pub mod token;

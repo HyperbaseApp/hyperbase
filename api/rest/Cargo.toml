@@ -7,6 +7,7 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 [dependencies]
 hb_dao = { workspace = true }
+hb_error = { workspace = true }
 hb_hash_argon2 = { workspace = true }
 hb_log = { workspace = true }
 hb_mailer = { workspace = true }
@@ -20,6 +21,7 @@ chrono = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 validator = { workspace = true, features = ["derive"] }

@@ -29,15 +29,15 @@ pub fn default_error_handler<B: MessageBody>(
             return status_code.to_string();
         }
         match to_bytes(res).await {
-            Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
-                Ok(str) => str,
+            Ok(bytes) => match std::str::from_utf8(&bytes) {
+                Ok(str) => str.to_owned(),
                 Err(err) => err.to_string(),
             },
             Err(err) => err.into().to_string(),
         }
     });
 
-    let res = Response::error(&status_code, &body);
+    let res = Response::error_raw(&status_code, &body);
 
     Ok(ErrorHandlerResponse::Response(
         ServiceResponse::new(req, res).map_into_right_body(),

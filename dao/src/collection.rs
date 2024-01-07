@@ -4,12 +4,9 @@ use chrono::{DateTime, Utc};
 use futures::future;
 use hb_db_mysql::{
     db::MysqlDb,
-    model::{
-        collection::{
-            CollectionModel as CollectionMysqlModel,
-            SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
-        },
-        system::SchemaFieldKind as SchemaFieldKindMysql,
+    model::collection::{
+        CollectionModel as CollectionMysqlModel,
+        SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
     },
     query::collection::{
         DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT,
@@ -18,12 +15,9 @@ use hb_db_mysql::{
 };
 use hb_db_postgresql::{
     db::PostgresDb,
-    model::{
-        collection::{
-            CollectionModel as CollectionPostgresModel,
-            SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
-        },
-        system::SchemaFieldKind as SchemaFieldKindPostgres,
+    model::collection::{
+        CollectionModel as CollectionPostgresModel,
+        SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
     },
     query::collection::{
         DELETE as POSTGRES_DELETE, INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT,
@@ -32,12 +26,9 @@ use hb_db_postgresql::{
 };
 use hb_db_scylladb::{
     db::ScyllaDb,
-    model::{
-        collection::{
-            CollectionModel as CollectionScyllaModel,
-            SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
-        },
-        system::SchemaFieldKind as SchemaFieldKindScylla,
+    model::collection::{
+        CollectionModel as CollectionScyllaModel,
+        SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
     },
     query::collection::{
         DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
@@ -46,12 +37,9 @@ use hb_db_scylladb::{
 };
 use hb_db_sqlite::{
     db::SqliteDb,
-    model::{
-        collection::{
-            CollectionModel as CollectionSqliteModel,
-            SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
-        },
-        system::SchemaFieldKind as SchemaFieldKindSqlite,
+    model::collection::{
+        CollectionModel as CollectionSqliteModel,
+        SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
     },
     query::collection::{
         DELETE as SQLITE_DELETE, INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT,
@@ -65,7 +53,7 @@ use scylla::{
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{record::RecordDao, util::conversion, Db};
+use crate::{record::RecordDao, util::conversion, value::ColumnKind, Db};
 
 pub struct CollectionDao {
     id: Uuid,
@@ -73,7 +61,7 @@ pub struct CollectionDao {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
-    schema_fields: HashMap<String, SchemaFieldPropsModel>,
+    schema_fields: HashMap<String, SchemaFieldProps>,
     indexes: HashSet<String>,
     _preserve: Option<Preserve>,
 }
@@ -82,7 +70,7 @@ impl CollectionDao {
     pub fn new(
         project_id: &Uuid,
         name: &str,
-        schema_fields: &HashMap<String, SchemaFieldPropsModel>,
+        schema_fields: &HashMap<String, SchemaFieldProps>,
         indexes: &HashSet<String>,
     ) -> Result<Self> {
         let now = Utc::now();
@@ -119,7 +107,7 @@ impl CollectionDao {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsModel> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldProps> {
         &self.schema_fields
     }
 
@@ -131,7 +119,7 @@ impl CollectionDao {
         self.name = name.to_owned();
     }
 
-    pub fn update_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldPropsModel>) {
+    pub fn update_schema_fields(&mut self, schema_fields: &HashMap<String, SchemaFieldProps>) {
         if self._preserve.is_none() {
             self._preserve = Some(Preserve {
                 schema_fields: Some(self.schema_fields.clone()),
@@ -160,11 +148,11 @@ impl CollectionDao {
             for index in &self.indexes {
                 if let Some(field) = self.schema_fields.get(index) {
                     match &field.kind {
-                        SchemaFieldKind::Binary
-                        | SchemaFieldKind::Varint
-                        | SchemaFieldKind::Decimal
-                        | SchemaFieldKind::String
-                        | SchemaFieldKind::Json => {
+                        ColumnKind::Binary
+                        | ColumnKind::Varint
+                        | ColumnKind::Decimal
+                        | ColumnKind::String
+                        | ColumnKind::Json => {
                             return Err(Error::msg(format!(
                                 "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
                                 index,
@@ -253,11 +241,11 @@ impl CollectionDao {
             for index in &self.indexes {
                 if let Some(field) = self.schema_fields.get(index) {
                     match &field.kind {
-                        SchemaFieldKind::Binary
-                        | SchemaFieldKind::Varint
-                        | SchemaFieldKind::Decimal
-                        | SchemaFieldKind::String
-                        | SchemaFieldKind::Json => {
+                        ColumnKind::Binary
+                        | ColumnKind::Varint
+                        | ColumnKind::Decimal
+                        | ColumnKind::String
+                        | ColumnKind::Json => {
                             return Err(Error::msg(format!(
                                 "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
                                 index,
@@ -571,7 +559,7 @@ impl CollectionDao {
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
         for (key, value) in model.schema_fields() {
-            let value = match SchemaFieldPropsModel::from_scylladb_model(value) {
+            let value = match SchemaFieldProps::from_scylladb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
             };
@@ -615,7 +603,7 @@ impl CollectionDao {
     fn from_postgresdb_model(model: &CollectionPostgresModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
         for (key, value) in &model.schema_fields().0 {
-            let value = match SchemaFieldPropsModel::from_postgresdb_model(value) {
+            let value = match SchemaFieldProps::from_postgresdb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
             };
@@ -653,7 +641,7 @@ impl CollectionDao {
     fn from_mysqldb_model(model: &CollectionMysqlModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
         for (key, value) in &model.schema_fields().0 {
-            let value = match SchemaFieldPropsModel::from_mysqldb_model(value) {
+            let value = match SchemaFieldProps::from_mysqldb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
             };
@@ -691,7 +679,7 @@ impl CollectionDao {
     fn from_sqlitedb_model(model: &CollectionSqliteModel) -> Result<Self> {
         let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
         for (key, value) in &model.schema_fields().0 {
-            let value = match SchemaFieldPropsModel::from_sqlitedb_model(value) {
+            let value = match SchemaFieldProps::from_sqlitedb_model(value) {
                 Ok(value) => value,
                 Err(err) => return Err(err.into()),
             };
@@ -728,20 +716,20 @@ impl CollectionDao {
 }
 
 #[derive(Serialize, Clone, Copy)]
-pub struct SchemaFieldPropsModel {
-    kind: SchemaFieldKind,
+pub struct SchemaFieldProps {
+    kind: ColumnKind,
     required: bool,
 }
 
-impl SchemaFieldPropsModel {
-    pub fn new(kind: &SchemaFieldKind, required: &bool) -> Self {
+impl SchemaFieldProps {
+    pub fn new(kind: &ColumnKind, required: &bool) -> Self {
         Self {
             kind: *kind,
             required: *required,
         }
     }
 
-    pub fn kind(&self) -> &SchemaFieldKind {
+    pub fn kind(&self) -> &ColumnKind {
         &self.kind
     }
 
@@ -750,7 +738,7 @@ impl SchemaFieldPropsModel {
     }
 
     fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Result<Self> {
-        let kind = match SchemaFieldKind::from_str(model.kind()) {
+        let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
             Err(err) => return Err(err.into()),
         };
@@ -769,7 +757,7 @@ impl SchemaFieldPropsModel {
     }
 
     fn from_postgresdb_model(model: &SchemaFieldPropsPostgresModel) -> Result<Self> {
-        let kind = match SchemaFieldKind::from_str(model.kind()) {
+        let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
             Err(err) => return Err(err.into()),
         };
@@ -788,7 +776,7 @@ impl SchemaFieldPropsModel {
     }
 
     fn from_mysqldb_model(model: &SchemaFieldPropsMysqlModel) -> Result<Self> {
-        let kind = match SchemaFieldKind::from_str(model.kind()) {
+        let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
             Err(err) => return Err(err.into()),
         };
@@ -807,7 +795,7 @@ impl SchemaFieldPropsModel {
     }
 
     fn from_sqlitedb_model(model: &SchemaFieldPropsSqliteModel) -> Result<Self> {
-        let kind = match SchemaFieldKind::from_str(model.kind()) {
+        let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
             Err(err) => return Err(err.into()),
         };
@@ -826,152 +814,7 @@ impl SchemaFieldPropsModel {
     }
 }
 
-#[derive(Serialize, PartialEq, Clone, Copy)]
-pub enum SchemaFieldKind {
-    Boolean,   // boolean
-    TinyInt,   // 8-bit signed int
-    SmallInt,  // 16-bit signed int
-    Int,       // 32-bit signed int
-    BigInt,    // 64-bit signed long
-    Varint,    // Arbitrary-precision integer
-    Float,     // 32-bit IEEE-754 floating point
-    Double,    // 64-bit IEEE-754 floating point
-    Decimal,   // Variable-precision decimal
-    String,    // UTF8 encoded string
-    Binary,    // Arbitrary bytes
-    Uuid,      // A UUID (of any version)
-    Date,      // A date (with no corresponding time value)
-    Time,      // A time (with no corresponding date value)
-    DateTime,  // A datetime
-    Timestamp, // A timestamp (date and time)
-    Json,      // A json data format
-}
-
-impl SchemaFieldKind {
-    pub fn to_str(&self) -> &str {
-        match self {
-            Self::Boolean => "boolean",
-            Self::TinyInt => "tinyint",
-            Self::SmallInt => "smallint",
-            Self::Int => "int",
-            Self::BigInt => "bigint",
-            Self::Varint => "varint",
-            Self::Float => "float",
-            Self::Double => "double",
-            Self::Decimal => "decimal",
-            Self::String => "string",
-            Self::Binary => "binary",
-            Self::Uuid => "uuid",
-            Self::Date => "date",
-            Self::Time => "time",
-            Self::DateTime => "datetime",
-            Self::Timestamp => "timestamp",
-            Self::Json => "json",
-        }
-    }
-
-    pub fn from_str(str: &str) -> Result<Self> {
-        match str {
-            "boolean" => Ok(Self::Boolean),
-            "tinyint" => Ok(Self::TinyInt),
-            "smallint" => Ok(Self::SmallInt),
-            "int" => Ok(Self::Int),
-            "bigint" => Ok(Self::BigInt),
-            "varint" => Ok(Self::Varint),
-            "float" => Ok(Self::Float),
-            "double" => Ok(Self::Double),
-            "decimal" => Ok(Self::Decimal),
-            "string" => Ok(Self::String),
-            "binary" => Ok(Self::Binary),
-            "uuid" => Ok(Self::Uuid),
-            "date" => Ok(Self::Date),
-            "time" => Ok(Self::Time),
-            "datetime" => Ok(Self::DateTime),
-            "timestamp" => Ok(Self::Timestamp),
-            "json" => Ok(Self::Json),
-            _ => Err(Error::msg(format!("Unknown schema field kind '{str}'"))),
-        }
-    }
-
-    fn to_scylladb_model(&self) -> SchemaFieldKindScylla {
-        match self {
-            Self::Boolean => SchemaFieldKindScylla::Boolean,
-            Self::TinyInt => SchemaFieldKindScylla::TinyInt,
-            Self::SmallInt => SchemaFieldKindScylla::SmallInt,
-            Self::Int => SchemaFieldKindScylla::Int,
-            Self::BigInt => SchemaFieldKindScylla::BigInt,
-            Self::Varint => SchemaFieldKindScylla::Varint,
-            Self::Float => SchemaFieldKindScylla::Float,
-            Self::Double => SchemaFieldKindScylla::Double,
-            Self::Decimal => SchemaFieldKindScylla::Decimal,
-            Self::String => SchemaFieldKindScylla::Text,
-            Self::Binary | Self::Json => SchemaFieldKindScylla::Blob,
-            Self::Uuid => SchemaFieldKindScylla::Uuid,
-            Self::Date => SchemaFieldKindScylla::Date,
-            Self::Time => SchemaFieldKindScylla::Time,
-            Self::DateTime | Self::Timestamp => SchemaFieldKindScylla::Timestamp,
-        }
-    }
-
-    pub fn to_postgresdb_model(&self) -> SchemaFieldKindPostgres {
-        match self {
-            Self::Boolean => SchemaFieldKindPostgres::Bool,
-            Self::TinyInt => SchemaFieldKindPostgres::Char,
-            Self::SmallInt => SchemaFieldKindPostgres::Smallint,
-            Self::Int => SchemaFieldKindPostgres::Integer,
-            Self::BigInt => SchemaFieldKindPostgres::Bigint,
-            Self::Varint => SchemaFieldKindPostgres::Numeric,
-            Self::Float => SchemaFieldKindPostgres::Real,
-            Self::Double => SchemaFieldKindPostgres::DoublePrecision,
-            Self::Decimal => SchemaFieldKindPostgres::Numeric,
-            Self::String => SchemaFieldKindPostgres::Varchar,
-            Self::Binary => SchemaFieldKindPostgres::Bytea,
-            Self::Uuid => SchemaFieldKindPostgres::Uuid,
-            Self::Date => SchemaFieldKindPostgres::Date,
-            Self::Time => SchemaFieldKindPostgres::Time,
-            Self::DateTime | Self::Timestamp => SchemaFieldKindPostgres::Timestamptz,
-            Self::Json => SchemaFieldKindPostgres::Jsonb,
-        }
-    }
-
-    fn to_mysqldb_model(&self) -> SchemaFieldKindMysql {
-        match self {
-            Self::Boolean => SchemaFieldKindMysql::Bool,
-            Self::TinyInt => SchemaFieldKindMysql::Tinyint,
-            Self::SmallInt => SchemaFieldKindMysql::Smallint,
-            Self::Int => SchemaFieldKindMysql::Int,
-            Self::BigInt => SchemaFieldKindMysql::Bigint,
-            Self::Binary | Self::Varint | Self::Decimal => SchemaFieldKindMysql::Blob,
-            Self::Float => SchemaFieldKindMysql::Float,
-            Self::Double => SchemaFieldKindMysql::Double,
-            Self::String => SchemaFieldKindMysql::Text,
-            Self::Uuid => SchemaFieldKindMysql::Binary16,
-            Self::Date => SchemaFieldKindMysql::Date,
-            Self::Time => SchemaFieldKindMysql::Time,
-            Self::DateTime => SchemaFieldKindMysql::Datetime,
-            Self::Timestamp => SchemaFieldKindMysql::Timestamp,
-            Self::Json => SchemaFieldKindMysql::Json,
-        }
-    }
-
-    fn to_sqlitedb_model(&self) -> SchemaFieldKindSqlite {
-        match self {
-            Self::Boolean => SchemaFieldKindSqlite::Boolean,
-            Self::TinyInt | Self::SmallInt | Self::Int => SchemaFieldKindSqlite::Integer,
-            Self::BigInt => SchemaFieldKindSqlite::Bigint,
-            Self::Binary | Self::Varint | Self::Decimal | Self::Uuid | Self::Json => {
-                SchemaFieldKindSqlite::Blob
-            }
-            Self::Float | Self::Double => SchemaFieldKindSqlite::Real,
-            Self::String => SchemaFieldKindSqlite::Text,
-            Self::Date => SchemaFieldKindSqlite::Date,
-            Self::Time => SchemaFieldKindSqlite::Time,
-            Self::DateTime | Self::Timestamp => SchemaFieldKindSqlite::Datetime,
-        }
-    }
-}
-
 struct Preserve {
-    schema_fields: Option<HashMap<String, SchemaFieldPropsModel>>,
+    schema_fields: Option<HashMap<String, SchemaFieldProps>>,
     indexes: Option<HashSet<String>>,
 }

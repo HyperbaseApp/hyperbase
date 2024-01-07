@@ -1,5 +1,6 @@
 use actix_header::actix_header;
 use actix_web::{http::StatusCode, HttpResponse, HttpResponseBuilder};
+use hb_error::Error;
 use serde::Serialize;
 
 pub mod admin;
@@ -54,12 +55,22 @@ impl Response {
             }),
             Err(err) => {
                 hb_log::error(None, &err);
-                Self::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                Self::error(&Error::InternalServerError(err.to_string()))
             }
         }
     }
 
-    pub fn error(status_code: &StatusCode, message: &str) -> HttpResponse {
+    pub fn error(err: &Error) -> HttpResponse {
+        let (status_code, message) = match err {
+            Error::BadRequest(msg) => (&StatusCode::BAD_REQUEST, msg),
+            Error::Forbidden(msg) => (&StatusCode::FORBIDDEN, msg),
+            Error::InternalServerError(msg) => (&StatusCode::INTERNAL_SERVER_ERROR, msg),
+        };
+
+        Self::error_raw(status_code, message)
+    }
+
+    pub fn error_raw(status_code: &StatusCode, message: &str) -> HttpResponse {
         hb_log::error(None, message);
 
         HttpResponseBuilder::new(*status_code).json(Self {

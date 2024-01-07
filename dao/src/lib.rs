@@ -11,6 +11,7 @@ pub mod record;
 pub mod register;
 pub mod token;
 mod util;
+pub mod value;
 
 pub enum Db {
     ScyllaDb(ScyllaDb),

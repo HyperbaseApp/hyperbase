@@ -17,7 +17,7 @@ impl InsertOneCollectionReqPath {
 #[derive(Deserialize)]
 pub struct InsertOneCollectionReqJson {
     name: String,
-    schema_fields: HashMap<String, SchemaFieldPropsModelJson>,
+    schema_fields: HashMap<String, SchemaFieldPropsJson>,
     indexes: Option<HashSet<String>>,
 }
 
@@ -26,7 +26,7 @@ impl InsertOneCollectionReqJson {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsModelJson> {
+    pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsJson> {
         &self.schema_fields
     }
 
@@ -70,7 +70,7 @@ impl UpdateOneCollectionReqPath {
 #[derive(Deserialize)]
 pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
-    schema_fields: Option<HashMap<String, SchemaFieldPropsModelJson>>,
+    schema_fields: Option<HashMap<String, SchemaFieldPropsJson>>,
     indexes: Option<HashSet<String>>,
 }
 
@@ -79,7 +79,7 @@ impl UpdateOneCollectionReqJson {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Option<HashMap<String, SchemaFieldPropsModelJson>> {
+    pub fn schema_fields(&self) -> &Option<HashMap<String, SchemaFieldPropsJson>> {
         &self.schema_fields
     }
 
@@ -126,7 +126,7 @@ pub struct CollectionResJson {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
-    schema_fields: HashMap<String, SchemaFieldPropsModelJson>,
+    schema_fields: HashMap<String, SchemaFieldPropsJson>,
     indexes: HashSet<String>,
 }
 
@@ -137,7 +137,7 @@ impl CollectionResJson {
         updated_at: &DateTime<Utc>,
         project_id: &Uuid,
         name: &str,
-        schema_fields: &HashMap<String, SchemaFieldPropsModelJson>,
+        schema_fields: &HashMap<String, SchemaFieldPropsJson>,
         indexes: &HashSet<String>,
     ) -> Self {
         Self {
@@ -163,13 +163,13 @@ impl DeleteCollectionResJson {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SchemaFieldPropsModelJson {
+#[derive(Deserialize, Serialize, Clone)]
+pub struct SchemaFieldPropsJson {
     kind: String,
     required: Option<bool>,
 }
 
-impl SchemaFieldPropsModelJson {
+impl SchemaFieldPropsJson {
     pub fn new(kind: &str, required: &Option<bool>) -> Self {
         Self {
             kind: kind.to_owned(),

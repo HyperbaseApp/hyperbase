@@ -42,18 +42,18 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
 async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     match token_claim.kind() {
         JwtTokenKind::User => {
             if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get user data: {err}"),
                 );
@@ -61,7 +61,7 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
         }
         JwtTokenKind::Token => {
             if let Err(err) = TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
                 );
@@ -75,7 +75,7 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
                 match ctx.token().jwt().renew(&token_claim) {
                     Ok(token) => token,
                     Err(err) => {
-                        return Response::error(
+                        return Response::error_raw(
                             &StatusCode::INTERNAL_SERVER_ERROR,
                             &err.to_string(),
                         )
@@ -85,7 +85,9 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
                 token.to_owned()
             }
         }
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
 
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
@@ -93,18 +95,18 @@ async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -
 
 async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) -> HttpResponse {
     if !ctx.admin_registration() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Admin registration is disabled");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Admin registration is disabled");
     }
 
     if let Err(err) = data.validate() {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if AdminDao::db_select_by_email(ctx.dao().db(), data.email())
         .await
         .is_ok()
     {
-        return Response::error(&StatusCode::BAD_REQUEST, "Account has been registered");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Account has been registered");
     };
 
     let password_hash = match ctx
@@ -113,7 +115,9 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         .hash_password(data.password().as_bytes())
     {
         Ok(hash) => hash,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
 
     let registration_data = match RegistrationDao::db_select_by_email(ctx.dao().db(), data.email())
@@ -122,14 +126,14 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         Ok(mut registration_data) => {
             registration_data.regenerate_code();
             if let Err(err) = registration_data.db_update(ctx.dao().db()).await {
-                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
             }
             registration_data
         }
         Err(_) => {
             let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
             if let Err(err) = registration_data.db_insert(ctx.dao().db()).await {
-                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
             }
             registration_data
         }
@@ -144,7 +148,7 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
             ctx.registration_ttl()
         ),
     )) {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -159,26 +163,26 @@ async fn verify_registration(
     data: web::Json<VerifyRegistrationReqJson>,
 ) -> HttpResponse {
     if !ctx.admin_registration() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Admin registration is disabled");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Admin registration is disabled");
     }
 
     let registration_data = match RegistrationDao::db_select(ctx.dao().db(), data.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if data.code() != registration_data.code() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Wrong code");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Wrong code");
     }
 
     let admin_data = AdminDao::new(registration_data.email(), registration_data.password_hash());
 
     if let Err(err) = admin_data.db_insert(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     if let Err(err) = registration_data.db_delete(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -193,12 +197,12 @@ async fn password_based(
     data: web::Json<PasswordBasedReqJson>,
 ) -> HttpResponse {
     if let Err(err) = data.validate() {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), data.email()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if let Err(err) = ctx
@@ -206,7 +210,7 @@ async fn password_based(
         .argon2()
         .verify_password(data.password(), admin_data.password_hash())
     {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let token = match ctx
@@ -215,7 +219,9 @@ async fn password_based(
         .encode(admin_data.id(), &JwtTokenKind::User)
     {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
 
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
@@ -227,7 +233,7 @@ async fn token_based(
 ) -> HttpResponse {
     let token_data = match TokenDao::db_select_by_token(ctx.dao().db(), data.token()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let token = match ctx
@@ -236,7 +242,9 @@ async fn token_based(
         .encode(token_data.id(), &JwtTokenKind::Token)
     {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
 
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
@@ -247,18 +255,18 @@ async fn request_password_reset(
     data: web::Json<RequestPasswordResetReqJson>,
 ) -> HttpResponse {
     if let Err(err) = data.validate() {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     };
 
     let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), data.email()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let password_reset_data = AdminPasswordResetDao::new(admin_data.id());
 
     if let Err(err) = password_reset_data.db_insert(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     if let Err(err)= ctx.mailer()
@@ -272,7 +280,7 @@ async fn request_password_reset(
                 ctx.reset_password_ttl()
             ),
         )) {
-            return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
 
         }
 
@@ -290,17 +298,17 @@ async fn confirm_password_reset(
     let password_reset_data =
         match AdminPasswordResetDao::db_select(ctx.dao().db(), data.id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
     if data.code() != password_reset_data.code() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Wrong code");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Wrong code");
     }
 
     let mut admin_data =
         match AdminDao::db_select(ctx.dao().db(), password_reset_data.admin_id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
     let password_hash = match ctx
@@ -309,13 +317,15 @@ async fn confirm_password_reset(
         .hash_password(data.password().as_bytes())
     {
         Ok(hash) => hash,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
 
     admin_data.set_password_hash(&password_hash.to_string());
 
     if let Err(err) = admin_data.db_update(ctx.dao().db()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if let Err(err) = ctx.mailer().sender().send(MailPayload::new(
@@ -323,7 +333,7 @@ async fn confirm_password_reset(
         "Your Password Has Been Reset Successfully",
         "Your account password has been successfully changed",
     )) {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(

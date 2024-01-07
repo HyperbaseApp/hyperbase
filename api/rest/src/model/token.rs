@@ -1,16 +1,18 @@
 use ahash::HashMap;
+use anyhow::Result;
 use chrono::{DateTime, Utc};
+use hb_dao::token::TokenRuleMethod;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct InsertOneTokenReqJson {
-    rules: HashMap<Uuid, i8>,
+    rules: HashMap<Uuid, TokenRuleMethodJson>,
     expired_at: Option<DateTime<Utc>>,
 }
 
 impl InsertOneTokenReqJson {
-    pub fn rules(&self) -> &HashMap<Uuid, i8> {
+    pub fn rules(&self) -> &HashMap<Uuid, TokenRuleMethodJson> {
         &self.rules
     }
 
@@ -43,17 +45,26 @@ impl UpdateOneTokenReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneTokenReqJson {
-    rules: Option<HashMap<Uuid, i8>>,
-    expired_at: Option<DateTime<Utc>>,
+    rules: Option<HashMap<Uuid, TokenRuleMethodJson>>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    expired_at: Option<Option<DateTime<Utc>>>,
 }
 
 impl UpdateOneTokenReqJson {
-    pub fn rules(&self) -> &Option<HashMap<Uuid, i8>> {
+    pub fn rules(&self) -> &Option<HashMap<Uuid, TokenRuleMethodJson>> {
         &self.rules
     }
 
-    pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
+    pub fn expired_at(&self) -> &Option<Option<DateTime<Utc>>> {
         &self.expired_at
+    }
+
+    pub fn is_all_none(&self) -> bool {
+        self.rules.is_none() && self.expired_at.is_none()
     }
 }
 
@@ -74,7 +85,7 @@ pub struct TokenResJson {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     token: String,
-    rules: HashMap<Uuid, i8>,
+    rules: HashMap<Uuid, TokenRuleMethodJson>,
     expired_at: Option<DateTime<Utc>>,
 }
 
@@ -84,7 +95,7 @@ impl TokenResJson {
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
         token: &str,
-        rules: &HashMap<Uuid, i8>,
+        rules: &HashMap<Uuid, TokenRuleMethodJson>,
         expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -106,5 +117,51 @@ pub struct DeleteTokenResJson {
 impl DeleteTokenResJson {
     pub fn new(id: &Uuid) -> Self {
         Self { id: *id }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct TokenRuleMethodJson {
+    find_one: Option<bool>,
+    find_many: Option<bool>,
+    insert: Option<bool>,
+    update: Option<bool>,
+    delete: Option<bool>,
+}
+
+impl TokenRuleMethodJson {
+    pub fn from_dao(dao: &TokenRuleMethod) -> Result<Self> {
+        Ok(Self {
+            find_one: Some(*dao.find_one()),
+            find_many: Some(*dao.find_many()),
+            insert: Some(*dao.insert()),
+            update: Some(*dao.update()),
+            delete: Some(*dao.delete()),
+        })
+    }
+
+    pub fn to_dao(&self) -> Result<TokenRuleMethod> {
+        Ok(TokenRuleMethod::new(
+            &match self.find_one {
+                Some(find_one) => find_one,
+                None => false,
+            },
+            &match self.find_many {
+                Some(find_many) => find_many,
+                None => false,
+            },
+            &match self.insert {
+                Some(insert) => insert,
+                None => false,
+            },
+            &match self.update {
+                Some(update) => update,
+                None => false,
+            },
+            &match self.delete {
+                Some(delete) => delete,
+                None => false,
+            },
+        ))
     }
 }

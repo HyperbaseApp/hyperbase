@@ -9,6 +9,7 @@ members = [
     "db/postgresql",
     "db/mysql",
     "db/sqlite",
+    "error",
     "dao",
     "mailer",
     "token/jwt",
@@ -24,6 +25,7 @@ hb_db_mysql = { path = "./db/mysql" }
 hb_db_postgresql = { path = "./db/postgresql" }
 hb_db_scylladb = { path = "./db/scylladb" }
 hb_db_sqlite = { path = "./db/sqlite" }
+hb_error = { path = "./error" }
 hb_hash_argon2 = { path = "./hash/argon2" }
 hb_log = { path = "./log" }
 hb_mailer = { path = "./mailer" }
@@ -52,6 +54,7 @@ rand = "0.8"
 scylla = { version = "0.11" }
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }
+serde_with = { version = "3", default-features = false }
 serde_yaml = "0.9"
 sqlx = { version = "0.7", features = [
     "runtime-tokio",

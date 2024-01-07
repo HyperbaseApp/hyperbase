@@ -19,16 +19,16 @@ pub fn admin_api(cfg: &mut web::ServiceConfig) {
 async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
@@ -36,7 +36,7 @@ async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>
 
     let admin_data = match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     Response::data(
@@ -58,16 +58,16 @@ async fn update_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
@@ -75,18 +75,18 @@ async fn update_one(
 
     let mut admin_data = match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if data.is_all_none() {
-        return Response::error(&StatusCode::BAD_REQUEST, "No request fields to be updated");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "No request fields to be updated");
     }
 
     if let Some(password) = data.password() {
         let password_hash = match ctx.hash().argon2().hash_password(password.as_bytes()) {
             Ok(hash) => hash,
             Err(err) => {
-                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
             }
         };
 
@@ -94,7 +94,7 @@ async fn update_one(
     }
 
     if let Err(err) = admin_data.db_update(ctx.dao().db()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -115,27 +115,27 @@ async fn delete_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
         );
     }
 
     if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if let Err(err) = AdminDao::db_delete(ctx.dao().db(), token_claim.id()).await {
-        return Response::error(&StatusCode::BAD_REQUEST, &err.to_string());
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(

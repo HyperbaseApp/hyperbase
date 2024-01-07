@@ -1,0 +1,12 @@
+[package]
+name = "hb_error"
+version = "0.1.0"
+edition = "2021"
+authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
+
+
+[dependencies]
+
+
+[lints]
+workspace = true

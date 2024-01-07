@@ -4,8 +4,9 @@ use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
     project::ProjectDao,
-    record::{RecordColumnValue, RecordDao, RecordFilters, RecordOrder, RecordPagination},
+    record::{RecordDao, RecordFilters, RecordOrder, RecordPagination},
     token::TokenDao,
+    value::{ColumnKind, ColumnValue},
 };
 use hb_token_jwt::kind::JwtTokenKind;
 
@@ -52,19 +53,19 @@ async fn insert_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get user data: {err}"),
                 )
@@ -73,7 +74,7 @@ async fn insert_one(
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
                 )
@@ -86,23 +87,23 @@ async fn insert_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id())
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if &admin_id != project_data.admin_id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if let Some(token_data) = token_data {
-        if !token_data.is_allow_write(path.collection_id()) {
-            return Response::error(
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_insert(path.collection_id()) {
+            return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to write data to this collection",
             );
@@ -111,7 +112,7 @@ async fn insert_one(
 
     for field_name in data.keys() {
         if !collection_data.schema_fields().contains_key(field_name) {
-            return Response::error(
+            return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Field '{field_name}' is not exist in the collection"),
             );
@@ -122,12 +123,24 @@ async fn insert_one(
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if !value.is_null() {
+                if let Some(value) = value.as_str() {
+                    if value == "$request.auth.id" {
+                        if *field_props.kind() != ColumnKind::Uuid {
+                            return Response::error_raw(
+                                &StatusCode::BAD_REQUEST,
+                                "Field for storing '$request.auth.id' must be of type 'uuid'",
+                            );
+                        }
+                        record_data.upsert(field_name, &ColumnValue::Uuid(Some(*token_claim.id())));
+                        continue;
+                    }
+                }
                 record_data.upsert(
                     field_name,
-                    &match RecordColumnValue::from_serde_json(field_props.kind(), value) {
+                    &match ColumnValue::from_serde_json(field_props.kind(), value) {
                         Ok(value) => value,
                         Err(err) => {
-                            return Response::error(
+                            return Response::error_raw(
                                 &StatusCode::BAD_REQUEST,
                                 &format!("Error in field '{}': {}", field_name, err),
                             )
@@ -138,17 +151,17 @@ async fn insert_one(
             }
         }
         if *field_props.required() {
-            return Response::error(
+            return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Value for '{field_name}' is required"),
             );
         } else {
-            record_data.upsert(field_name, &RecordColumnValue::none(field_props.kind()));
+            record_data.upsert(field_name, &ColumnValue::none(field_props.kind()));
         }
     }
 
     if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     let mut record = HashMap::with_capacity(record_data.len());
@@ -156,7 +169,7 @@ async fn insert_one(
         let value = match value.to_serde_json() {
             Ok(value) => value,
             Err(err) => {
-                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
             }
         };
         record.insert(key.to_owned(), value);
@@ -172,19 +185,19 @@ async fn find_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get user data: {err}"),
                 )
@@ -193,7 +206,7 @@ async fn find_one(
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
                 )
@@ -206,23 +219,23 @@ async fn find_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if &admin_id != project_data.admin_id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if let Some(token_data) = token_data {
-        if !token_data.is_allow_read(path.collection_id()) {
-            return Response::error(
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_find_one(path.collection_id()) {
+            return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read this record",
             );
@@ -232,7 +245,7 @@ async fn find_one(
     let record_data =
         match RecordDao::db_select(ctx.dao().db(), &collection_data, path.record_id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
     let mut record = HashMap::with_capacity(record_data.len());
@@ -240,7 +253,7 @@ async fn find_one(
         let value = match value.to_serde_json() {
             Ok(value) => value,
             Err(err) => {
-                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
             }
         };
         record.insert(key.to_owned(), value);
@@ -257,19 +270,19 @@ async fn update_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get user data: {err}"),
                 )
@@ -278,7 +291,7 @@ async fn update_one(
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
                 )
@@ -291,23 +304,23 @@ async fn update_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if &admin_id != project_data.admin_id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if let Some(token_data) = token_data {
-        if !token_data.is_allow_write(path.collection_id()) {
-            return Response::error(
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_update(path.collection_id()) {
+            return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to update this record",
             );
@@ -316,7 +329,7 @@ async fn update_one(
 
     for field_name in data.keys() {
         if !collection_data.schema_fields().contains_key(field_name) {
-            return Response::error(
+            return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Field '{field_name}' is not exist in the collection"),
             );
@@ -326,24 +339,36 @@ async fn update_one(
     let mut record_data =
         match RecordDao::db_select(ctx.dao().db(), &collection_data, path.record_id()).await {
             Ok(data) => data,
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if value.is_null() {
                 if *field_props.required() {
-                    return Response::error(
+                    return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
                         &format!("Value for '{field_name}' is required"),
                     );
                 }
             }
+            if let Some(value) = value.as_str() {
+                if value == "$request.auth.id" {
+                    if *field_props.kind() != ColumnKind::Uuid {
+                        return Response::error_raw(
+                            &StatusCode::BAD_REQUEST,
+                            "Field for storing '$request.auth.id' must be of type 'uuid'",
+                        );
+                    }
+                    record_data.upsert(field_name, &ColumnValue::Uuid(Some(*token_claim.id())));
+                    continue;
+                }
+            }
             record_data.upsert(
                 field_name,
-                &match RecordColumnValue::from_serde_json(field_props.kind(), value) {
+                &match ColumnValue::from_serde_json(field_props.kind(), value) {
                     Ok(value) => value,
                     Err(err) => {
-                        return Response::error(
+                        return Response::error_raw(
                             &StatusCode::BAD_REQUEST,
                             &format!("Error in field '{}': {}", field_name, err),
                         )
@@ -354,7 +379,7 @@ async fn update_one(
     }
 
     if let Err(err) = record_data.db_update(ctx.dao().db()).await {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     let mut record = HashMap::with_capacity(record_data.len());
@@ -362,7 +387,7 @@ async fn update_one(
         let value = match value.to_serde_json() {
             Ok(value) => value,
             Err(err) => {
-                return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
             }
         };
         record.insert(key.to_owned(), value);
@@ -378,19 +403,19 @@ async fn delete_one(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get user data: {err}"),
                 )
@@ -399,7 +424,7 @@ async fn delete_one(
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
                 )
@@ -412,23 +437,23 @@ async fn delete_one(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if &admin_id != project_data.admin_id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if let Some(token_data) = token_data {
-        if !token_data.is_allow_write(path.collection_id()) {
-            return Response::error(
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_delete(path.collection_id()) {
+            return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to delete this record",
             );
@@ -438,7 +463,7 @@ async fn delete_one(
     if let Err(err) =
         RecordDao::db_delete(ctx.dao().db(), collection_data.id(), path.record_id()).await
     {
-        return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
     Response::data(
@@ -456,19 +481,19 @@ async fn find_many(
 ) -> HttpResponse {
     let token = match token.get() {
         Some(token) => token,
-        None => return Response::error(&StatusCode::BAD_REQUEST, "Invalid token"),
+        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
     };
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
         JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get user data: {err}"),
                 )
@@ -477,7 +502,7 @@ async fn find_many(
         JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
-                return Response::error(
+                return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
                 )
@@ -490,23 +515,23 @@ async fn find_many(
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
     ) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     if &admin_id != project_data.admin_id() {
-        return Response::error(
+        return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
     }
 
-    if let Some(token_data) = token_data {
-        if !token_data.is_allow_read(path.collection_id()) {
-            return Response::error(
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_find_many(path.collection_id()) {
+            return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read these records",
             );
@@ -516,7 +541,7 @@ async fn find_many(
     let filters = match query_data.filter() {
         Some(filter) => match filter.to_dao(&collection_data) {
             Ok(filter) => filter,
-            Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         None => RecordFilters::new(&Vec::new()),
     };
@@ -524,12 +549,10 @@ async fn find_many(
         Some(group) => {
             let mut groups = Vec::with_capacity(group.len());
             for field in group {
-                if collection_data.schema_fields().contains_key(field) {
-                    groups.push(field.as_str());
-                } else if field == "_id" {
+                if collection_data.schema_fields().contains_key(field) || field == "_id" {
                     groups.push(field.as_str());
                 } else {
-                    return Response::error(
+                    return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
                         &format!("Field '{field}' is not exist in the collection"),
                     );
@@ -543,12 +566,10 @@ async fn find_many(
         Some(order) => {
             let mut orders = Vec::with_capacity(order.len());
             for o in order {
-                if collection_data.schema_fields().contains_key(o.field()) {
-                    orders.push(RecordOrder::new(o.field(), o.kind()));
-                } else if o.field() == "_id" {
+                if collection_data.schema_fields().contains_key(o.field()) || o.field() == "_id" {
                     orders.push(RecordOrder::new(o.field(), o.kind()));
                 } else {
-                    return Response::error(
+                    return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
                         &format!("Field '{}' is not exist in the collection", o.field()),
                     );
@@ -570,7 +591,7 @@ async fn find_many(
     .await
     {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::BAD_REQUEST, &err.to_string()),
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     let mut records = Vec::with_capacity(records_data.len());
@@ -580,7 +601,10 @@ async fn find_many(
             let value = match value.to_serde_json() {
                 Ok(value) => value,
                 Err(err) => {
-                    return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                    return Response::error_raw(
+                        &StatusCode::INTERNAL_SERVER_ERROR,
+                        &err.to_string(),
+                    )
                 }
             };
             record.insert(key.to_owned(), value);
@@ -590,7 +614,9 @@ async fn find_many(
 
     let total = match usize::try_from(total) {
         Ok(data) => data,
-        Err(err) => return Response::error(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string()),
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
     };
 
     Response::data(

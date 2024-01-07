@@ -1,9 +1,7 @@
-use std::{collections::hash_map::Keys, str::FromStr};
+use std::collections::hash_map::Keys;
 
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
-use bigdecimal::BigDecimal;
-use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
     model::{
@@ -48,27 +46,18 @@ use hb_db_sqlite::{
     },
     query::{record as sqlite_record, system::COUNT_TABLE as SQLITE_COUNT_TABLE},
 };
-use num_bigint::BigInt;
-use scylla::{
-    frame::{
-        response::result::CqlValue as ScyllaCqlValue, value::CqlTimestamp as ScyllaCqlTimestamp,
-    },
-    serialize::value::SerializeCql,
-};
+use scylla::{frame::response::result::CqlValue as ScyllaCqlValue, serialize::value::SerializeCql};
 use uuid::Uuid;
 
 use crate::{
-    collection::{CollectionDao, SchemaFieldKind, SchemaFieldPropsModel},
-    util::conversion::{
-        self, naivedate_to_scylla_cql_date, naivetime_to_scylla_cql_time,
-        scylla_cql_date_to_naivedate, scylla_cql_time_to_naivetime,
-    },
+    collection::{CollectionDao, SchemaFieldProps},
+    value::{ColumnKind, ColumnValue},
     Db,
 };
 
 pub struct RecordDao {
     table_name: String,
-    data: HashMap<String, RecordColumnValue>,
+    data: HashMap<String, ColumnValue>,
 }
 
 impl RecordDao {
@@ -77,10 +66,7 @@ impl RecordDao {
             Some(capacity) => capacity + 1,
             None => 1,
         });
-        data.insert(
-            "_id".to_owned(),
-            RecordColumnValue::Uuid(Some(Uuid::now_v7())),
-        );
+        data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::now_v7())));
 
         Self {
             table_name: Self::new_table_name(collection_id),
@@ -96,15 +82,15 @@ impl RecordDao {
         &self.table_name
     }
 
-    pub fn data(&self) -> &HashMap<String, RecordColumnValue> {
+    pub fn data(&self) -> &HashMap<String, ColumnValue> {
         &self.data
     }
 
-    pub fn get(&self, key: &str) -> Option<&RecordColumnValue> {
+    pub fn get(&self, key: &str) -> Option<&ColumnValue> {
         self.data.get(key)
     }
 
-    pub fn keys(&self) -> Keys<'_, String, RecordColumnValue> {
+    pub fn keys(&self) -> Keys<'_, String, ColumnValue> {
         self.data.keys()
     }
 
@@ -112,7 +98,7 @@ impl RecordDao {
         self.data.len()
     }
 
-    pub fn upsert(&mut self, key: &str, value: &RecordColumnValue) {
+    pub fn upsert(&mut self, key: &str, value: &ColumnValue) {
         self.data.insert(key.to_owned(), value.to_owned());
     }
 
@@ -235,7 +221,7 @@ impl RecordDao {
     pub async fn db_add_columns(
         db: &Db,
         collection_id: &Uuid,
-        columns: &HashMap<String, SchemaFieldPropsModel>,
+        columns: &HashMap<String, SchemaFieldProps>,
     ) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => {
@@ -303,7 +289,7 @@ impl RecordDao {
     pub async fn db_change_columns_type(
         db: &Db,
         collection_id: &Uuid,
-        columns: &HashMap<String, SchemaFieldPropsModel>,
+        columns: &HashMap<String, SchemaFieldProps>,
     ) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => {
@@ -390,7 +376,7 @@ impl RecordDao {
                     Vec::with_capacity(collection_data.schema_fields().len() + 1);
 
                 columns.push("_id");
-                columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
+                columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
 
                 for (column, props) in collection_data.schema_fields() {
                     columns.push(column);
@@ -403,17 +389,15 @@ impl RecordDao {
                 for (idx, value) in scylladb_data.iter().enumerate() {
                     match value {
                         Some(value) => {
-                            match RecordColumnValue::from_scylladb_model(
-                                columns_props[idx].kind(),
-                                value,
-                            ) {
+                            match ColumnValue::from_scylladb_model(columns_props[idx].kind(), value)
+                            {
                                 Ok(value) => data.insert(columns[idx].to_owned(), value),
                                 Err(err) => return Err(err.into()),
                             }
                         }
                         None => data.insert(
                             columns[idx].to_owned(),
-                            RecordColumnValue::none(columns_props[idx].kind()),
+                            ColumnValue::none(columns_props[idx].kind()),
                         ),
                     };
                 }
@@ -435,16 +419,12 @@ impl RecordDao {
                 let mut data = HashMap::with_capacity(columns.len());
                 data.insert(
                     "_id".to_owned(),
-                    RecordColumnValue::from_postgresdb_model(
-                        &SchemaFieldKind::Uuid,
-                        "_id",
-                        &postgresdb_data,
-                    )?,
+                    ColumnValue::from_postgresdb_model(&ColumnKind::Uuid, "_id", &postgresdb_data)?,
                 );
                 for (field, field_props) in collection_data.schema_fields() {
                     data.insert(
                         field.to_owned(),
-                        RecordColumnValue::from_postgresdb_model(
+                        ColumnValue::from_postgresdb_model(
                             field_props.kind(),
                             field,
                             &postgresdb_data,
@@ -468,20 +448,12 @@ impl RecordDao {
                 let mut data = HashMap::with_capacity(columns.len());
                 data.insert(
                     "_id".to_owned(),
-                    RecordColumnValue::from_mysqldb_model(
-                        &SchemaFieldKind::Uuid,
-                        "_id",
-                        &mysqldb_data,
-                    )?,
+                    ColumnValue::from_mysqldb_model(&ColumnKind::Uuid, "_id", &mysqldb_data)?,
                 );
                 for (field, field_props) in collection_data.schema_fields() {
                     data.insert(
                         field.to_owned(),
-                        RecordColumnValue::from_mysqldb_model(
-                            field_props.kind(),
-                            field,
-                            &mysqldb_data,
-                        )?,
+                        ColumnValue::from_mysqldb_model(field_props.kind(), field, &mysqldb_data)?,
                     );
                 }
 
@@ -501,16 +473,12 @@ impl RecordDao {
                 let mut data = HashMap::with_capacity(columns.len());
                 data.insert(
                     "_id".to_owned(),
-                    RecordColumnValue::from_sqlitedb_model(
-                        &SchemaFieldKind::Uuid,
-                        "_id",
-                        &sqlitedb_data,
-                    )?,
+                    ColumnValue::from_sqlitedb_model(&ColumnKind::Uuid, "_id", &sqlitedb_data)?,
                 );
                 for (field, field_props) in collection_data.schema_fields() {
                     data.insert(
                         field.to_owned(),
-                        RecordColumnValue::from_sqlitedb_model(
+                        ColumnValue::from_sqlitedb_model(
                             field_props.kind(),
                             field,
                             &sqlitedb_data,
@@ -540,7 +508,7 @@ impl RecordDao {
                     Vec::with_capacity(collection_data.schema_fields().len() + 1);
 
                 columns.push("_id");
-                columns_props.push(SchemaFieldPropsModel::new(&SchemaFieldKind::Uuid, &true));
+                columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
 
                 for (column, props) in collection_data.schema_fields() {
                     columns.push(column);
@@ -563,7 +531,7 @@ impl RecordDao {
                     let mut data = HashMap::with_capacity(scylladb_data.len());
                     for (idx, value) in scylladb_data.iter().enumerate() {
                         match value {
-                            Some(value) => match RecordColumnValue::from_scylladb_model(
+                            Some(value) => match ColumnValue::from_scylladb_model(
                                 columns_props[idx].kind(),
                                 value,
                             ) {
@@ -572,7 +540,7 @@ impl RecordDao {
                             },
                             None => data.insert(
                                 columns[idx].to_owned(),
-                                RecordColumnValue::none(columns_props[idx].kind()),
+                                ColumnValue::none(columns_props[idx].kind()),
                             ),
                         };
                     }
@@ -610,8 +578,8 @@ impl RecordDao {
                         HashMap::with_capacity(columns.len());
                     data.insert(
                         "_id".to_owned(),
-                        RecordColumnValue::from_postgresdb_model(
-                            &SchemaFieldKind::Uuid,
+                        ColumnValue::from_postgresdb_model(
+                            &ColumnKind::Uuid,
                             "_id",
                             postgres_data,
                         )?,
@@ -619,7 +587,7 @@ impl RecordDao {
                     for (field, field_props) in collection_data.schema_fields() {
                         data.insert(
                             field.to_owned(),
-                            RecordColumnValue::from_postgresdb_model(
+                            ColumnValue::from_postgresdb_model(
                                 field_props.kind(),
                                 field,
                                 postgres_data,
@@ -660,20 +628,12 @@ impl RecordDao {
                         HashMap::with_capacity(columns.len());
                     data.insert(
                         "_id".to_owned(),
-                        RecordColumnValue::from_mysqldb_model(
-                            &SchemaFieldKind::Uuid,
-                            "_id",
-                            mysql_data,
-                        )?,
+                        ColumnValue::from_mysqldb_model(&ColumnKind::Uuid, "_id", mysql_data)?,
                     );
                     for (field, field_props) in collection_data.schema_fields() {
                         data.insert(
                             field.to_owned(),
-                            RecordColumnValue::from_mysqldb_model(
-                                field_props.kind(),
-                                field,
-                                mysql_data,
-                            )?,
+                            ColumnValue::from_mysqldb_model(field_props.kind(), field, mysql_data)?,
                         );
                     }
                     data_many.push(Self {
@@ -710,16 +670,12 @@ impl RecordDao {
                         HashMap::with_capacity(columns.len());
                     data.insert(
                         "_id".to_owned(),
-                        RecordColumnValue::from_sqlitedb_model(
-                            &SchemaFieldKind::Uuid,
-                            "_id",
-                            sqlite_data,
-                        )?,
+                        ColumnValue::from_sqlitedb_model(&ColumnKind::Uuid, "_id", sqlite_data)?,
                     );
                     for (field, field_props) in collection_data.schema_fields() {
                         data.insert(
                             field.to_owned(),
-                            RecordColumnValue::from_sqlitedb_model(
+                            ColumnValue::from_sqlitedb_model(
                                 field_props.kind(),
                                 field,
                                 sqlite_data,
@@ -1595,726 +1551,6 @@ impl RecordDao {
 }
 
 #[derive(Clone)]
-pub enum RecordColumnValue {
-    Boolean(Option<bool>),
-    TinyInteger(Option<i8>),
-    SmallInteger(Option<i16>),
-    Integer(Option<i32>),
-    BigInteger(Option<i64>),
-    VarInteger(Option<BigInt>),
-    Float(Option<f32>),
-    Double(Option<f64>),
-    Decimal(Option<BigDecimal>),
-    String(Option<String>),
-    Binary(Option<Vec<u8>>),
-    Uuid(Option<Uuid>),
-    Date(Option<NaiveDate>),
-    Time(Option<NaiveTime>),
-    DateTime(Option<DateTime<Utc>>),
-    Timestamp(Option<DateTime<Utc>>),
-    Json(Option<String>),
-}
-
-impl RecordColumnValue {
-    pub fn from_serde_json(kind: &SchemaFieldKind, value: &serde_json::Value) -> Result<Self> {
-        match value {
-            serde_json::Value::Null => Ok(Self::none(kind)),
-            serde_json::Value::Bool(value) => match kind {
-                SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(*value))),
-                SchemaFieldKind::Binary => Ok(Self::Binary(Some(vec![(*value).into()]))),
-                SchemaFieldKind::Json => Ok(Self::Json(Some(value.to_string()))),
-                _ => return Err(Error::msg("Wrong value type")),
-            },
-            serde_json::Value::Number(value) => match kind {
-                SchemaFieldKind::TinyInt => match value.as_i64() {
-                    Some(value) => match i8::try_from(value) {
-                        Ok(value) => Ok(Self::TinyInteger(Some(value))),
-                        Err(err) => Err(err.into()),
-                    },
-                    None => Err(Error::msg("Wrong value type")),
-                },
-                SchemaFieldKind::SmallInt => match value.as_i64() {
-                    Some(value) => match i16::try_from(value) {
-                        Ok(value) => Ok(Self::SmallInteger(Some(value))),
-                        Err(err) => Err(err.into()),
-                    },
-                    None => Err(Error::msg("Wrong value type")),
-                },
-                SchemaFieldKind::Int => match value.as_i64() {
-                    Some(value) => match i32::try_from(value) {
-                        Ok(value) => Ok(Self::Integer(Some(value))),
-                        Err(err) => Err(err.into()),
-                    },
-                    None => Err(Error::msg("Wrong value type")),
-                },
-                SchemaFieldKind::BigInt => match value.as_i64() {
-                    Some(value) => Ok(Self::BigInteger(Some(value))),
-                    None => Err(Error::msg("Wrong value type")),
-                },
-                SchemaFieldKind::Float => match value.as_f64() {
-                    Some(value) => {
-                        let value = value as f32;
-                        if value.is_finite() {
-                            Ok(Self::Float(Some(value)))
-                        } else {
-                            Err(Error::msg("Wrong value type"))
-                        }
-                    }
-                    None => Err(Error::msg("Wrong value type")),
-                },
-                SchemaFieldKind::Double => match value.as_f64() {
-                    Some(value) => Ok(Self::Double(Some(value))),
-                    None => Err(Error::msg("Wrong value type")),
-                },
-                SchemaFieldKind::Binary => Ok(Self::Binary(Some(value.to_string().into_bytes()))),
-                SchemaFieldKind::Json => Ok(Self::Json(Some(value.to_string()))),
-                _ => return Err(Error::msg("Wrong value type")),
-            },
-            serde_json::Value::String(value) => match kind {
-                SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
-                    &value.to_string(),
-                )?))),
-                SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                    &value.to_string(),
-                )?))),
-                SchemaFieldKind::String => Ok(Self::String(Some(value.to_owned()))),
-                SchemaFieldKind::Binary => Ok(Self::Binary(Some(value.as_bytes().to_vec()))),
-                SchemaFieldKind::Uuid => match Uuid::from_str(value) {
-                    Ok(uuid) => Ok(Self::Uuid(Some(uuid))),
-                    Err(err) => Err(err.into()),
-                },
-                SchemaFieldKind::Date => match NaiveDate::parse_from_str(value, "%Y-%m-%d") {
-                    Ok(date) => Ok(Self::Date(Some(date))),
-                    Err(err) => Err(err.into()),
-                },
-                SchemaFieldKind::Time => match NaiveTime::parse_from_str(value, "%H:%M:%S%.f") {
-                    Ok(time) => Ok(Self::Time(Some(time))),
-                    Err(err) => Err(err.into()),
-                },
-                SchemaFieldKind::DateTime => match DateTime::parse_from_rfc3339(value) {
-                    Ok(datetime) => Ok(Self::DateTime(Some(datetime.with_timezone(&Utc)))),
-                    Err(err) => Err(err.into()),
-                },
-                SchemaFieldKind::Timestamp => match DateTime::parse_from_rfc3339(value) {
-                    Ok(timestamp) => Ok(Self::Timestamp(Some(timestamp.with_timezone(&Utc)))),
-                    Err(err) => Err(err.into()),
-                },
-                SchemaFieldKind::Json => Ok(Self::Json(Some(value.to_owned()))),
-                _ => return Err(Error::msg("Wrong value type")),
-            },
-            serde_json::Value::Array(value) => match kind {
-                SchemaFieldKind::Binary => {
-                    let mut bytes = Vec::with_capacity(value.len());
-                    for value in value.iter() {
-                        match value.as_str() {
-                            Some(value) => bytes.append(&mut value.as_bytes().to_vec()),
-                            None => return Err(Error::msg("Wrong value type")),
-                        }
-                    }
-                    Ok(Self::Binary(Some(bytes)))
-                }
-                SchemaFieldKind::Json => Ok(Self::Json(Some(serde_json::json!(value).to_string()))),
-                _ => return Err(Error::msg("Wrong value type")),
-            },
-            serde_json::Value::Object(value) => match kind {
-                SchemaFieldKind::Binary => Ok(Self::Binary(Some(
-                    serde_json::json!(value).to_string().into_bytes(),
-                ))),
-                SchemaFieldKind::Json => Ok(Self::Json(Some(serde_json::json!(value).to_string()))),
-                _ => return Err(Error::msg("Wrong value type")),
-            },
-        }
-    }
-
-    pub fn to_serde_json(&self) -> Result<serde_json::Value> {
-        match self {
-            Self::Boolean(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::TinyInteger(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::SmallInteger(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Integer(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::BigInteger(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::VarInteger(data) => match data {
-                Some(data) => Ok(serde_json::json!(data.to_string())),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Float(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Double(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Decimal(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::String(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Binary(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Uuid(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Date(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Time(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::DateTime(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Timestamp(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
-            Self::Json(data) => match data {
-                Some(data) => match serde_json::from_str(data) {
-                    Ok(data) => Ok(data),
-                    Err(err) => Err(err.into()),
-                },
-                None => Ok(serde_json::Value::Null),
-            },
-        }
-    }
-
-    pub fn none(kind: &SchemaFieldKind) -> Self {
-        match kind {
-            SchemaFieldKind::Boolean => Self::Boolean(None),
-            SchemaFieldKind::TinyInt => Self::TinyInteger(None),
-            SchemaFieldKind::SmallInt => Self::SmallInteger(None),
-            SchemaFieldKind::Int => Self::Integer(None),
-            SchemaFieldKind::BigInt => Self::BigInteger(None),
-            SchemaFieldKind::Varint => Self::VarInteger(None),
-            SchemaFieldKind::Float => Self::Float(None),
-            SchemaFieldKind::Double => Self::Double(None),
-            SchemaFieldKind::Decimal => Self::Decimal(None),
-            SchemaFieldKind::String => Self::String(None),
-            SchemaFieldKind::Binary => Self::Binary(None),
-            SchemaFieldKind::Uuid => Self::Uuid(None),
-            SchemaFieldKind::Date => Self::Date(None),
-            SchemaFieldKind::Time => Self::Time(None),
-            SchemaFieldKind::DateTime => Self::DateTime(None),
-            SchemaFieldKind::Timestamp => Self::Timestamp(None),
-            SchemaFieldKind::Json => Self::Json(None),
-        }
-    }
-
-    pub fn from_scylladb_model(kind: &SchemaFieldKind, value: &ScyllaCqlValue) -> Result<Self> {
-        match kind {
-            SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(value.as_boolean().ok_or(
-                Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'boolean'.",
-                ),
-            )?))),
-            SchemaFieldKind::TinyInt => Ok(Self::TinyInteger(Some(value.as_tinyint().ok_or(
-                Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'tinyint'.",
-                ),
-            )?))),
-            SchemaFieldKind::SmallInt => Ok(Self::SmallInteger(Some(value.as_smallint().ok_or(
-                Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'smallint'.",
-                ),
-            )?))),
-            SchemaFieldKind::Int => Ok(Self::Integer(Some(value.as_int().ok_or(Error::msg(
-                "Incorrect internal value type. Internal value is not of type 'int'.",
-            ))?))),
-            SchemaFieldKind::BigInt => Ok(Self::BigInteger(Some(value.as_bigint().ok_or(
-                Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'bigint'.",
-                ),
-            )?))),
-            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
-                &value
-                    .clone()
-                    .into_varint()
-                    .ok_or(Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'varint'.",
-                    ))?
-                    .to_signed_bytes_be(),
-            )))),
-            SchemaFieldKind::Float => Ok(Self::Float(Some(value.as_float().ok_or(Error::msg(
-                "Incorrect internal value type. Internal value is not of type 'float'.",
-            ))?))),
-            SchemaFieldKind::Double => {
-                Ok(Self::Double(Some(value.as_double().ok_or(Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'double'.",
-                ))?)))
-            }
-            SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                &value
-                    .clone()
-                    .into_decimal()
-                    .ok_or(Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'decimal'.",
-                    ))?
-                    .to_string(),
-            )?))),
-            SchemaFieldKind::String => Ok(Self::String(Some(
-                value
-                    .as_text()
-                    .ok_or(Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'text'.",
-                    ))?
-                    .to_owned(),
-            ))),
-            SchemaFieldKind::Binary => Ok(Self::Binary(Some(
-                value
-                    .as_blob()
-                    .ok_or(Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'blob'.",
-                    ))?
-                    .to_vec(),
-            ))),
-            SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(value.as_uuid().ok_or(Error::msg(
-                "Incorrect internal value type. Internal value is not of type 'uuid'.",
-            ))?))),
-            SchemaFieldKind::Date => {
-                let date = value.as_cql_date().ok_or(Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'date'.",
-                ))?;
-                Ok(Self::Date(Some(scylla_cql_date_to_naivedate(&date)?)))
-            }
-            SchemaFieldKind::Time => {
-                let time = value.as_cql_time().ok_or(Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'time'.",
-                ))?;
-                Ok(Self::Time(Some(scylla_cql_time_to_naivetime(&time)?)))
-            }
-            SchemaFieldKind::DateTime => {
-                let timestamp = value.as_cql_timestamp().ok_or(Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'timestamp'.",
-                ))?;
-                Ok(Self::DateTime(Some(
-                    conversion::scylla_cql_timestamp_to_datetime_utc(&timestamp)?,
-                )))
-            }
-            SchemaFieldKind::Timestamp => {
-                let timestamp = value.as_cql_timestamp().ok_or(Error::msg(
-                    "Incorrect internal value type. Internal value is not of type 'timestamp'.",
-                ))?;
-                Ok(Self::DateTime(Some(
-                    conversion::scylla_cql_timestamp_to_datetime_utc(&timestamp)?,
-                )))
-            }
-            SchemaFieldKind::Json => Ok(Self::Json(Some(String::from_utf8(
-                value
-                    .as_blob()
-                    .ok_or(Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'text'.",
-                    ))?
-                    .to_owned(),
-            )?))),
-        }
-    }
-
-    pub fn to_scylladb_model(&self) -> Result<Box<dyn SerializeCql>> {
-        match self {
-            Self::Boolean(data) => Ok(Box::new(*data)),
-            Self::TinyInteger(data) => Ok(Box::new(*data)),
-            Self::SmallInteger(data) => Ok(Box::new(*data)),
-            Self::Integer(data) => Ok(Box::new(*data)),
-            Self::BigInteger(data) => Ok(Box::new(*data)),
-            Self::VarInteger(data) => Ok(Box::new(match data {
-                Some(data) => Some(num_bigint_03::BigInt::from_signed_bytes_be(
-                    &data.to_signed_bytes_be(),
-                )),
-                None => None,
-            })),
-            Self::Float(data) => Ok(Box::new(*data)),
-            Self::Double(data) => Ok(Box::new(*data)),
-            Self::Decimal(data) => Ok(Box::new(match data {
-                Some(data) => Some(bigdecimal_02::BigDecimal::from_str(&data.to_string())?),
-                None => None,
-            })),
-            Self::String(data) => Ok(Box::new(data.to_owned())),
-            Self::Binary(data) => Ok(Box::new(data.to_owned())),
-            Self::Uuid(data) => Ok(Box::new(*data)),
-            Self::Date(data) => Ok(Box::new(match data {
-                Some(data) => Some(naivedate_to_scylla_cql_date(data)?),
-                None => None,
-            })),
-            Self::Time(data) => Ok(Box::new(match data {
-                Some(data) => Some(naivetime_to_scylla_cql_time(data)?),
-                None => None,
-            })),
-            Self::DateTime(data) => Ok(Box::new(match data {
-                Some(data) => Some(ScyllaCqlTimestamp(data.timestamp_millis())),
-                None => None,
-            })),
-            Self::Timestamp(data) => Ok(Box::new(match data {
-                Some(data) => Some(ScyllaCqlTimestamp(data.timestamp_millis())),
-                None => None,
-            })),
-            Self::Json(data) => Ok(Box::new(match data {
-                Some(data) => Some(data.to_owned().into_bytes()),
-                None => None,
-            })),
-        }
-    }
-
-    pub fn from_postgresdb_model(
-        kind: &SchemaFieldKind,
-        index: &str,
-        value: &sqlx::postgres::PgRow,
-    ) -> Result<Self> {
-        match kind {
-            SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::TinyInt => {
-                Ok(Self::TinyInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::SmallInt => {
-                Ok(Self::SmallInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Int => Ok(Self::Integer(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::BigInt => {
-                Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
-                &sqlx::Row::try_get::<sqlx::types::BigDecimal, _>(value, index)?.to_string(),
-            )?))),
-            SchemaFieldKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                &sqlx::Row::try_get::<sqlx::types::BigDecimal, _>(value, index)?.to_string(),
-            )?))),
-            SchemaFieldKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Date => Ok(Self::Date(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Time => Ok(Self::Time(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::DateTime => {
-                Ok(Self::DateTime(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Timestamp => {
-                Ok(Self::Timestamp(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Json => Ok(Self::Json(Some(String::from_utf8(
-                (sqlx::Row::try_get::<sqlx::types::Json<Vec<u8>>, _>(value, index)?).0,
-            )?))),
-        }
-    }
-
-    pub fn to_postgresdb_model<'a>(
-        &self,
-        query: sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>,
-    ) -> Result<sqlx::query::Query<'a, sqlx::Postgres, sqlx::postgres::PgArguments>> {
-        match self {
-            Self::Boolean(data) => Ok(query.bind(*data)),
-            Self::TinyInteger(data) => Ok(query.bind(*data)),
-            Self::SmallInteger(data) => Ok(query.bind(*data)),
-            Self::Integer(data) => Ok(query.bind(*data)),
-            Self::BigInteger(data) => Ok(query.bind(*data)),
-            Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
-                None => None,
-            })),
-            Self::Float(data) => Ok(query.bind(*data)),
-            Self::Double(data) => Ok(query.bind(*data)),
-            Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
-                None => None,
-            })),
-            Self::String(data) => Ok(query.bind(data.to_owned())),
-            Self::Binary(data) => Ok(query.bind(data.to_owned())),
-            Self::Uuid(data) => Ok(query.bind(*data)),
-            Self::Date(data) => Ok(query.bind(*data)),
-            Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
-            Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
-                None => None,
-            })),
-        }
-    }
-
-    pub fn to_postgresdb_model_as<'a, T>(
-        &self,
-        query: sqlx::query::QueryAs<'a, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
-    ) -> Result<sqlx::query::QueryAs<'a, sqlx::Postgres, T, sqlx::postgres::PgArguments>> {
-        match self {
-            Self::Boolean(data) => Ok(query.bind(*data)),
-            Self::TinyInteger(data) => Ok(query.bind(*data)),
-            Self::SmallInteger(data) => Ok(query.bind(*data)),
-            Self::Integer(data) => Ok(query.bind(*data)),
-            Self::BigInteger(data) => Ok(query.bind(*data)),
-            Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
-                None => None,
-            })),
-            Self::Float(data) => Ok(query.bind(*data)),
-            Self::Double(data) => Ok(query.bind(*data)),
-            Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::BigDecimal::from_str(&data.to_string())?),
-                None => None,
-            })),
-            Self::String(data) => Ok(query.bind(data.to_owned())),
-            Self::Binary(data) => Ok(query.bind(data.to_owned())),
-            Self::Uuid(data) => Ok(query.bind(*data)),
-            Self::Date(data) => Ok(query.bind(*data)),
-            Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
-            Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
-                None => None,
-            })),
-        }
-    }
-
-    pub fn from_mysqldb_model(
-        kind: &SchemaFieldKind,
-        index: &str,
-        value: &sqlx::mysql::MySqlRow,
-    ) -> Result<Self> {
-        match kind {
-            SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::TinyInt => {
-                Ok(Self::TinyInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::SmallInt => {
-                Ok(Self::SmallInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Int => Ok(Self::Integer(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::BigInt => {
-                Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
-                sqlx::Row::try_get::<&[u8], _>(value, index)?,
-            )))),
-            SchemaFieldKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                std::str::from_utf8(sqlx::Row::try_get::<&[u8], _>(value, index)?)?,
-            )?))),
-            SchemaFieldKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Date => Ok(Self::Date(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Time => Ok(Self::Time(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::DateTime => Ok(Self::DateTime(Some(
-                sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
-            ))),
-            SchemaFieldKind::Timestamp => Ok(Self::DateTime(Some(
-                sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
-            ))),
-            SchemaFieldKind::Json => Ok(Self::Json(Some(String::from_utf8(
-                sqlx::Row::try_get::<sqlx::types::Json<Vec<u8>>, _>(value, index)?.0,
-            )?))),
-        }
-    }
-
-    pub fn to_mysqldb_model<'a>(
-        &self,
-        query: sqlx::query::Query<'a, sqlx::MySql, sqlx::mysql::MySqlArguments>,
-    ) -> Result<sqlx::query::Query<'a, sqlx::MySql, sqlx::mysql::MySqlArguments>> {
-        match self {
-            Self::Boolean(data) => Ok(query.bind(*data)),
-            Self::TinyInteger(data) => Ok(query.bind(*data)),
-            Self::SmallInteger(data) => Ok(query.bind(*data)),
-            Self::Integer(data) => Ok(query.bind(*data)),
-            Self::BigInteger(data) => Ok(query.bind(*data)),
-            Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_signed_bytes_be()),
-                None => None,
-            })),
-            Self::Float(data) => Ok(query.bind(*data)),
-            Self::Double(data) => Ok(query.bind(*data)),
-            Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string().into_bytes()),
-                None => None,
-            })),
-            Self::String(data) => Ok(query.bind(data.to_owned())),
-            Self::Binary(data) => Ok(query.bind(data.to_owned())),
-            Self::Uuid(data) => Ok(query.bind(*data)),
-            Self::Date(data) => Ok(query.bind(*data)),
-            Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
-            Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
-                None => None,
-            })),
-        }
-    }
-
-    pub fn to_mysqldb_model_as<'a, T>(
-        &self,
-        query: sqlx::query::QueryAs<'a, sqlx::MySql, T, sqlx::mysql::MySqlArguments>,
-    ) -> Result<sqlx::query::QueryAs<'a, sqlx::MySql, T, sqlx::mysql::MySqlArguments>> {
-        match self {
-            Self::Boolean(data) => Ok(query.bind(*data)),
-            Self::TinyInteger(data) => Ok(query.bind(*data)),
-            Self::SmallInteger(data) => Ok(query.bind(*data)),
-            Self::Integer(data) => Ok(query.bind(*data)),
-            Self::BigInteger(data) => Ok(query.bind(*data)),
-            Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_signed_bytes_be()),
-                None => None,
-            })),
-            Self::Float(data) => Ok(query.bind(*data)),
-            Self::Double(data) => Ok(query.bind(*data)),
-            Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string().into_bytes()),
-                None => None,
-            })),
-            Self::String(data) => Ok(query.bind(data.to_owned())),
-            Self::Binary(data) => Ok(query.bind(data.to_owned())),
-            Self::Uuid(data) => Ok(query.bind(*data)),
-            Self::Date(data) => Ok(query.bind(*data)),
-            Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
-            Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(match data {
-                Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
-                None => None,
-            })),
-        }
-    }
-
-    pub fn from_sqlitedb_model(
-        kind: &SchemaFieldKind,
-        index: &str,
-        value: &sqlx::sqlite::SqliteRow,
-    ) -> Result<Self> {
-        match kind {
-            SchemaFieldKind::Boolean => Ok(Self::Boolean(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::TinyInt => {
-                Ok(Self::TinyInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::SmallInt => {
-                Ok(Self::SmallInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Int => Ok(Self::Integer(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::BigInt => {
-                Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
-                sqlx::Row::try_get::<&[u8], _>(value, index)?,
-            )))),
-            SchemaFieldKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                std::str::from_utf8(sqlx::Row::try_get::<&[u8], _>(value, index)?)?,
-            )?))),
-            SchemaFieldKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Uuid => Ok(Self::Uuid(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Date => Ok(Self::Date(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::Time => Ok(Self::Time(Some(sqlx::Row::try_get(value, index)?))),
-            SchemaFieldKind::DateTime => {
-                Ok(Self::DateTime(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Timestamp => {
-                Ok(Self::Timestamp(Some(sqlx::Row::try_get(value, index)?)))
-            }
-            SchemaFieldKind::Json => {
-                Ok(Self::Json(Some(String::from_utf8(sqlx::Row::try_get::<
-                    Vec<u8>,
-                    _,
-                >(
-                    value, index
-                )?)?)))
-            }
-        }
-    }
-
-    pub fn to_sqlitedb_model<'a>(
-        &self,
-        query: sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>,
-    ) -> Result<sqlx::query::Query<'a, sqlx::Sqlite, sqlx::sqlite::SqliteArguments<'a>>> {
-        match self {
-            Self::Boolean(data) => Ok(query.bind(*data)),
-            Self::TinyInteger(data) => Ok(query.bind(*data)),
-            Self::SmallInteger(data) => Ok(query.bind(*data)),
-            Self::Integer(data) => Ok(query.bind(*data)),
-            Self::BigInteger(data) => Ok(query.bind(*data)),
-            Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_signed_bytes_be()),
-                None => None,
-            })),
-            Self::Float(data) => Ok(query.bind(*data)),
-            Self::Double(data) => Ok(query.bind(*data)),
-            Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string().into_bytes()),
-                None => None,
-            })),
-            Self::String(data) => Ok(query.bind(data.to_owned())),
-            Self::Binary(data) => Ok(query.bind(data.to_owned())),
-            Self::Uuid(data) => Ok(query.bind(*data)),
-            Self::Date(data) => Ok(query.bind(*data)),
-            Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
-            Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_owned().into_bytes()),
-                None => None,
-            })),
-        }
-    }
-
-    pub fn to_sqlitedb_model_as<'a, T>(
-        &self,
-        query: sqlx::query::QueryAs<'a, sqlx::Sqlite, T, sqlx::sqlite::SqliteArguments<'a>>,
-    ) -> Result<sqlx::query::QueryAs<'a, sqlx::Sqlite, T, sqlx::sqlite::SqliteArguments<'a>>> {
-        match self {
-            Self::Boolean(data) => Ok(query.bind(*data)),
-            Self::TinyInteger(data) => Ok(query.bind(*data)),
-            Self::SmallInteger(data) => Ok(query.bind(*data)),
-            Self::Integer(data) => Ok(query.bind(*data)),
-            Self::BigInteger(data) => Ok(query.bind(*data)),
-            Self::VarInteger(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_signed_bytes_be()),
-                None => None,
-            })),
-            Self::Float(data) => Ok(query.bind(*data)),
-            Self::Double(data) => Ok(query.bind(*data)),
-            Self::Decimal(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_string().into_bytes()),
-                None => None,
-            })),
-            Self::String(data) => Ok(query.bind(data.to_owned())),
-            Self::Binary(data) => Ok(query.bind(data.to_owned())),
-            Self::Uuid(data) => Ok(query.bind(*data)),
-            Self::Date(data) => Ok(query.bind(*data)),
-            Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
-            Self::Timestamp(data) => Ok(query.bind(*data)),
-            Self::Json(data) => Ok(query.bind(match data {
-                Some(data) => Some(data.to_owned().into_bytes()),
-                None => None,
-            })),
-        }
-    }
-}
-
-#[derive(Clone)]
 pub struct RecordFilters(Vec<RecordFilter>);
 
 impl RecordFilters {
@@ -2636,7 +1872,7 @@ impl RecordFilters {
 pub struct RecordFilter {
     field: Option<String>,
     op: String,
-    value: Option<RecordColumnValue>,
+    value: Option<ColumnValue>,
     child: Option<RecordFilters>,
 }
 
@@ -2644,7 +1880,7 @@ impl RecordFilter {
     pub fn new(
         field: &Option<String>,
         op: &str,
-        value: &Option<RecordColumnValue>,
+        value: &Option<ColumnValue>,
         child: &Option<RecordFilters>,
     ) -> Self {
         Self {
@@ -2663,7 +1899,7 @@ impl RecordFilter {
         &self.op
     }
 
-    pub fn value(&self) -> &Option<RecordColumnValue> {
+    pub fn value(&self) -> &Option<ColumnValue> {
         &self.value
     }
 

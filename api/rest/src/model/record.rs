@@ -1,8 +1,9 @@
 use ahash::HashMap;
 use anyhow::{Error, Result};
 use hb_dao::{
-    collection::{CollectionDao, SchemaFieldKind},
-    record::{RecordColumnValue, RecordFilter, RecordFilters},
+    collection::CollectionDao,
+    record::{RecordFilter, RecordFilters},
+    value::{ColumnKind, ColumnValue},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -148,21 +149,20 @@ impl FindManyRecordFiltersReqJson {
             let schema_field_kind = match &f.field {
                 Some(field) => match collection_data.schema_fields().get(field) {
                     Some(field) => Some(field.kind()),
-                    None => {
-                        if field == "_id" {
-                            Some(&SchemaFieldKind::Uuid)
-                        } else {
+                    None => match field.as_str() {
+                        "_id" => Some(&ColumnKind::Uuid),
+                        _ => {
                             return Err(Error::msg(format!(
                                 "Field '{field}' is not exist in the collection",
-                            )));
+                            )))
                         }
-                    }
+                    },
                 },
                 None => None,
             };
 
             let value = if schema_field_kind.is_some() && f.value.is_some() {
-                match RecordColumnValue::from_serde_json(
+                match ColumnValue::from_serde_json(
                     schema_field_kind.unwrap(),
                     f.value.as_ref().unwrap(),
                 ) {
@@ -197,7 +197,7 @@ impl FindManyRecordFiltersReqJson {
 pub struct FindManyRecordFilterReqJson {
     field: Option<String>,
     op: String,
-    value: Option<serde_json::Value>,
+    value: Option<Value>,
     child: Option<FindManyRecordFiltersReqJson>,
 }
 

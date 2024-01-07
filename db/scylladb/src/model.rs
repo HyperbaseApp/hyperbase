@@ -5,3 +5,4 @@ pub mod project;
 pub mod registration;
 pub mod system;
 pub mod token;
+pub mod value;

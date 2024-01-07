@@ -2,7 +2,7 @@ use ahash::{HashMap, HashSet};
 use scylla::{frame::value::CqlTimestamp, FromRow, FromUserType, SerializeCql, SerializeRow};
 use uuid::Uuid;
 
-use super::system::SchemaFieldKind;
+use super::value::ColumnKind;
 
 #[derive(FromRow, SerializeRow)]
 pub struct CollectionModel {
@@ -68,12 +68,12 @@ impl CollectionModel {
 #[derive(FromUserType, SerializeCql, Clone)]
 pub struct SchemaFieldPropsModel {
     kind: String,
-    internal_kind: SchemaFieldKind,
+    internal_kind: ColumnKind,
     required: bool,
 }
 
 impl SchemaFieldPropsModel {
-    pub fn new(kind: &str, internal_kind: &SchemaFieldKind, required: &bool) -> Self {
+    pub fn new(kind: &str, internal_kind: &ColumnKind, required: &bool) -> Self {
         Self {
             kind: kind.to_owned(),
             internal_kind: *internal_kind,
@@ -85,7 +85,7 @@ impl SchemaFieldPropsModel {
         &self.kind
     }
 
-    pub fn internal_kind(&self) -> &SchemaFieldKind {
+    pub fn internal_kind(&self) -> &ColumnKind {
         &self.internal_kind
     }
 
