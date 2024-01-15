@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::sync::{mpsc::Sender, Arc};
 
 use hb_dao::Db;
 use hb_hash_argon2::argon2::Argon2Hash;
@@ -115,11 +115,11 @@ impl MailerCtx {
 }
 
 pub struct DaoCtx {
-    db: Db,
+    db: Arc<Db>,
 }
 
 impl DaoCtx {
-    pub fn new(db: Db) -> Self {
+    pub fn new(db: Arc<Db>) -> Self {
         Self { db }
     }
 

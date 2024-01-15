@@ -9,7 +9,8 @@ pub struct TokenModel {
     updated_at: CqlTimestamp,
     admin_id: Uuid,
     token: String,
-    rules: Option<HashMap<Uuid, TokenRuleMethodModel>>,
+    bucket_rules: Option<HashMap<Uuid, TokenBucketRuleMethodModel>>,
+    collection_rules: Option<HashMap<Uuid, TokenCollectionRuleMethodModel>>,
     expired_at: Option<CqlTimestamp>,
 }
 
@@ -20,7 +21,8 @@ impl TokenModel {
         updated_at: &CqlTimestamp,
         admin_id: &Uuid,
         token: &str,
-        rules: &Option<HashMap<Uuid, TokenRuleMethodModel>>,
+        bucket_rules: &Option<HashMap<Uuid, TokenBucketRuleMethodModel>>,
+        collection_rules: &Option<HashMap<Uuid, TokenCollectionRuleMethodModel>>,
         expired_at: &Option<CqlTimestamp>,
     ) -> Self {
         Self {
@@ -29,7 +31,8 @@ impl TokenModel {
             updated_at: *updated_at,
             admin_id: *admin_id,
             token: token.to_owned(),
-            rules: rules.clone(),
+            bucket_rules: bucket_rules.clone(),
+            collection_rules: collection_rules.clone(),
             expired_at: *expired_at,
         }
     }
@@ -54,8 +57,12 @@ impl TokenModel {
         &self.token
     }
 
-    pub fn rules(&self) -> &Option<HashMap<Uuid, TokenRuleMethodModel>> {
-        &self.rules
+    pub fn bucket_rules(&self) -> &Option<HashMap<Uuid, TokenBucketRuleMethodModel>> {
+        &self.bucket_rules
+    }
+
+    pub fn collection_rules(&self) -> &Option<HashMap<Uuid, TokenCollectionRuleMethodModel>> {
+        &self.collection_rules
     }
 
     pub fn expired_at(&self) -> &Option<CqlTimestamp> {
@@ -64,7 +71,7 @@ impl TokenModel {
 }
 
 #[derive(FromUserType, SerializeCql, Clone)]
-pub struct TokenRuleMethodModel {
+pub struct TokenCollectionRuleMethodModel {
     find_one: bool,
     find_many: bool,
     insert: bool,
@@ -72,7 +79,7 @@ pub struct TokenRuleMethodModel {
     delete: bool,
 }
 
-impl TokenRuleMethodModel {
+impl TokenCollectionRuleMethodModel {
     pub fn new(
         find_one: &bool,
         find_many: &bool,
@@ -107,5 +114,59 @@ impl TokenRuleMethodModel {
 
     pub fn delete(&self) -> &bool {
         &self.delete
+    }
+}
+
+#[derive(FromUserType, SerializeCql, Clone)]
+pub struct TokenBucketRuleMethodModel {
+    find_one: bool,
+    find_many: bool,
+    insert: bool,
+    update: bool,
+    delete: bool,
+    download_one: bool,
+}
+
+impl TokenBucketRuleMethodModel {
+    pub fn new(
+        find_one: &bool,
+        find_many: &bool,
+        insert: &bool,
+        update: &bool,
+        delete: &bool,
+        download_one: &bool,
+    ) -> Self {
+        Self {
+            find_one: *find_one,
+            find_many: *find_many,
+            insert: *insert,
+            update: *update,
+            delete: *delete,
+            download_one: *download_one,
+        }
+    }
+
+    pub fn find_one(&self) -> &bool {
+        &self.find_one
+    }
+
+    pub fn find_many(&self) -> &bool {
+        &self.find_many
+    }
+
+    pub fn insert(&self) -> &bool {
+        &self.insert
+    }
+
+    pub fn update(&self) -> &bool {
+        &self.update
+    }
+
+    pub fn delete(&self) -> &bool {
+        &self.delete
+    }
+
+    pub fn download_one(&self) -> &bool {
+        &self.download_one
     }
 }

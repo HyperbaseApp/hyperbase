@@ -1,19 +1,24 @@
 use ahash::HashMap;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use hb_dao::token::TokenRuleMethod;
+use hb_dao::token::{TokenBucketRuleMethod, TokenCollectionRuleMethod};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct InsertOneTokenReqJson {
-    rules: HashMap<Uuid, TokenRuleMethodJson>,
+    collection_rules: HashMap<Uuid, TokenCollectionRuleMethodJson>,
+    bucket_rules: HashMap<Uuid, TokenBucketRuleMethodJson>,
     expired_at: Option<DateTime<Utc>>,
 }
 
 impl InsertOneTokenReqJson {
-    pub fn rules(&self) -> &HashMap<Uuid, TokenRuleMethodJson> {
-        &self.rules
+    pub fn collection_rules(&self) -> &HashMap<Uuid, TokenCollectionRuleMethodJson> {
+        &self.collection_rules
+    }
+
+    pub fn bucket_rules(&self) -> &HashMap<Uuid, TokenBucketRuleMethodJson> {
+        &self.bucket_rules
     }
 
     pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
@@ -45,7 +50,7 @@ impl UpdateOneTokenReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneTokenReqJson {
-    rules: Option<HashMap<Uuid, TokenRuleMethodJson>>,
+    collection_rules: Option<HashMap<Uuid, TokenCollectionRuleMethodJson>>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -55,8 +60,8 @@ pub struct UpdateOneTokenReqJson {
 }
 
 impl UpdateOneTokenReqJson {
-    pub fn rules(&self) -> &Option<HashMap<Uuid, TokenRuleMethodJson>> {
-        &self.rules
+    pub fn collection_rules(&self) -> &Option<HashMap<Uuid, TokenCollectionRuleMethodJson>> {
+        &self.collection_rules
     }
 
     pub fn expired_at(&self) -> &Option<Option<DateTime<Utc>>> {
@@ -64,7 +69,7 @@ impl UpdateOneTokenReqJson {
     }
 
     pub fn is_all_none(&self) -> bool {
-        self.rules.is_none() && self.expired_at.is_none()
+        self.collection_rules.is_none() && self.expired_at.is_none()
     }
 }
 
@@ -85,7 +90,8 @@ pub struct TokenResJson {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     token: String,
-    rules: HashMap<Uuid, TokenRuleMethodJson>,
+    bucket_rules: HashMap<Uuid, TokenBucketRuleMethodJson>,
+    collection_rules: HashMap<Uuid, TokenCollectionRuleMethodJson>,
     expired_at: Option<DateTime<Utc>>,
 }
 
@@ -95,7 +101,8 @@ impl TokenResJson {
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
         token: &str,
-        rules: &HashMap<Uuid, TokenRuleMethodJson>,
+        bucket_rules: &HashMap<Uuid, TokenBucketRuleMethodJson>,
+        collection_rules: &HashMap<Uuid, TokenCollectionRuleMethodJson>,
         expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         Self {
@@ -103,7 +110,8 @@ impl TokenResJson {
             created_at: *created_at,
             updated_at: *updated_at,
             token: token.to_owned(),
-            rules: rules.clone(),
+            bucket_rules: bucket_rules.clone(),
+            collection_rules: collection_rules.clone(),
             expired_at: *expired_at,
         }
     }
@@ -121,7 +129,7 @@ impl DeleteTokenResJson {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
-pub struct TokenRuleMethodJson {
+pub struct TokenCollectionRuleMethodJson {
     find_one: Option<bool>,
     find_many: Option<bool>,
     insert: Option<bool>,
@@ -129,8 +137,8 @@ pub struct TokenRuleMethodJson {
     delete: Option<bool>,
 }
 
-impl TokenRuleMethodJson {
-    pub fn from_dao(dao: &TokenRuleMethod) -> Result<Self> {
+impl TokenCollectionRuleMethodJson {
+    pub fn from_dao(dao: &TokenCollectionRuleMethod) -> Result<Self> {
         Ok(Self {
             find_one: Some(*dao.find_one()),
             find_many: Some(*dao.find_many()),
@@ -140,8 +148,8 @@ impl TokenRuleMethodJson {
         })
     }
 
-    pub fn to_dao(&self) -> Result<TokenRuleMethod> {
-        Ok(TokenRuleMethod::new(
+    pub fn to_dao(&self) -> Result<TokenCollectionRuleMethod> {
+        Ok(TokenCollectionRuleMethod::new(
             &match self.find_one {
                 Some(find_one) => find_one,
                 None => false,
@@ -160,6 +168,58 @@ impl TokenRuleMethodJson {
             },
             &match self.delete {
                 Some(delete) => delete,
+                None => false,
+            },
+        ))
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct TokenBucketRuleMethodJson {
+    find_one: Option<bool>,
+    find_many: Option<bool>,
+    insert: Option<bool>,
+    update: Option<bool>,
+    delete: Option<bool>,
+    download_one: Option<bool>,
+}
+
+impl TokenBucketRuleMethodJson {
+    pub fn from_dao(dao: &TokenBucketRuleMethod) -> Result<Self> {
+        Ok(Self {
+            find_one: Some(*dao.find_one()),
+            find_many: Some(*dao.find_many()),
+            insert: Some(*dao.insert()),
+            update: Some(*dao.update()),
+            delete: Some(*dao.delete()),
+            download_one: Some(*dao.download_one()),
+        })
+    }
+
+    pub fn to_dao(&self) -> Result<TokenBucketRuleMethod> {
+        Ok(TokenBucketRuleMethod::new(
+            &match self.find_one {
+                Some(find_one) => find_one,
+                None => false,
+            },
+            &match self.find_many {
+                Some(find_many) => find_many,
+                None => false,
+            },
+            &match self.insert {
+                Some(insert) => insert,
+                None => false,
+            },
+            &match self.update {
+                Some(update) => update,
+                None => false,
+            },
+            &match self.delete {
+                Some(delete) => delete,
+                None => false,
+            },
+            &match self.download_one {
+                Some(download_one) => download_one,
                 None => false,
             },
         ))

@@ -14,10 +14,12 @@ members = [
     "mailer",
     "token/jwt",
     "api/rest",
+    "api/mqtt",
 ]
 
 
 [workspace.dependencies]
+hb_api_mqtt = { path = "./api/mqtt" }
 hb_api_rest = { path = "./api/rest" }
 hb_config = { path = "./config" }
 hb_dao = { path = "./dao" }
@@ -50,6 +52,8 @@ lettre = { version = "0.11", default-features = false, features = [
     "pool",
 ] }
 num-bigint = "0.4"
+ntex = { version = "1", features = ["tokio"] }
+ntex-mqtt = "1"
 rand = "0.8"
 scylla = { version = "0.11" }
 serde = { version = "1", default-features = false }

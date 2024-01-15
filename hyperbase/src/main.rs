@@ -1,5 +1,11 @@
+use std::sync::Arc;
+
+use hb_api_mqtt::{
+    context::{ApiMqttCtx, DaoCtx as ApiMqttDaoCtx},
+    ApiMqttServer,
+};
 use hb_api_rest::{
-    context::{ApiRestCtx, DaoCtx, HashCtx, MailerCtx, TokenCtx},
+    context::{ApiRestCtx, DaoCtx as ApiRestDaoCtx, HashCtx, MailerCtx, TokenCtx},
     ApiRestServer,
 };
 use hb_dao::Db;
@@ -13,7 +19,8 @@ use hb_token_jwt::token::JwtToken;
 
 mod config_path;
 
-#[tokio::main]
+// #[tokio::main]
+#[ntex::main]
 async fn main() {
     let config_path = config_path::get();
     let config = hb_config::new(&config_path);
@@ -39,7 +46,7 @@ async fn main() {
         config.mailer().sender_email(),
     );
     let db = if let Some(scylla) = config.db().scylla() {
-        Db::ScyllaDb(
+        Arc::new(Db::ScyllaDb(
             ScyllaDb::new(
                 scylla.host(),
                 scylla.port(),
@@ -49,9 +56,9 @@ async fn main() {
                 config.auth().reset_password_ttl(),
             )
             .await,
-        )
+        ))
     } else if let Some(postgres) = config.db().postgres() {
-        Db::PostgresqlDb(
+        Arc::new(Db::PostgresqlDb(
             PostgresDb::new(
                 postgres.user(),
                 postgres.password(),
@@ -63,9 +70,9 @@ async fn main() {
                 &i64::from(*config.auth().reset_password_ttl()),
             )
             .await,
-        )
+        ))
     } else if let Some(mysql) = config.db().mysql() {
-        Db::MysqlDb(
+        Arc::new(Db::MysqlDb(
             MysqlDb::new(
                 mysql.user(),
                 mysql.password(),
@@ -77,9 +84,9 @@ async fn main() {
                 &i64::from(*config.auth().reset_password_ttl()),
             )
             .await,
-        )
+        ))
     } else if let Some(sqlite) = config.db().sqlite() {
-        Db::SqliteDb(
+        Arc::new(Db::SqliteDb(
             SqliteDb::new(
                 sqlite.path(),
                 sqlite.max_connections(),
@@ -87,7 +94,7 @@ async fn main() {
                 &i64::from(*config.auth().reset_password_ttl()),
             )
             .await,
-        )
+        ))
     } else {
         panic!("No database configuration is specified")
     };
@@ -99,15 +106,20 @@ async fn main() {
             HashCtx::new(argon2_hash),
             TokenCtx::new(jwt_token),
             MailerCtx::new(mailer_sender),
-            DaoCtx::new(db),
+            ApiRestDaoCtx::new(db.clone()),
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),
             *config.auth().registration_ttl(),
             *config.auth().reset_password_ttl(),
         ),
     );
+    let api_mqtt_server = ApiMqttServer::new(
+        config.api().mqtt().host(),
+        config.api().mqtt().port(),
+        ApiMqttCtx::new(ApiMqttDaoCtx::new(db)),
+    );
 
-    tokio::try_join!(mailer.run(), api_rest_server.run()).unwrap();
+    tokio::try_join!(mailer.run(), api_rest_server.run(), api_mqtt_server.run()).unwrap();
 
     hb_log::info(Some("👋"), "Hyperbase: turned off");
 }

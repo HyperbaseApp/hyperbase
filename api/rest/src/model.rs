@@ -5,7 +5,9 @@ use serde::Serialize;
 
 pub mod admin;
 pub mod auth;
+pub mod bucket;
 pub mod collection;
+pub mod file;
 pub mod project;
 pub mod record;
 pub mod token;

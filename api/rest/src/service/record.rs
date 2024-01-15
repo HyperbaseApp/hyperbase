@@ -82,6 +82,15 @@ async fn insert_one(
         },
     };
 
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_insert_record(path.collection_id()) {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to write data to this collection",
+            );
+        }
+    }
+
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
         CollectionDao::db_select(ctx.dao().db(), path.collection_id())
@@ -99,15 +108,6 @@ async fn insert_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
-    }
-
-    if let Some(token_data) = &token_data {
-        if !token_data.is_allow_insert(path.collection_id()) {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to write data to this collection",
-            );
-        }
     }
 
     for field_name in data.keys() {
@@ -214,6 +214,15 @@ async fn find_one(
         },
     };
 
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_find_one_record(path.collection_id()) {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to read this record",
+            );
+        }
+    }
+
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
@@ -231,15 +240,6 @@ async fn find_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
-    }
-
-    if let Some(token_data) = &token_data {
-        if !token_data.is_allow_find_one(path.collection_id()) {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to read this record",
-            );
-        }
     }
 
     let record_data =
@@ -299,6 +299,15 @@ async fn update_one(
         },
     };
 
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_update_record(path.collection_id()) {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to update this record",
+            );
+        }
+    }
+
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
@@ -316,15 +325,6 @@ async fn update_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
-    }
-
-    if let Some(token_data) = &token_data {
-        if !token_data.is_allow_update(path.collection_id()) {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to update this record",
-            );
-        }
     }
 
     for field_name in data.keys() {
@@ -432,6 +432,15 @@ async fn delete_one(
         },
     };
 
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_delete_record(path.collection_id()) {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to delete this record",
+            );
+        }
+    }
+
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
@@ -449,15 +458,6 @@ async fn delete_one(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
-    }
-
-    if let Some(token_data) = &token_data {
-        if !token_data.is_allow_delete(path.collection_id()) {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to delete this record",
-            );
-        }
     }
 
     if let Err(err) =
@@ -510,6 +510,15 @@ async fn find_many(
         },
     };
 
+    if let Some(token_data) = &token_data {
+        if !token_data.is_allow_find_many_records(path.collection_id()) {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to read these records",
+            );
+        }
+    }
+
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
         CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
@@ -527,15 +536,6 @@ async fn find_many(
 
     if project_data.id() != collection_data.project_id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
-    }
-
-    if let Some(token_data) = &token_data {
-        if !token_data.is_allow_find_many(path.collection_id()) {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to read these records",
-            );
-        }
     }
 
     let filters = match query_data.filter() {

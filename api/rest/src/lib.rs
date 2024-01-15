@@ -3,12 +3,12 @@ use actix_web::{
     web, App, HttpServer,
 };
 use anyhow::Result;
-use config::config;
+use configure::configure;
 use context::ApiRestCtx;
 use error_handler::default_error_handler;
 use logger::logger_format;
 
-mod config;
+mod configure;
 pub mod context;
 mod error_handler;
 mod logger;
@@ -38,10 +38,9 @@ impl ApiRestServer {
                 .wrap(Logger::new(logger_format()))
                 .wrap(ErrorHandlers::new().default_handler(default_error_handler))
                 .app_data(self.context.clone())
-                .configure(config)
+                .configure(configure)
         })
-        .bind(self.address)
-        .unwrap()
+        .bind(self.address)?
         .run()
         .await?)
     }

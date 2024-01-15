@@ -13,7 +13,8 @@ use crate::{
     model::{
         token::{
             DeleteOneTokenReqPath, DeleteTokenResJson, FindOneTokenReqPath, InsertOneTokenReqJson,
-            TokenResJson, TokenRuleMethodJson, UpdateOneTokenReqJson, UpdateOneTokenReqPath,
+            TokenBucketRuleMethodJson, TokenCollectionRuleMethodJson, TokenResJson,
+            UpdateOneTokenReqJson, UpdateOneTokenReqPath,
         },
         PaginationRes, Response, TokenReqHeader,
     },
@@ -56,8 +57,8 @@ async fn insert_one(
         );
     }
 
-    if data.rules().is_empty() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Rules can't be empty");
+    if data.collection_rules().is_empty() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Collection rules can't be empty");
     }
 
     if let Some(expired_at) = data.expired_at() {
@@ -69,9 +70,9 @@ async fn insert_one(
         }
     }
 
-    let mut collections_data_fut = Vec::with_capacity(data.rules().len());
-    let mut check_tables_must_exist_fut = Vec::with_capacity(data.rules().len());
-    for collection_id in data.rules().keys() {
+    let mut collections_data_fut = Vec::with_capacity(data.collection_rules().len());
+    let mut check_tables_must_exist_fut = Vec::with_capacity(data.collection_rules().len());
+    for collection_id in data.collection_rules().keys() {
         collections_data_fut.push(CollectionDao::db_select(ctx.dao().db(), collection_id));
         check_tables_must_exist_fut.push(RecordDao::db_check_table_must_exist(
             ctx.dao().db(),
@@ -108,32 +109,52 @@ async fn insert_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let mut data_rules = HashMap::with_capacity(data.rules().len());
-    for (collection_id, rules) in data.rules() {
-        let rules = match rules.to_dao() {
-            Ok(rules) => rules,
+    let mut data_bucket_rules = HashMap::with_capacity(data.collection_rules().len());
+    for (bucket_id, bucket_rules) in data.bucket_rules() {
+        let bucket_rules = match bucket_rules.to_dao() {
+            Ok(bucket_rules) => bucket_rules,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
-        data_rules.insert(*collection_id, rules);
+        data_bucket_rules.insert(*bucket_id, bucket_rules);
+    }
+
+    let mut data_collection_rules = HashMap::with_capacity(data.collection_rules().len());
+    for (collection_id, collection_rules) in data.collection_rules() {
+        let collection_rules = match collection_rules.to_dao() {
+            Ok(collection_rules) => collection_rules,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        data_collection_rules.insert(*collection_id, collection_rules);
     }
 
     let token_data = TokenDao::new(
         token_claim.id(),
         ctx.access_token_length(),
-        &data_rules,
+        &data_bucket_rules,
+        &data_collection_rules,
         data.expired_at(),
     );
     if let Err(err) = token_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    let mut token_data_rules = HashMap::with_capacity(token_data.rules().len());
-    for (collection_id, rules) in token_data.rules() {
-        let rules = match TokenRuleMethodJson::from_dao(rules) {
-            Ok(rules) => rules,
+    let mut token_data_collection_rules =
+        HashMap::with_capacity(token_data.collection_rules().len());
+    for (collection_id, collection_rules) in token_data.collection_rules() {
+        let collection_rules = match TokenCollectionRuleMethodJson::from_dao(collection_rules) {
+            Ok(collection_rules) => collection_rules,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
-        token_data_rules.insert(*collection_id, rules);
+        token_data_collection_rules.insert(*collection_id, collection_rules);
+    }
+
+    let mut token_data_bucket_rules = HashMap::with_capacity(token_data.bucket_rules().len());
+    for (bucket_id, bucket_rules) in token_data.bucket_rules() {
+        let bucket_rules = match TokenBucketRuleMethodJson::from_dao(bucket_rules) {
+            Ok(bucket_rules) => bucket_rules,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        token_data_bucket_rules.insert(*bucket_id, bucket_rules);
     }
 
     Response::data(
@@ -144,7 +165,8 @@ async fn insert_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
-            &token_data_rules,
+            &token_data_bucket_rules,
+            &token_data_collection_rules,
             token_data.expired_at(),
         ),
     )
@@ -188,13 +210,23 @@ async fn find_one(
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 
-    let mut token_data_rules = HashMap::with_capacity(token_data.rules().len());
-    for (collection_id, rules) in token_data.rules() {
-        let rules = match TokenRuleMethodJson::from_dao(rules) {
-            Ok(rules) => rules,
+    let mut token_data_bucket_rules = HashMap::with_capacity(token_data.bucket_rules().len());
+    for (bucket_id, bucket_rules) in token_data.bucket_rules() {
+        let bucket_rules = match TokenBucketRuleMethodJson::from_dao(bucket_rules) {
+            Ok(bucket_rules) => bucket_rules,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
-        token_data_rules.insert(*collection_id, rules);
+        token_data_bucket_rules.insert(*bucket_id, bucket_rules);
+    }
+
+    let mut token_data_collection_rules =
+        HashMap::with_capacity(token_data.collection_rules().len());
+    for (collection_id, collection_rules) in token_data.collection_rules() {
+        let collection_rules = match TokenCollectionRuleMethodJson::from_dao(collection_rules) {
+            Ok(collection_rules) => collection_rules,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        token_data_collection_rules.insert(*collection_id, collection_rules);
     }
 
     Response::data(
@@ -205,7 +237,8 @@ async fn find_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
-            &token_data_rules,
+            &token_data_bucket_rules,
+            &token_data_collection_rules,
             token_data.expired_at(),
         ),
     )
@@ -255,10 +288,10 @@ async fn update_one(
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 
-    if let Some(rules) = data.rules() {
-        let mut collections_data_fut = Vec::with_capacity(rules.len());
-        let mut check_tables_must_exist_fut = Vec::with_capacity(rules.len());
-        for collection_id in rules.keys() {
+    if let Some(collection_rules) = data.collection_rules() {
+        let mut collections_data_fut = Vec::with_capacity(collection_rules.len());
+        let mut check_tables_must_exist_fut = Vec::with_capacity(collection_rules.len());
+        for collection_id in collection_rules.keys() {
             collections_data_fut.push(CollectionDao::db_select(ctx.dao().db(), collection_id));
             check_tables_must_exist_fut.push(RecordDao::db_check_table_must_exist(
                 ctx.dao().db(),
@@ -300,16 +333,16 @@ async fn update_one(
             return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
         }
 
-        let mut data_rules = HashMap::with_capacity(rules.len());
-        for (collection_id, rules) in rules {
-            let rules = match rules.to_dao() {
-                Ok(rules) => rules,
+        let mut data_rules = HashMap::with_capacity(collection_rules.len());
+        for (collection_id, collection_rules) in collection_rules {
+            let collection_rules = match collection_rules.to_dao() {
+                Ok(collection_rules) => collection_rules,
                 Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
             };
-            data_rules.insert(*collection_id, rules);
+            data_rules.insert(*collection_id, collection_rules);
         }
 
-        token_data.set_rules(&data_rules);
+        token_data.set_collection_rules(&data_rules);
     }
 
     if let Some(expired_at) = data.expired_at() {
@@ -330,13 +363,23 @@ async fn update_one(
         }
     }
 
-    let mut token_data_rules = HashMap::with_capacity(token_data.rules().len());
-    for (collection_id, rules) in token_data.rules() {
-        let rules = match TokenRuleMethodJson::from_dao(rules) {
-            Ok(rules) => rules,
+    let mut token_data_bucket_rules = HashMap::with_capacity(token_data.bucket_rules().len());
+    for (bucket_id, bucket_rules) in token_data.bucket_rules() {
+        let bucket_rules = match TokenBucketRuleMethodJson::from_dao(bucket_rules) {
+            Ok(bucket_rules) => bucket_rules,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
-        token_data_rules.insert(*collection_id, rules);
+        token_data_bucket_rules.insert(*bucket_id, bucket_rules);
+    }
+
+    let mut token_data_collection_rules =
+        HashMap::with_capacity(token_data.collection_rules().len());
+    for (collection_id, collection_rules) in token_data.collection_rules() {
+        let collection_rules = match TokenCollectionRuleMethodJson::from_dao(collection_rules) {
+            Ok(collection_rules) => collection_rules,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        token_data_collection_rules.insert(*collection_id, collection_rules);
     }
 
     Response::data(
@@ -347,7 +390,8 @@ async fn update_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
-            &token_data_rules,
+            &token_data_bucket_rules,
+            &token_data_collection_rules,
             token_data.expired_at(),
         ),
     )
@@ -435,20 +479,32 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader
 
     let mut tokens_res = Vec::with_capacity(tokens_data.len());
     for token_data in &tokens_data {
-        let mut token_data_rules = HashMap::with_capacity(token_data.rules().len());
-        for (collection_id, rules) in token_data.rules() {
-            let rules = match TokenRuleMethodJson::from_dao(rules) {
-                Ok(rules) => rules,
+        let mut token_data_bucket_rules = HashMap::with_capacity(token_data.bucket_rules().len());
+        for (bucket_id, bucket_rules) in token_data.bucket_rules() {
+            let bucket_rules = match TokenBucketRuleMethodJson::from_dao(bucket_rules) {
+                Ok(bucket_rules) => bucket_rules,
                 Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
             };
-            token_data_rules.insert(*collection_id, rules);
+            token_data_bucket_rules.insert(*bucket_id, bucket_rules);
         }
+
+        let mut token_data_collection_rules =
+            HashMap::with_capacity(token_data.collection_rules().len());
+        for (collection_id, collection_rules) in token_data.collection_rules() {
+            let collection_rules = match TokenCollectionRuleMethodJson::from_dao(collection_rules) {
+                Ok(collection_rules) => collection_rules,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+            token_data_collection_rules.insert(*collection_id, collection_rules);
+        }
+
         tokens_res.push(TokenResJson::new(
             token_data.id(),
             token_data.created_at(),
             token_data.updated_at(),
             token_data.token(),
-            &token_data_rules,
+            &token_data_bucket_rules,
+            &token_data_collection_rules,
             token_data.expired_at(),
         ));
     }
