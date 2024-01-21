@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use hb_api_mqtt::{
-    context::{ApiMqttCtx, DaoCtx as ApiMqttDaoCtx},
-    ApiMqttServer,
-};
+use hb_api_mqtt::ApiMqttClient;
 use hb_api_rest::{
     context::{ApiRestCtx, DaoCtx as ApiRestDaoCtx, HashCtx, MailerCtx, TokenCtx},
     ApiRestServer,
@@ -19,8 +16,7 @@ use hb_token_jwt::token::JwtToken;
 
 mod config_path;
 
-// #[tokio::main]
-#[ntex::main]
+#[tokio::main]
 async fn main() {
     let config_path = config_path::get();
     let config = hb_config::new(&config_path);
@@ -34,10 +30,12 @@ async fn main() {
         config.hash().argon2().version(),
         config.hash().argon2().salt(),
     );
+
     let jwt_token = JwtToken::new(
         config.token().jwt().secret(),
         config.token().jwt().expiry_duration(),
     );
+
     let (mailer, mailer_sender) = Mailer::new(
         config.mailer().smtp_host(),
         config.mailer().smtp_username(),
@@ -45,6 +43,8 @@ async fn main() {
         config.mailer().sender_name(),
         config.mailer().sender_email(),
     );
+    mailer.run();
+
     let db = if let Some(scylla) = config.db().scylla() {
         Arc::new(Db::ScyllaDb(
             ScyllaDb::new(
@@ -113,13 +113,15 @@ async fn main() {
             *config.auth().reset_password_ttl(),
         ),
     );
-    let api_mqtt_server = ApiMqttServer::new(
+
+    let api_mqtt_client = ApiMqttClient::new(
         config.api().mqtt().host(),
         config.api().mqtt().port(),
-        ApiMqttCtx::new(ApiMqttDaoCtx::new(db)),
+        config.api().mqtt().topic(),
+        config.api().mqtt().channel_capacity(),
     );
 
-    tokio::try_join!(mailer.run(), api_rest_server.run(), api_mqtt_server.run()).unwrap();
+    tokio::try_join!(api_rest_server.run(), api_mqtt_client.run()).unwrap();
 
     hb_log::info(Some("👋"), "Hyperbase: turned off");
 }

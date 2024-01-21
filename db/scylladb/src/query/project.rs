@@ -1,10 +1,14 @@
-use scylla::CachingSession;
+use anyhow::Result;
+use scylla::{transport::session::TypedRowIter, CachingSession};
+use uuid::Uuid;
 
-pub const INSERT: &str = "INSERT INTO \"hyperbase\".\"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
-pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
-pub const SELECT_MANY_BY_ADMIN_ID :  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"admin_id\" = ?";
-pub const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?";
-pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
+use crate::{db::ScyllaDb, model::project::ProjectModel};
+
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_ADMIN_ID :  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"admin_id\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?";
+const DELETE: &str = "DELETE FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up projects table");
@@ -39,4 +43,39 @@ pub async fn init(cached_session: &CachingSession) {
         .add_prepared_statement(&DELETE.into())
         .await
         .unwrap();
+}
+
+impl ScyllaDb {
+    pub async fn insert_project(&self, value: &ProjectModel) -> Result<()> {
+        self.execute(INSERT, value).await?;
+        Ok(())
+    }
+
+    pub async fn select_project(&self, id: &Uuid) -> Result<ProjectModel> {
+        Ok(self
+            .execute(SELECT, [id].as_ref())
+            .await?
+            .first_row_typed()?)
+    }
+
+    pub async fn select_many_projects_by_admin_id(
+        &self,
+        admin_id: &Uuid,
+    ) -> Result<TypedRowIter<ProjectModel>> {
+        Ok(self
+            .execute(SELECT_MANY_BY_ADMIN_ID, [admin_id].as_ref())
+            .await?
+            .rows_typed()?)
+    }
+
+    pub async fn update_project(&self, value: &ProjectModel) -> Result<()> {
+        self.execute(UPDATE, &(value.updated_at(), value.name(), value.id()))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_project(&self, id: &Uuid) -> Result<()> {
+        self.execute(DELETE, [id].as_ref()).await?;
+        Ok(())
+    }
 }

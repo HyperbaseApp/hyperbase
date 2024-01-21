@@ -19,7 +19,7 @@ impl ApiConfig {
 #[derive(Deserialize)]
 pub struct ApiRestConfig {
     host: String,
-    port: String,
+    port: u16,
 }
 
 impl ApiRestConfig {
@@ -27,7 +27,7 @@ impl ApiRestConfig {
         &self.host
     }
 
-    pub fn port(&self) -> &str {
+    pub fn port(&self) -> &u16 {
         &self.port
     }
 }
@@ -35,7 +35,9 @@ impl ApiRestConfig {
 #[derive(Deserialize)]
 pub struct ApiMqttConfig {
     host: String,
-    port: String,
+    port: u16,
+    topic: String,
+    channel_capacity: usize,
 }
 
 impl ApiMqttConfig {
@@ -43,7 +45,15 @@ impl ApiMqttConfig {
         &self.host
     }
 
-    pub fn port(&self) -> &str {
+    pub fn port(&self) -> &u16 {
         &self.port
+    }
+
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    pub fn channel_capacity(&self) -> &usize {
+        &self.channel_capacity
     }
 }

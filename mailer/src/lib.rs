@@ -55,8 +55,8 @@ impl Mailer {
         Ok(())
     }
 
-    pub async fn run(self) -> Result<()> {
-        Ok(tokio::spawn((|| async {
+    pub fn run(self) {
+        tokio::spawn((|| async {
             hb_log::info(Some("💫"), "Mailer: Running component");
 
             let channel_receiver = self.channel_receiver;
@@ -97,8 +97,7 @@ impl Mailer {
                     }
                 }
             }
-        })())
-        .await?)
+        })());
     }
 }
 

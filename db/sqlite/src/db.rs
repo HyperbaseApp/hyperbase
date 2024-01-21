@@ -4,7 +4,7 @@ use sqlx::{
     Error, Pool, Sqlite,
 };
 
-use crate::query::{admin, admin_password_reset, collection, project, registration, token};
+use crate::query::{admin, admin_password_reset, bucket, collection, project, registration, token};
 
 pub struct SqliteDb {
     pool: Pool<Sqlite>,
@@ -102,6 +102,7 @@ impl SqliteDb {
         token::init(pool).await;
         project::init(pool).await;
         collection::init(pool).await;
+        bucket::init(pool).await;
         registration::init(pool).await;
         admin_password_reset::init(pool).await;
     }

@@ -18,7 +18,7 @@ pub struct TokenModel {
     token: String,
     bucket_rules: Json<HashMap<Uuid, TokenBucketRuleMethodModel>>,
     collection_rules: Json<HashMap<Uuid, TokenCollectionRuleMethodModel>>,
-    expired_at: Option<Json<DateTime<Utc>>>,
+    expired_at: Option<DateTime<Utc>>,
 }
 
 impl TokenModel {
@@ -30,7 +30,7 @@ impl TokenModel {
         token: &str,
         bucket_rules: &Json<HashMap<Uuid, TokenBucketRuleMethodModel>>,
         collection_rules: &Json<HashMap<Uuid, TokenCollectionRuleMethodModel>>,
-        expired_at: &Option<Json<DateTime<Utc>>>,
+        expired_at: &Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             id: *id,
@@ -72,7 +72,7 @@ impl TokenModel {
         &self.collection_rules
     }
 
-    pub fn expired_at(&self) -> &Option<Json<DateTime<Utc>>> {
+    pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
     }
 }

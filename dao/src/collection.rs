@@ -2,54 +2,20 @@ use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use futures::future;
-use hb_db_mysql::{
-    db::MysqlDb,
-    model::collection::{
-        CollectionModel as CollectionMysqlModel,
-        SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
-    },
-    query::collection::{
-        DELETE as MYSQL_DELETE, INSERT as MYSQL_INSERT, SELECT as MYSQL_SELECT,
-        SELECT_MANY_BY_PROJECT_ID as MYSQL_SELECT_MANY_BY_PROJECT_ID, UPDATE as MYSQL_UPDATE,
-    },
+use hb_db_mysql::model::collection::{
+    CollectionModel as CollectionMysqlModel, SchemaFieldPropsModel as SchemaFieldPropsMysqlModel,
 };
-use hb_db_postgresql::{
-    db::PostgresDb,
-    model::collection::{
-        CollectionModel as CollectionPostgresModel,
-        SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
-    },
-    query::collection::{
-        DELETE as POSTGRES_DELETE, INSERT as POSTGRES_INSERT, SELECT as POSTGRES_SELECT,
-        SELECT_MANY_BY_PROJECT_ID as POSTGRES_SELECT_MANY_BY_PROJECT_ID, UPDATE as POSTGRES_UPDATE,
-    },
+use hb_db_postgresql::model::collection::{
+    CollectionModel as CollectionPostgresModel,
+    SchemaFieldPropsModel as SchemaFieldPropsPostgresModel,
 };
-use hb_db_scylladb::{
-    db::ScyllaDb,
-    model::collection::{
-        CollectionModel as CollectionScyllaModel,
-        SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
-    },
-    query::collection::{
-        DELETE as SCYLLA_DELETE, INSERT as SCYLLA_INSERT, SELECT as SCYLLA_SELECT,
-        SELECT_MANY_BY_PROJECT_ID as SCYLLA_SELECT_MANY_BY_PROJECT_ID, UPDATE as SCYLLA_UPDATE,
-    },
+use hb_db_scylladb::model::collection::{
+    CollectionModel as CollectionScyllaModel, SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
 };
-use hb_db_sqlite::{
-    db::SqliteDb,
-    model::collection::{
-        CollectionModel as CollectionSqliteModel,
-        SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
-    },
-    query::collection::{
-        DELETE as SQLITE_DELETE, INSERT as SQLITE_INSERT, SELECT as SQLITE_SELECT,
-        SELECT_MANY_BY_PROJECT_ID as SQLITE_SELECT_MANY_BY_PROJECT_ID, UPDATE as SQLITE_UPDATE,
-    },
+use hb_db_sqlite::model::collection::{
+    CollectionModel as CollectionSqliteModel, SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
 };
-use scylla::{
-    frame::value::CqlTimestamp as ScyllaCqlTimestamp,
-    transport::session::TypedRowIter as ScyllaTypedRowIter,
-};
+use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -72,19 +38,19 @@ impl CollectionDao {
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldProps>,
         indexes: &HashSet<String>,
-    ) -> Result<Self> {
+    ) -> Self {
         let now = Utc::now();
 
-        Ok(Self {
+        Self {
             id: Uuid::now_v7(),
             created_at: now,
             updated_at: now,
             project_id: *project_id,
-            name: name.to_string(),
+            name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             indexes: indexes.clone(),
             _preserve: None,
-        })
+        }
     }
 
     pub fn id(&self) -> &Uuid {
@@ -174,27 +140,21 @@ impl CollectionDao {
         future::try_join_all(create_indexes_fut).await?;
 
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
-            Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
-            Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
-            Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
+            Db::ScyllaDb(db) => db.insert_collection(&self.to_scylladb_model()).await,
+            Db::PostgresqlDb(db) => db.insert_collection(&self.to_postgresdb_model()).await,
+            Db::MysqlDb(db) => db.insert_collection(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.insert_collection(&self.to_sqlitedb_model()).await,
         }
     }
 
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
-            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
-                &Self::scylladb_select(db, id).await?,
-            )?),
+            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(&db.select_collection(id).await?)?),
             Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
-                &Self::postgresdb_select(db, id).await?,
+                &db.select_collection(id).await?,
             )?),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
-                &Self::mysqldb_select(db, id).await?,
-            )?),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
-                &Self::sqlitedb_select(db, id).await?,
-            )?),
+            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(&db.select_collection(id).await?)?),
+            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(&db.select_collection(id).await?)?),
         }
     }
 
@@ -202,15 +162,14 @@ impl CollectionDao {
         match db {
             Db::ScyllaDb(db) => {
                 let mut collections_data = Vec::new();
-                let collections = Self::scylladb_select_many_by_project_id(db, project_id).await?;
+                let collections = db.select_many_collections_by_project_id(project_id).await?;
                 for collection in collections {
                     collections_data.push(Self::from_scylladb_model(&collection?)?)
                 }
                 Ok(collections_data)
             }
             Db::PostgresqlDb(db) => {
-                let collections =
-                    Self::postgresdb_select_many_by_project_id(db, project_id).await?;
+                let collections = db.select_many_collections_by_project_id(project_id).await?;
                 let mut collections_data = Vec::with_capacity(collections.len());
                 for collection in &collections {
                     collections_data.push(Self::from_postgresdb_model(collection)?);
@@ -218,7 +177,7 @@ impl CollectionDao {
                 Ok(collections_data)
             }
             Db::MysqlDb(db) => {
-                let collections = Self::mysqldb_select_many_by_project_id(db, project_id).await?;
+                let collections = db.select_many_collections_by_project_id(project_id).await?;
                 let mut collections_data = Vec::with_capacity(collections.len());
                 for collection in &collections {
                     collections_data.push(Self::from_mysqldb_model(collection)?);
@@ -226,7 +185,7 @@ impl CollectionDao {
                 Ok(collections_data)
             }
             Db::SqliteDb(db) => {
-                let collections = Self::sqlitedb_select_many_by_project_id(db, project_id).await?;
+                let collections = db.select_many_collections_by_project_id(project_id).await?;
                 let mut collections_data = Vec::with_capacity(collections.len());
                 for collection in &collections {
                     collections_data.push(Self::from_sqlitedb_model(collection)?);
@@ -346,10 +305,10 @@ impl CollectionDao {
         self.updated_at = Utc::now();
 
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
-            Db::PostgresqlDb(db) => Self::postgresdb_update(self, db).await,
-            Db::MysqlDb(db) => Self::mysqldb_update(self, db).await,
-            Db::SqliteDb(db) => Self::sqlitedb_update(self, db).await,
+            Db::ScyllaDb(db) => db.update_collection(&self.to_scylladb_model()).await,
+            Db::PostgresqlDb(db) => db.update_collection(&self.to_postgresdb_model()).await,
+            Db::MysqlDb(db) => db.update_collection(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.update_collection(&self.to_sqlitedb_model()).await,
         }
     }
 
@@ -357,203 +316,11 @@ impl CollectionDao {
         RecordDao::db_drop_table(db, id).await?;
 
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_delete(db, id).await,
-            Db::PostgresqlDb(db) => Self::postgresdb_delete(db, id).await,
-            Db::MysqlDb(db) => Self::mysqldb_delete(db, id).await,
-            Db::SqliteDb(db) => Self::sqlitedb_delete(db, id).await,
+            Db::ScyllaDb(db) => db.delete_collection(id).await,
+            Db::PostgresqlDb(db) => db.delete_collection(id).await,
+            Db::MysqlDb(db) => db.delete_collection(id).await,
+            Db::SqliteDb(db) => db.delete_collection(id).await,
         }
-    }
-
-    async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(SCYLLA_INSERT, &self.to_scylladb_model()).await?;
-        Ok(())
-    }
-
-    async fn scylladb_select(db: &ScyllaDb, id: &Uuid) -> Result<CollectionScyllaModel> {
-        Ok(db
-            .execute(SCYLLA_SELECT, [id].as_ref())
-            .await?
-            .first_row_typed::<CollectionScyllaModel>()?)
-    }
-
-    async fn scylladb_select_many_by_project_id(
-        db: &ScyllaDb,
-        project_id: &Uuid,
-    ) -> Result<ScyllaTypedRowIter<CollectionScyllaModel>> {
-        Ok(db
-            .execute(SCYLLA_SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
-            .await?
-            .rows_typed::<CollectionScyllaModel>()?)
-    }
-
-    async fn scylladb_update(&self, db: &ScyllaDb) -> Result<()> {
-        db.execute(
-            SCYLLA_UPDATE,
-            &(
-                &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
-                &self.name,
-                &self
-                    .schema_fields
-                    .iter()
-                    .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
-                    .collect::<HashMap<_, _>>(),
-                &self.indexes,
-                &self.id,
-            ),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn scylladb_delete(db: &ScyllaDb, id: &Uuid) -> Result<()> {
-        db.execute(SCYLLA_DELETE, [id].as_ref()).await?;
-        Ok(())
-    }
-
-    async fn postgresdb_insert(&self, db: &PostgresDb) -> Result<()> {
-        let model = self.to_postgresdb_model();
-        db.execute(
-            sqlx::query(POSTGRES_INSERT)
-                .bind(model.id())
-                .bind(model.created_at())
-                .bind(model.updated_at())
-                .bind(model.project_id())
-                .bind(model.name())
-                .bind(model.schema_fields())
-                .bind(model.indexes()),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn postgresdb_select(db: &PostgresDb, id: &Uuid) -> Result<CollectionPostgresModel> {
-        Ok(db
-            .fetch_one(sqlx::query_as(POSTGRES_SELECT).bind(id))
-            .await?)
-    }
-
-    async fn postgresdb_select_many_by_project_id(
-        db: &PostgresDb,
-        project_id: &Uuid,
-    ) -> Result<Vec<CollectionPostgresModel>> {
-        Ok(db
-            .fetch_all(sqlx::query_as(POSTGRES_SELECT_MANY_BY_PROJECT_ID).bind(project_id))
-            .await?)
-    }
-
-    async fn postgresdb_update(&self, db: &PostgresDb) -> Result<()> {
-        let model = self.to_postgresdb_model();
-        db.execute(
-            sqlx::query(POSTGRES_UPDATE)
-                .bind(model.updated_at())
-                .bind(model.name())
-                .bind(model.schema_fields())
-                .bind(model.indexes())
-                .bind(model.id()),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn postgresdb_delete(db: &PostgresDb, id: &Uuid) -> Result<()> {
-        db.execute(sqlx::query(POSTGRES_DELETE).bind(id)).await?;
-        Ok(())
-    }
-
-    async fn mysqldb_insert(&self, db: &MysqlDb) -> Result<()> {
-        let model = self.to_mysqldb_model();
-        db.execute(
-            sqlx::query(MYSQL_INSERT)
-                .bind(model.id())
-                .bind(model.created_at())
-                .bind(model.updated_at())
-                .bind(model.project_id())
-                .bind(model.name())
-                .bind(model.schema_fields())
-                .bind(model.indexes()),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn mysqldb_select(db: &MysqlDb, id: &Uuid) -> Result<CollectionMysqlModel> {
-        Ok(db.fetch_one(sqlx::query_as(MYSQL_SELECT).bind(id)).await?)
-    }
-
-    async fn mysqldb_select_many_by_project_id(
-        db: &MysqlDb,
-        project_id: &Uuid,
-    ) -> Result<Vec<CollectionMysqlModel>> {
-        Ok(db
-            .fetch_all(sqlx::query_as(MYSQL_SELECT_MANY_BY_PROJECT_ID).bind(project_id))
-            .await?)
-    }
-
-    async fn mysqldb_update(&self, db: &MysqlDb) -> Result<()> {
-        let model = self.to_mysqldb_model();
-        db.execute(
-            sqlx::query(MYSQL_UPDATE)
-                .bind(model.updated_at())
-                .bind(model.name())
-                .bind(model.schema_fields())
-                .bind(model.indexes())
-                .bind(model.id()),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn mysqldb_delete(db: &MysqlDb, id: &Uuid) -> Result<()> {
-        db.execute(sqlx::query(MYSQL_DELETE).bind(id)).await?;
-        Ok(())
-    }
-
-    async fn sqlitedb_insert(&self, db: &SqliteDb) -> Result<()> {
-        let model = self.to_sqlitedb_model();
-        db.execute(
-            sqlx::query(SQLITE_INSERT)
-                .bind(model.id())
-                .bind(model.created_at())
-                .bind(model.updated_at())
-                .bind(model.project_id())
-                .bind(model.name())
-                .bind(model.schema_fields())
-                .bind(model.indexes()),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn sqlitedb_select(db: &SqliteDb, id: &Uuid) -> Result<CollectionSqliteModel> {
-        Ok(db.fetch_one(sqlx::query_as(SQLITE_SELECT).bind(id)).await?)
-    }
-
-    async fn sqlitedb_select_many_by_project_id(
-        db: &SqliteDb,
-        project_id: &Uuid,
-    ) -> Result<Vec<CollectionSqliteModel>> {
-        Ok(db
-            .fetch_all(sqlx::query_as(SQLITE_SELECT_MANY_BY_PROJECT_ID).bind(project_id))
-            .await?)
-    }
-
-    async fn sqlitedb_update(&self, db: &SqliteDb) -> Result<()> {
-        let model = self.to_sqlitedb_model();
-        db.execute(
-            sqlx::query(SQLITE_UPDATE)
-                .bind(model.updated_at())
-                .bind(model.name())
-                .bind(model.schema_fields())
-                .bind(model.indexes())
-                .bind(model.id()),
-        )
-        .await?;
-        Ok(())
-    }
-
-    async fn sqlitedb_delete(db: &SqliteDb, id: &Uuid) -> Result<()> {
-        db.execute(sqlx::query(SQLITE_DELETE).bind(id)).await?;
-        Ok(())
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
@@ -616,7 +383,7 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: HashSet::from_iter(model.indexes().to_owned()),
+            indexes: model.indexes().0.to_owned(),
             _preserve: None,
         })
     }
@@ -634,7 +401,7 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_postgresdb_model()))
                     .collect(),
             ),
-            &Vec::from_iter(self.indexes.to_owned()),
+            &sqlx::types::Json(self.indexes.to_owned()),
         )
     }
 

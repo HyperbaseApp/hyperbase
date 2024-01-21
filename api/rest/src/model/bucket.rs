@@ -1,9 +1,6 @@
-use ahash::{HashMap, HashSet};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use super::collection::SchemaFieldPropsJson;
 
 #[derive(Deserialize)]
 pub struct InsertOneBucketReqPath {
@@ -62,8 +59,6 @@ impl UpdateOneBucketReqPath {
 #[derive(Deserialize)]
 pub struct UpdateOneBucketReqJson {
     name: Option<String>,
-    schema_fields: Option<HashMap<String, SchemaFieldPropsJson>>,
-    indexes: Option<HashSet<String>>,
 }
 
 impl UpdateOneBucketReqJson {
@@ -71,16 +66,8 @@ impl UpdateOneBucketReqJson {
         &self.name
     }
 
-    pub fn schema_fields(&self) -> &Option<HashMap<String, SchemaFieldPropsJson>> {
-        &self.schema_fields
-    }
-
-    pub fn indexes(&self) -> &Option<HashSet<String>> {
-        &self.indexes
-    }
-
     pub fn is_all_none(&self) -> bool {
-        self.name.is_none() && self.schema_fields.is_none() && self.indexes.is_none()
+        self.name.is_none()
     }
 }
 

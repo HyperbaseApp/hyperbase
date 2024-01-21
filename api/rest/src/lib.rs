@@ -21,7 +21,7 @@ pub struct ApiRestServer {
 }
 
 impl ApiRestServer {
-    pub fn new(host: &str, port: &str, ctx: ApiRestCtx) -> Self {
+    pub fn new(host: &str, port: &u16, ctx: ApiRestCtx) -> Self {
         hb_log::info(Some("⚡"), "ApiRestServer: Initializing component");
 
         let address = format!("{}:{}", host, port);

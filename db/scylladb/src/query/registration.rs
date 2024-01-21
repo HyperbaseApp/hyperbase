@@ -1,10 +1,14 @@
+use anyhow::Result;
 use scylla::CachingSession;
+use uuid::Uuid;
 
-pub const INSERT: &str = "INSERT INTO \"hyperbase\".\"registrations\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\") VALUES (?, ?, ?, ?, ?, ?)";
-pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\" FROM \"hyperbase\".\"registrations\" WHERE \"id\" = ?";
-pub const SELECT_BY_EMAIL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\" FROM \"hyperbase\".\"registrations\" WHERE \"email\" = ?";
-pub const UPDATE: &str = "UPDATE \"hyperbase\".\"registrations\" SET \"updated_at\" = ?, \"code\" = ? WHERE \"id\" = ?";
-pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"registrations\" WHERE \"id\" = ?";
+use crate::{db::ScyllaDb, model::registration::RegistrationModel};
+
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"registrations\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\") VALUES (?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\" FROM \"hyperbase\".\"registrations\" WHERE \"id\" = ?";
+const SELECT_BY_EMAIL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\" FROM \"hyperbase\".\"registrations\" WHERE \"email\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"registrations\" SET \"updated_at\" = ?, \"code\" = ? WHERE \"id\" = ?";
+const DELETE: &str = "DELETE FROM \"hyperbase\".\"registrations\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession, ttl: &u32) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up registrations table");
@@ -35,4 +39,36 @@ pub async fn init(cached_session: &CachingSession, ttl: &u32) {
         .add_prepared_statement(&DELETE.into())
         .await
         .unwrap();
+}
+
+impl ScyllaDb {
+    pub async fn insert_registration(&self, value: &RegistrationModel) -> Result<()> {
+        self.execute(INSERT, value).await?;
+        Ok(())
+    }
+
+    pub async fn select_registration(&self, id: &Uuid) -> Result<RegistrationModel> {
+        Ok(self
+            .execute(SELECT, [id].as_ref())
+            .await?
+            .first_row_typed()?)
+    }
+
+    pub async fn select_registration_by_email(&self, email: &str) -> Result<RegistrationModel> {
+        Ok(self
+            .execute(SELECT_BY_EMAIL, [email].as_ref())
+            .await?
+            .first_row_typed()?)
+    }
+
+    pub async fn update_registration(&self, value: &RegistrationModel) -> Result<()> {
+        self.execute(UPDATE, &(value.updated_at(), value.code(), value.id()))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_registration(&self, id: &Uuid) -> Result<()> {
+        self.execute(DELETE, [id].as_ref()).await?;
+        Ok(())
+    }
 }

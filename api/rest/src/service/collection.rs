@@ -155,7 +155,7 @@ async fn insert_one(
         }
     }
 
-    let collection_data = match CollectionDao::new(
+    let collection_data = CollectionDao::new(
         path.project_id(),
         data.name(),
         &schema_fields,
@@ -163,12 +163,7 @@ async fn insert_one(
             Some(indexes) => indexes.clone(),
             None => HashSet::new(),
         },
-    ) {
-        Ok(data) => data,
-        Err(err) => {
-            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
-        }
-    };
+    );
     if let Err(err) = collection_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }

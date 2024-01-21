@@ -1,9 +1,13 @@
+use anyhow::Result;
 use scylla::CachingSession;
+use uuid::Uuid;
 
-pub const INSERT: &str = "INSERT INTO \"hyperbase\".\"admin_password_resets\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"code\") VALUES (?, ?, ?, ?, ?)";
-pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"code\" FROM \"hyperbase\".\"admin_password_resets\" WHERE \"id\" = ?";
-pub const UPDATE: &str = "UPDATE \"hyperbase\".\"admin_password_resets\" SET \"updated_at\" = ?, \"code\" = ? WHERE \"id\" = ?";
-pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"admin_password_resets\" WHERE \"id\" = ?";
+use crate::{db::ScyllaDb, model::admin_password_reset::AdminPasswordResetModel};
+
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"admin_password_resets\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"code\") VALUES (?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"code\" FROM \"hyperbase\".\"admin_password_resets\" WHERE \"id\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"admin_password_resets\" SET \"updated_at\" = ?, \"code\" = ? WHERE \"id\" = ?";
+const DELETE: &str = "DELETE FROM \"hyperbase\".\"admin_password_resets\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession, ttl: &u32) {
     hb_log::info(
@@ -29,4 +33,29 @@ pub async fn init(cached_session: &CachingSession, ttl: &u32) {
         .add_prepared_statement(&DELETE.into())
         .await
         .unwrap();
+}
+
+impl ScyllaDb {
+    pub async fn insert_admin_password_reset(&self, value: &AdminPasswordResetModel) -> Result<()> {
+        self.execute(INSERT, value).await?;
+        Ok(())
+    }
+
+    pub async fn select_admin_password_reset(&self, id: &Uuid) -> Result<AdminPasswordResetModel> {
+        Ok(self
+            .execute(SELECT, [id].as_ref())
+            .await?
+            .first_row_typed()?)
+    }
+
+    pub async fn update_admin_password_reset(&self, value: &AdminPasswordResetModel) -> Result<()> {
+        self.execute(UPDATE, &(value.updated_at(), value.code(), value.id()))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_admin_password_reset(&self, id: &Uuid) -> Result<()> {
+        self.execute(DELETE, [id].as_ref()).await?;
+        Ok(())
+    }
 }

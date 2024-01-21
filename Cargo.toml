@@ -52,9 +52,8 @@ lettre = { version = "0.11", default-features = false, features = [
     "pool",
 ] }
 num-bigint = "0.4"
-ntex = { version = "1", features = ["tokio"] }
-ntex-mqtt = "1"
 rand = "0.8"
+rumqttc = "0.23"
 scylla = { version = "0.11" }
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }

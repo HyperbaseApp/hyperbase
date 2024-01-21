@@ -1,10 +1,14 @@
-use scylla::CachingSession;
+use anyhow::Result;
+use scylla::{transport::session::TypedRowIter, CachingSession};
+use uuid::Uuid;
 
-pub const INSERT: &str = "INSERT INTO \"hyperbase\".\"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\") VALUES (?, ?, ?, ?, ?, ?, ?)";
-pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\" FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
-pub const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\" FROM \"hyperbase\".\"collections\" WHERE \"project_id\" = ?";
-pub const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"indexes\" = ? WHERE \"id\" = ?";
-pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
+use crate::{db::ScyllaDb, model::collection::CollectionModel};
+
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\") VALUES (?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\" FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\" FROM \"hyperbase\".\"collections\" WHERE \"project_id\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"indexes\" = ? WHERE \"id\" = ?";
+const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up collections table");
@@ -47,4 +51,48 @@ pub async fn init(cached_session: &CachingSession) {
         .add_prepared_statement(&DELETE.into())
         .await
         .unwrap();
+}
+
+impl ScyllaDb {
+    pub async fn insert_collection(&self, value: &CollectionModel) -> Result<()> {
+        self.execute(INSERT, value).await?;
+        Ok(())
+    }
+
+    pub async fn select_collection(&self, id: &Uuid) -> Result<CollectionModel> {
+        Ok(self
+            .execute(SELECT, [id].as_ref())
+            .await?
+            .first_row_typed()?)
+    }
+
+    pub async fn select_many_collections_by_project_id(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<TypedRowIter<CollectionModel>> {
+        Ok(self
+            .execute(SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
+            .await?
+            .rows_typed()?)
+    }
+
+    pub async fn update_collection(&self, value: &CollectionModel) -> Result<()> {
+        self.execute(
+            UPDATE,
+            &(
+                value.updated_at(),
+                value.name(),
+                value.schema_fields(),
+                value.indexes(),
+                value.id(),
+            ),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn delete_collection(&self, id: &Uuid) -> Result<()> {
+        self.execute(DELETE, [id].as_ref()).await?;
+        Ok(())
+    }
 }

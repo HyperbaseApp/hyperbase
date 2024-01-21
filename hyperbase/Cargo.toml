@@ -19,7 +19,6 @@ hb_log = { workspace = true }
 hb_mailer = { workspace = true }
 hb_token_jwt = { workspace = true }
 
-ntex = { workspace = true }
 tokio = { workspace = true }
 
 

@@ -1,4 +1,4 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use sqlx::{
     prelude::FromRow,
@@ -19,7 +19,7 @@ pub struct CollectionModel {
     project_id: Uuid,
     name: String,
     schema_fields: Json<HashMap<String, SchemaFieldPropsModel>>,
-    indexes: Vec<String>,
+    indexes: Json<HashSet<String>>,
 }
 
 impl CollectionModel {
@@ -30,7 +30,7 @@ impl CollectionModel {
         project_id: &Uuid,
         name: &str,
         schema_fields: &Json<HashMap<String, SchemaFieldPropsModel>>,
-        indexes: &Vec<String>,
+        indexes: &Json<HashSet<String>>,
     ) -> Self {
         Self {
             id: *id,
@@ -67,7 +67,7 @@ impl CollectionModel {
         &self.schema_fields
     }
 
-    pub fn indexes(&self) -> &Vec<String> {
+    pub fn indexes(&self) -> &Json<HashSet<String>> {
         &self.indexes
     }
 }

@@ -5,6 +5,7 @@ use hb_db_sqlite::db::SqliteDb;
 
 pub mod admin;
 pub mod admin_password_reset;
+pub mod bucket;
 pub mod collection;
 pub mod project;
 pub mod record;
