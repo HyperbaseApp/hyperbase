@@ -34,6 +34,7 @@ hb_mailer = { path = "./mailer" }
 hb_token_jwt = { path = "./token/jwt" }
 
 actix_header = "0.1"
+actix-multipart = "0.6"
 actix-web = "4"
 ahash = "0.8"
 anyhow = "1"
@@ -51,6 +52,7 @@ lettre = { version = "0.11", default-features = false, features = [
     "smtp-transport",
     "pool",
 ] }
+mime = "0.3"
 num-bigint = "0.4"
 rand = "0.8"
 rumqttc = "0.23"

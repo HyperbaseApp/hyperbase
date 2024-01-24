@@ -1,15 +1,29 @@
 use anyhow::Result;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
+use context::ApiMqttCtx;
+use model::payload::Payload;
+use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
+use service::record::record_service;
+
+pub mod context;
+mod model;
+mod service;
 
 pub struct ApiMqttClient {
     host: String,
     port: u16,
     topic: String,
     channel_capacity: usize,
+    context: ApiMqttCtx,
 }
 
 impl ApiMqttClient {
-    pub fn new(host: &str, port: &u16, topic: &str, channel_capacity: &usize) -> Self {
+    pub fn new(
+        host: &str,
+        port: &u16,
+        topic: &str,
+        channel_capacity: &usize,
+        ctx: ApiMqttCtx,
+    ) -> Self {
         hb_log::info(Some("⚡"), "ApiMqttClient: Initializing component");
 
         Self {
@@ -17,6 +31,7 @@ impl ApiMqttClient {
             port: *port,
             topic: topic.to_owned(),
             channel_capacity: *channel_capacity,
+            context: ctx,
         }
     }
 
@@ -31,10 +46,17 @@ impl ApiMqttClient {
             .await
             .unwrap();
 
-        while let Ok(notification) = eventloop.poll().await {
-            println!("Received = {:?}", notification);
+        loop {
+            if let Ok(event) = eventloop.poll().await {
+                if let Event::Incoming(packet) = event {
+                    if let Packet::Publish(publish) = packet {
+                        match serde_json::from_slice::<Payload>(&publish.payload) {
+                            Ok(payload) => record_service(&self.context, &payload).await,
+                            Err(err) => hb_log::error(None, err),
+                        }
+                    }
+                }
+            }
         }
-
-        Ok(())
     }
 }

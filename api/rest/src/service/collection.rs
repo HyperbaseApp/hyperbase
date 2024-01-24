@@ -237,7 +237,7 @@ async fn find_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     Response::data(
@@ -310,7 +310,7 @@ async fn update_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     if let Some(name) = data.name() {
@@ -470,7 +470,7 @@ async fn delete_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     if let Err(err) = CollectionDao::db_delete(ctx.dao().db(), path.collection_id()).await {

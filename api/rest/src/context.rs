@@ -6,26 +6,28 @@ use hb_mailer::MailPayload;
 use hb_token_jwt::token::JwtToken;
 
 pub struct ApiRestCtx {
-    hash: HashCtx,
-    token: TokenCtx,
-    mailer: MailerCtx,
-    dao: DaoCtx,
+    hash: ApiRestHashCtx,
+    token: ApiRestTokenCtx,
+    mailer: ApiRestMailerCtx,
+    dao: ApiRestDaoCtx,
     admin_registration: bool,
     access_token_length: usize,
     registration_ttl: u32,
     reset_password_ttl: u32,
+    bucket_path: String,
 }
 
 impl ApiRestCtx {
     pub fn new(
-        hash: HashCtx,
-        token: TokenCtx,
-        mailer: MailerCtx,
-        dao: DaoCtx,
+        hash: ApiRestHashCtx,
+        token: ApiRestTokenCtx,
+        mailer: ApiRestMailerCtx,
+        dao: ApiRestDaoCtx,
         admin_registration: bool,
         access_token_length: usize,
         registration_ttl: u32,
         reset_password_ttl: u32,
+        bucket_path: String,
     ) -> Self {
         Self {
             hash,
@@ -36,22 +38,23 @@ impl ApiRestCtx {
             access_token_length,
             registration_ttl,
             reset_password_ttl,
+            bucket_path,
         }
     }
 
-    pub fn hash(&self) -> &HashCtx {
+    pub fn hash(&self) -> &ApiRestHashCtx {
         &self.hash
     }
 
-    pub fn token(&self) -> &TokenCtx {
+    pub fn token(&self) -> &ApiRestTokenCtx {
         &self.token
     }
 
-    pub fn mailer(&self) -> &MailerCtx {
+    pub fn mailer(&self) -> &ApiRestMailerCtx {
         &self.mailer
     }
 
-    pub fn dao(&self) -> &DaoCtx {
+    pub fn dao(&self) -> &ApiRestDaoCtx {
         &self.dao
     }
 
@@ -70,13 +73,17 @@ impl ApiRestCtx {
     pub fn reset_password_ttl(&self) -> &u32 {
         &self.reset_password_ttl
     }
+
+    pub fn bucket_path(&self) -> &str {
+        &self.bucket_path
+    }
 }
 
-pub struct HashCtx {
+pub struct ApiRestHashCtx {
     argon2: Argon2Hash,
 }
 
-impl HashCtx {
+impl ApiRestHashCtx {
     pub fn new(argon2: Argon2Hash) -> Self {
         Self { argon2 }
     }
@@ -86,11 +93,11 @@ impl HashCtx {
     }
 }
 
-pub struct TokenCtx {
+pub struct ApiRestTokenCtx {
     jwt: JwtToken,
 }
 
-impl TokenCtx {
+impl ApiRestTokenCtx {
     pub fn new(jwt: JwtToken) -> Self {
         Self { jwt }
     }
@@ -100,11 +107,11 @@ impl TokenCtx {
     }
 }
 
-pub struct MailerCtx {
+pub struct ApiRestMailerCtx {
     sender: Sender<MailPayload>,
 }
 
-impl MailerCtx {
+impl ApiRestMailerCtx {
     pub fn new(sender: Sender<MailPayload>) -> Self {
         Self { sender }
     }
@@ -114,11 +121,11 @@ impl MailerCtx {
     }
 }
 
-pub struct DaoCtx {
+pub struct ApiRestDaoCtx {
     db: Arc<Db>,
 }
 
-impl DaoCtx {
+impl ApiRestDaoCtx {
     pub fn new(db: Arc<Db>) -> Self {
         Self { db }
     }

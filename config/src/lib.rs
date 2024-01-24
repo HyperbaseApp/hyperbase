@@ -2,6 +2,7 @@ use std::fs::File;
 
 use api::ApiConfig;
 use auth::AuthConfig;
+use bucket::BucketConfig;
 use db::DbConfig;
 use hash::HashConfig;
 use log::LogConfig;
@@ -11,6 +12,7 @@ use token::TokenConfig;
 
 pub mod api;
 pub mod auth;
+pub mod bucket;
 pub mod db;
 pub mod hash;
 pub mod log;
@@ -24,6 +26,7 @@ pub struct Config {
     token: TokenConfig,
     mailer: MailerConfig,
     db: DbConfig,
+    bucket: BucketConfig,
     api: ApiConfig,
     auth: AuthConfig,
 }
@@ -47,6 +50,10 @@ impl Config {
 
     pub fn db(&self) -> &DbConfig {
         &self.db
+    }
+
+    pub fn bucket(&self) -> &BucketConfig {
+        &self.bucket
     }
 
     pub fn api(&self) -> &ApiConfig {

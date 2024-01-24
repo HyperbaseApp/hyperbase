@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use hb_api_mqtt::ApiMqttClient;
+use hb_api_mqtt::{
+    context::{ApiMqttCtx, ApiMqttDaoCtx},
+    ApiMqttClient,
+};
 use hb_api_rest::{
-    context::{ApiRestCtx, DaoCtx as ApiRestDaoCtx, HashCtx, MailerCtx, TokenCtx},
+    context::{ApiRestCtx, ApiRestDaoCtx, ApiRestHashCtx, ApiRestMailerCtx, ApiRestTokenCtx},
     ApiRestServer,
 };
 use hb_dao::Db;
@@ -103,14 +106,15 @@ async fn main() {
         config.api().rest().host(),
         config.api().rest().port(),
         ApiRestCtx::new(
-            HashCtx::new(argon2_hash),
-            TokenCtx::new(jwt_token),
-            MailerCtx::new(mailer_sender),
+            ApiRestHashCtx::new(argon2_hash),
+            ApiRestTokenCtx::new(jwt_token),
+            ApiRestMailerCtx::new(mailer_sender),
             ApiRestDaoCtx::new(db.clone()),
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),
             *config.auth().registration_ttl(),
             *config.auth().reset_password_ttl(),
+            config.bucket().path().to_owned(),
         ),
     );
 
@@ -119,6 +123,7 @@ async fn main() {
         config.api().mqtt().port(),
         config.api().mqtt().topic(),
         config.api().mqtt().channel_capacity(),
+        ApiMqttCtx::new(ApiMqttDaoCtx::new(db)),
     );
 
     tokio::try_join!(api_rest_server.run(), api_mqtt_client.run()).unwrap();

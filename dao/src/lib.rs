@@ -7,6 +7,7 @@ pub mod admin;
 pub mod admin_password_reset;
 pub mod bucket;
 pub mod collection;
+pub mod file;
 pub mod project;
 pub mod record;
 pub mod register;

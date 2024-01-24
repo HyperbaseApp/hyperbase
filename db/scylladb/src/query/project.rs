@@ -6,7 +6,7 @@ use crate::{db::ScyllaDb, model::project::ProjectModel};
 
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_ADMIN_ID :  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"admin_id\" = ?";
+const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"admin_id\" = ?";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 

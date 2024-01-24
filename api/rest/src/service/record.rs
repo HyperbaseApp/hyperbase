@@ -107,7 +107,7 @@ async fn insert_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     for field_name in data.keys() {
@@ -239,7 +239,7 @@ async fn find_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     let record_data =
@@ -324,7 +324,7 @@ async fn update_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     for field_name in data.keys() {
@@ -457,7 +457,7 @@ async fn delete_one(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     if let Err(err) =
@@ -535,7 +535,7 @@ async fn find_many(
     }
 
     if project_data.id() != collection_data.project_id() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project ID does not match");
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
     let filters = match query_data.filter() {

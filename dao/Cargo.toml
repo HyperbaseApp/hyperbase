@@ -19,6 +19,7 @@ bigdecimal_02 = { package = "bigdecimal", version = "0.2", features = [
 ] }
 chrono = { workspace = true }
 futures = { workspace = true }
+mime = { workspace = true }
 num-bigint = { workspace = true, features = ["serde"] }
 num-bigint_03 = { package = "num-bigint", version = "0.3", features = [
     "serde",
