@@ -1,4 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::admin::AdminDao;
 use hb_token_jwt::kind::JwtTokenKind;
 
@@ -6,7 +7,7 @@ use crate::{
     context::ApiRestCtx,
     model::{
         admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
-        Response, TokenReqHeader,
+        Response,
     },
 };
 
@@ -16,11 +17,8 @@ pub fn admin_api(cfg: &mut web::ServiceConfig) {
         .route("/admin", web::delete().to(delete_one));
 }
 
-async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+async fn find_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -53,13 +51,10 @@ async fn find_one(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>
 
 async fn update_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     data: web::Json<UpdateOneAdminReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -109,14 +104,8 @@ async fn update_one(
     )
 }
 
-async fn delete_one(
-    ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
-) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+async fn delete_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,

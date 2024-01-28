@@ -1,4 +1,3 @@
-use actix_header::actix_header;
 use actix_web::{http::StatusCode, HttpResponse, HttpResponseBuilder};
 use hb_error::Error;
 use serde::Serialize;
@@ -11,27 +10,6 @@ pub mod file;
 pub mod project;
 pub mod record;
 pub mod token;
-
-#[actix_header("Authorization")]
-pub struct TokenReqHeader(String);
-
-impl TokenReqHeader {
-    pub fn get(&self) -> Option<&'_ str> {
-        self.0.strip_prefix("Bearer ")
-    }
-}
-
-impl From<String> for TokenReqHeader {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl From<TokenReqHeader> for String {
-    fn from(s: TokenReqHeader) -> Self {
-        s.0
-    }
-}
 
 #[derive(Serialize)]
 pub struct Response {

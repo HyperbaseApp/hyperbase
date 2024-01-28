@@ -1,9 +1,11 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use hb_dao::{
     admin::AdminDao,
     collection::{CollectionDao, SchemaFieldProps},
     project::ProjectDao,
+    token::TokenDao,
     value::ColumnKind,
 };
 use hb_token_jwt::kind::JwtTokenKind;
@@ -17,7 +19,7 @@ use crate::{
             InsertOneCollectionReqPath, SchemaFieldPropsJson, UpdateOneCollectionReqJson,
             UpdateOneCollectionReqPath,
         },
-        PaginationRes, Response, TokenReqHeader,
+        PaginationRes, Response,
     },
 };
 
@@ -46,14 +48,11 @@ pub fn collection_api(cfg: &mut web::ServiceConfig) {
 
 async fn insert_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<InsertOneCollectionReqPath>,
     data: web::Json<InsertOneCollectionReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -194,32 +193,36 @@ async fn insert_one(
 
 async fn find_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<FindOneCollectionReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::User {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
+        },
+        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
+        },
+    };
 
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -229,7 +232,7 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() {
+    if &admin_id != project_data.admin_id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -266,14 +269,11 @@ async fn find_one(
 
 async fn update_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<UpdateOneCollectionReqPath>,
     data: web::Json<UpdateOneCollectionReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -427,13 +427,10 @@ async fn update_one(
 
 async fn delete_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<DeleteOneCollectionReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -486,13 +483,10 @@ async fn delete_one(
 
 async fn find_many(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<FindManyCollectionReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,

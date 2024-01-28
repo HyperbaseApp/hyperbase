@@ -20,6 +20,7 @@ impl ApiConfig {
 pub struct ApiRestConfig {
     host: String,
     port: u16,
+    allowed_origin: Option<String>,
 }
 
 impl ApiRestConfig {
@@ -29,6 +30,10 @@ impl ApiRestConfig {
 
     pub fn port(&self) -> &u16 {
         &self.port
+    }
+
+    pub fn allowed_origin(&self) -> &Option<String> {
+        &self.allowed_origin
     }
 }
 

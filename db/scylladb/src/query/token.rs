@@ -7,7 +7,6 @@ use crate::{db::ScyllaDb, model::token::TokenModel};
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"tokens\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"admin_id\" = ?";
-const SELECT_BY_TOKEN: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"token\" = ?";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"tokens\" SET \"updated_at\" = ?, \"bucket_rules\" = ?, \"collection_rules\" = ?, \"expired_at\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 
@@ -25,14 +24,6 @@ pub async fn init(cached_session: &CachingSession) {
         )
         .await
         .unwrap();
-    cached_session
-        .get_session()
-        .query(
-            "CREATE INDEX IF NOT EXISTS ON \"hyperbase\".\"tokens\" (\"token\")",
-            &[],
-        )
-        .await
-        .unwrap();
 
     cached_session
         .add_prepared_statement(&INSERT.into())
@@ -44,10 +35,6 @@ pub async fn init(cached_session: &CachingSession) {
         .unwrap();
     cached_session
         .add_prepared_statement(&SELECT_MANY_BY_ADMIN_ID.into())
-        .await
-        .unwrap();
-    cached_session
-        .add_prepared_statement(&SELECT_BY_TOKEN.into())
         .await
         .unwrap();
     cached_session
@@ -73,13 +60,6 @@ impl ScyllaDb {
             .first_row_typed()?)
     }
 
-    pub async fn select_token_by_token(&self, token: &str) -> Result<TokenModel> {
-        Ok(self
-            .execute(SELECT_BY_TOKEN, [token].as_ref())
-            .await?
-            .first_row_typed()?)
-    }
-
     pub async fn select_many_tokens_by_admin_id(
         &self,
         admin_id: &Uuid,
@@ -95,6 +75,7 @@ impl ScyllaDb {
             UPDATE,
             &(
                 &value.updated_at(),
+                &value.bucket_rules(),
                 &value.collection_rules(),
                 &value.expired_at(),
                 &value.id(),

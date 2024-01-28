@@ -103,8 +103,10 @@ async fn main() {
     };
 
     let api_rest_server = ApiRestServer::new(
+        config.app().mode(),
         config.api().rest().host(),
         config.api().rest().port(),
+        config.api().rest().allowed_origin(),
         ApiRestCtx::new(
             ApiRestHashCtx::new(argon2_hash),
             ApiRestTokenCtx::new(jwt_token),

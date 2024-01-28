@@ -1,4 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::{
     admin::AdminDao, admin_password_reset::AdminPasswordResetDao, register::RegistrationDao,
     token::TokenDao,
@@ -15,7 +16,7 @@ use crate::{
             RequestPasswordResetResJson, TokenBasedReqJson, VerifyRegistrationReqJson,
             VerifyRegistrationResJson,
         },
-        Response, TokenReqHeader,
+        Response,
     },
     ApiRestCtx,
 };
@@ -39,11 +40,8 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
         );
 }
 
-async fn token(ctx: web::Data<ApiRestCtx>, token: web::Header<TokenReqHeader>) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -231,10 +229,14 @@ async fn token_based(
     ctx: web::Data<ApiRestCtx>,
     data: web::Json<TokenBasedReqJson>,
 ) -> HttpResponse {
-    let token_data = match TokenDao::db_select_by_token(ctx.dao().db(), data.token()).await {
+    let token_data = match TokenDao::db_select(ctx.dao().db(), data.token_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if token_data.token() != data.token() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Token doesn't match");
+    }
 
     let token = match ctx
         .token()

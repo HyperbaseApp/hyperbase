@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct Payload {
+    token_id: Uuid,
     token: String,
     method: Method,
     project_id: Uuid,
@@ -13,6 +14,10 @@ pub struct Payload {
 }
 
 impl Payload {
+    pub fn token_id(&self) -> &Uuid {
+        &self.token_id
+    }
+
     pub fn token(&self) -> &str {
         &self.token
     }

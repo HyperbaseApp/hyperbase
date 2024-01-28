@@ -6,6 +6,7 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 
 [dependencies]
+hb_config = { workspace = true }
 hb_dao = { workspace = true }
 hb_error = { workspace = true }
 hb_hash_argon2 = { workspace = true }
@@ -13,9 +14,10 @@ hb_log = { workspace = true }
 hb_mailer = { workspace = true }
 hb_token_jwt = { workspace = true }
 
-actix_header = { workspace = true }
+actix-cors = { workspace = true }
 actix-multipart = { workspace = true }
 actix-web = { workspace = true }
+actix-web-httpauth = { workspace = true }
 ahash = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }

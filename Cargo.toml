@@ -33,9 +33,10 @@ hb_log = { path = "./log" }
 hb_mailer = { path = "./mailer" }
 hb_token_jwt = { path = "./token/jwt" }
 
-actix_header = "0.1"
+actix-cors = "0.7"
 actix-multipart = "0.6"
 actix-web = "4"
+actix-web-httpauth = "0.8"
 ahash = "0.8"
 anyhow = "1"
 argon2 = "0.5"

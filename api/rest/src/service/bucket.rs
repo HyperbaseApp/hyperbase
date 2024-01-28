@@ -1,4 +1,5 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::{admin::AdminDao, bucket::BucketDao, project::ProjectDao};
 use hb_token_jwt::kind::JwtTokenKind;
 
@@ -10,7 +11,7 @@ use crate::{
             FindOneBucketReqPath, InsertOneBucketReqJson, InsertOneBucketReqPath,
             UpdateOneBucketReqJson, UpdateOneBucketReqPath,
         },
-        PaginationRes, Response, TokenReqHeader,
+        PaginationRes, Response,
     },
 };
 
@@ -33,14 +34,11 @@ pub fn bucket_api(cfg: &mut web::ServiceConfig) {
 
 async fn insert_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<InsertOneBucketReqPath>,
     data: web::Json<InsertOneBucketReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -94,13 +92,10 @@ async fn insert_one(
 
 async fn find_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<FindOneBucketReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -152,14 +147,11 @@ async fn find_one(
 
 async fn update_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<UpdateOneBucketReqPath>,
     data: web::Json<UpdateOneBucketReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -221,13 +213,10 @@ async fn update_one(
 
 async fn delete_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<DeleteOneBucketReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -277,13 +266,10 @@ async fn delete_one(
 
 async fn find_many(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<FindManyBucketReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,

@@ -1,4 +1,4 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashSet};
 use anyhow::{Error, Result};
 use hb_dao::{
     collection::CollectionDao,
@@ -110,23 +110,28 @@ impl FindManyRecordReqPath {
 
 #[derive(Deserialize)]
 pub struct FindManyRecordReqJson {
-    filter: Option<FindManyRecordFiltersReqJson>,
-    group: Option<Vec<String>>,
-    order: Option<Vec<FindManyRecordOrderReqJson>>,
+    fields: Option<HashSet<String>>,
+    filters: Option<FindManyRecordFiltersReqJson>,
+    groups: Option<Vec<String>>,
+    orders: Option<Vec<FindManyRecordOrderReqJson>>,
     limit: Option<i32>,
 }
 
 impl FindManyRecordReqJson {
-    pub fn filter(&self) -> &Option<FindManyRecordFiltersReqJson> {
-        &self.filter
+    pub fn fields(&self) -> &Option<HashSet<String>> {
+        &self.fields
     }
 
-    pub fn group(&self) -> &Option<Vec<String>> {
-        &self.group
+    pub fn filters(&self) -> &Option<FindManyRecordFiltersReqJson> {
+        &self.filters
     }
 
-    pub fn order(&self) -> &Option<Vec<FindManyRecordOrderReqJson>> {
-        &self.order
+    pub fn groups(&self) -> &Option<Vec<String>> {
+        &self.groups
+    }
+
+    pub fn orders(&self) -> &Option<Vec<FindManyRecordOrderReqJson>> {
+        &self.orders
     }
 
     pub fn limit(&self) -> &Option<i32> {

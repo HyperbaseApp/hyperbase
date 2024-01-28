@@ -7,7 +7,6 @@ use crate::{db::MysqlDb, model::token::TokenModel};
 const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at` FROM `tokens` WHERE `id` = ?";
 const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at` FROM `tokens` WHERE `admin_id` = ?";
-const SELECT_BY_TOKEN: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at` FROM `tokens` WHERE `token` = ?";
 const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `bucket_rules` = ?, `collection_rules` = ?, `expired_at` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `tokens` WHERE `id` = ?";
 
@@ -19,7 +18,6 @@ pub async fn init(pool: &Pool<MySql>) {
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
     pool.prepare(SELECT_MANY_BY_ADMIN_ID).await.unwrap();
-    pool.prepare(SELECT_BY_TOKEN).await.unwrap();
     pool.prepare(UPDATE).await.unwrap();
     pool.prepare(DELETE).await.unwrap();
 }
@@ -33,6 +31,7 @@ impl MysqlDb {
                 .bind(value.updated_at())
                 .bind(value.admin_id())
                 .bind(value.token())
+                .bind(value.bucket_rules())
                 .bind(value.collection_rules())
                 .bind(value.expired_at()),
         )
@@ -42,12 +41,6 @@ impl MysqlDb {
 
     pub async fn select_token(&self, id: &Uuid) -> Result<TokenModel> {
         Ok(self.fetch_one(sqlx::query_as(SELECT).bind(id)).await?)
-    }
-
-    pub async fn select_token_by_token(&self, token: &str) -> Result<TokenModel> {
-        Ok(self
-            .fetch_one(sqlx::query_as(SELECT_BY_TOKEN).bind(token))
-            .await?)
     }
 
     pub async fn select_many_tokens_by_admin_id(&self, admin_id: &Uuid) -> Result<Vec<TokenModel>> {
@@ -60,6 +53,7 @@ impl MysqlDb {
         self.execute(
             sqlx::query(UPDATE)
                 .bind(value.updated_at())
+                .bind(&sqlx::types::Json(value.bucket_rules()))
                 .bind(&sqlx::types::Json(value.collection_rules()))
                 .bind(value.expired_at())
                 .bind(value.id()),

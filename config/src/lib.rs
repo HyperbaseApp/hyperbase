@@ -1,6 +1,7 @@
 use std::fs::File;
 
 use api::ApiConfig;
+use app::AppConfig;
 use auth::AuthConfig;
 use bucket::BucketConfig;
 use db::DbConfig;
@@ -11,6 +12,7 @@ use serde::Deserialize;
 use token::TokenConfig;
 
 pub mod api;
+pub mod app;
 pub mod auth;
 pub mod bucket;
 pub mod db;
@@ -21,6 +23,7 @@ pub mod token;
 
 #[derive(Deserialize)]
 pub struct Config {
+    app: AppConfig,
     log: LogConfig,
     hash: HashConfig,
     token: TokenConfig,
@@ -32,6 +35,10 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn app(&self) -> &AppConfig {
+        &self.app
+    }
+
     pub fn log(&self) -> &LogConfig {
         &self.log
     }

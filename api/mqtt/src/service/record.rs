@@ -22,10 +22,17 @@ pub async fn record_service(ctx: &ApiMqttCtx, payload: &Payload) {
 }
 
 async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
-    let token_data = match TokenDao::db_select_by_token(ctx.dao().db(), payload.token()).await {
+    let token_data = match TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
         Ok(data) => data,
         Err(err) => return Err(Error::msg(format!("Failed to get token data: {err}"))),
     };
+
+    if token_data.token() != payload.token() {
+        return Err(Error::msg(format!(
+            "Token ({}) doesn't match",
+            payload.token()
+        )));
+    }
 
     if !token_data.is_allow_insert_record(payload.collection_id()) {
         return Err(Error::msg(format!(

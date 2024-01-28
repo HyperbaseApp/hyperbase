@@ -195,23 +195,6 @@ impl TokenDao {
         }
     }
 
-    pub async fn db_select_by_token(db: &Db, token: &str) -> Result<Self> {
-        match db {
-            Db::ScyllaDb(db) => Ok(Self::from_scylladb_model(
-                &db.select_token_by_token(token).await?,
-            )?),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
-                &db.select_token_by_token(token).await?,
-            )),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
-                &db.select_token_by_token(token).await?,
-            )),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
-                &db.select_token_by_token(token).await?,
-            )),
-        }
-    }
-
     pub async fn db_select_many_by_admin_id(db: &Db, admin_id: &Uuid) -> Result<Vec<Self>> {
         match db {
             Db::ScyllaDb(db) => {

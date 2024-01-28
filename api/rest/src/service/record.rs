@@ -1,5 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
-use ahash::{HashMap, HashMapExt};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
+use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
@@ -18,7 +19,7 @@ use crate::{
             FindManyRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson,
             InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson, UpdateOneRecordReqPath,
         },
-        PaginationRes, Response, TokenReqHeader,
+        PaginationRes, Response,
     },
 };
 
@@ -47,14 +48,11 @@ pub fn record_api(cfg: &mut web::ServiceConfig) {
 
 async fn insert_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<InsertOneRecordReqPath>,
     data: web::Json<InsertOneRecordReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -180,13 +178,10 @@ async fn insert_one(
 
 async fn find_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<FindOneRecordReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -264,14 +259,11 @@ async fn find_one(
 
 async fn update_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<UpdateOneRecordReqPath>,
     data: web::Json<UpdateOneRecordReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -398,13 +390,10 @@ async fn update_one(
 
 async fn delete_one(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<DeleteOneRecordReqPath>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -475,14 +464,11 @@ async fn delete_one(
 
 async fn find_many(
     ctx: web::Data<ApiRestCtx>,
-    token: web::Header<TokenReqHeader>,
+    auth: BearerAuth,
     path: web::Path<FindManyRecordReqPath>,
     query_data: web::Json<FindManyRecordReqJson>,
 ) -> HttpResponse {
-    let token = match token.get() {
-        Some(token) => token,
-        None => return Response::error_raw(&StatusCode::BAD_REQUEST, "Invalid token"),
-    };
+    let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -538,17 +524,34 @@ async fn find_many(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let filters = match query_data.filter() {
+    let fields = match query_data.fields() {
+        Some(origin_fields) => {
+            let mut fields = HashSet::with_capacity(origin_fields.len());
+            for field in origin_fields {
+                if collection_data.schema_fields().contains_key(field) || field == "_id" {
+                    fields.insert(field.as_str());
+                } else {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Field '{field}' is not exist in the collection"),
+                    );
+                }
+            }
+            fields
+        }
+        None => HashSet::new(),
+    };
+    let filters = match query_data.filters() {
         Some(filter) => match filter.to_dao(&collection_data) {
             Ok(filter) => filter,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         },
         None => RecordFilters::new(&Vec::new()),
     };
-    let groups = match query_data.group() {
-        Some(group) => {
-            let mut groups = Vec::with_capacity(group.len());
-            for field in group {
+    let groups = match query_data.groups() {
+        Some(origin_groups) => {
+            let mut groups = Vec::with_capacity(origin_groups.len());
+            for field in origin_groups {
                 if collection_data.schema_fields().contains_key(field) || field == "_id" {
                     groups.push(field.as_str());
                 } else {
@@ -562,7 +565,7 @@ async fn find_many(
         }
         None => Vec::new(),
     };
-    let orders = match query_data.order() {
+    let orders = match query_data.orders() {
         Some(order) => {
             let mut orders = Vec::with_capacity(order.len());
             for o in order {
@@ -583,6 +586,7 @@ async fn find_many(
     let (records_data, total) = match RecordDao::db_select_many(
         ctx.dao().db(),
         &collection_data,
+        &fields,
         &filters,
         &groups,
         &orders,

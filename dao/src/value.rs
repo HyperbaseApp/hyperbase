@@ -527,136 +527,50 @@ impl ColumnValue {
 
     pub fn from_scylladb_model(kind: &ColumnKind, value: &ScyllaCqlValue) -> Result<Self> {
         match kind {
-            ColumnKind::Boolean => Ok(Self::Boolean(Some(value.as_boolean().ok_or_else(
-                || {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'boolean'.",
-                    )
-                },
-            )?))),
-            ColumnKind::TinyInt => Ok(Self::TinyInteger(Some(value.as_tinyint().ok_or_else(
-                || {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'tinyint'.",
-                    )
-                },
-            )?))),
-            ColumnKind::SmallInt => Ok(Self::SmallInteger(Some(value.as_smallint().ok_or_else(
-                || {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'smallint'.",
-                    )
-                },
-            )?))),
-            ColumnKind::Int => Ok(Self::Integer(Some(value.as_int().ok_or_else(|| {
-                Error::msg("Incorrect internal value type. Internal value is not of type 'int'.")
-            })?))),
-            ColumnKind::BigInt => Ok(Self::BigInteger(Some(value.as_bigint().ok_or_else(
-                || {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'bigint'.",
-                    )
-                },
-            )?))),
-            ColumnKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
-                &value
-                    .clone()
-                    .into_varint()
-                    .ok_or_else(|| {
-                        Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'varint'.",
-                    )
-                    })?
-                    .to_signed_bytes_be(),
-            )))),
-            ColumnKind::Float => Ok(Self::Float(Some(value.as_float().ok_or_else(|| {
-                Error::msg("Incorrect internal value type. Internal value is not of type 'float'.")
-            })?))),
-            ColumnKind::Double => Ok(Self::Double(Some(value.as_double().ok_or_else(|| {
-                Error::msg("Incorrect internal value type. Internal value is not of type 'double'.")
-            })?))),
-            ColumnKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                &value
-                    .clone()
-                    .into_decimal()
-                    .ok_or_else(|| {
-                        Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'decimal'.",
-                    )
-                    })?
-                    .to_string(),
-            )?))),
-            ColumnKind::String => Ok(Self::String(Some(
-                value
-                    .as_text()
-                    .ok_or_else(|| {
-                        Error::msg(
-                            "Incorrect internal value type. Internal value is not of type 'text'.",
-                        )
-                    })?
-                    .to_owned(),
-            ))),
-            ColumnKind::Binary => Ok(Self::Binary(Some(
-                value
-                    .as_blob()
-                    .ok_or_else(|| {
-                        Error::msg(
-                            "Incorrect internal value type. Internal value is not of type 'blob'.",
-                        )
-                    })?
-                    .to_vec(),
-            ))),
-            ColumnKind::Uuid => Ok(Self::Uuid(Some(value.as_uuid().ok_or_else(|| {
-                Error::msg("Incorrect internal value type. Internal value is not of type 'uuid'.")
-            })?))),
-            ColumnKind::Date => {
-                let date = value.as_cql_date().ok_or_else(|| {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'date'.",
-                    )
-                })?;
-                Ok(Self::Date(Some(conversion::scylla_cql_date_to_naivedate(
-                    &date,
-                )?)))
-            }
-            ColumnKind::Time => {
-                let time = value.as_cql_time().ok_or_else(|| {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'time'.",
-                    )
-                })?;
-                Ok(Self::Time(Some(conversion::scylla_cql_time_to_naivetime(
-                    &time,
-                )?)))
-            }
-            ColumnKind::DateTime => {
-                let timestamp = value.as_cql_timestamp().ok_or_else(|| {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'timestamp'.",
-                    )
-                })?;
-                Ok(Self::DateTime(Some(
-                    conversion::scylla_cql_timestamp_to_datetime_utc(&timestamp)?,
-                )))
-            }
-            ColumnKind::Timestamp => {
-                let timestamp = value.as_cql_timestamp().ok_or_else(|| {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'timestamp'.",
-                    )
-                })?;
-                Ok(Self::DateTime(Some(
-                    conversion::scylla_cql_timestamp_to_datetime_utc(&timestamp)?,
-                )))
-            }
-            ColumnKind::Json => Ok(Self::Json(Some(
-                std::str::from_utf8(&value.as_blob().ok_or_else(|| {
-                    Error::msg(
-                        "Incorrect internal value type. Internal value is not of type 'text'.",
-                    )
-                })?)?
-                .to_owned(),
-            ))),
+            ColumnKind::Boolean => Ok(Self::Boolean(value.as_boolean())),
+            ColumnKind::TinyInt => Ok(Self::TinyInteger(value.as_tinyint())),
+            ColumnKind::SmallInt => Ok(Self::SmallInteger(value.as_smallint())),
+            ColumnKind::Int => Ok(Self::Integer(value.as_int())),
+            ColumnKind::BigInt => Ok(Self::BigInteger(value.as_bigint())),
+            ColumnKind::Varint => Ok(Self::VarInteger(match value.clone().into_varint() {
+                Some(value) => Some(BigInt::from_signed_bytes_be(&value.to_signed_bytes_be())),
+                None => None,
+            })),
+            ColumnKind::Float => Ok(Self::Float(value.as_float())),
+            ColumnKind::Double => Ok(Self::Double(value.as_double())),
+            ColumnKind::Decimal => Ok(Self::Decimal(match value.clone().into_decimal() {
+                Some(value) => Some(BigDecimal::from_str(&value.to_string())?),
+                None => None,
+            })),
+            ColumnKind::String => Ok(Self::String(match value.as_text() {
+                Some(value) => Some(value.to_owned()),
+                None => None,
+            })),
+            ColumnKind::Binary => Ok(Self::Binary(match value.as_blob() {
+                Some(value) => Some(value.to_vec()),
+                None => None,
+            })),
+            ColumnKind::Uuid => Ok(Self::Uuid(value.as_uuid())),
+            ColumnKind::Date => Ok(Self::Date(match value.as_cql_date() {
+                Some(value) => Some(conversion::scylla_cql_date_to_naivedate(&value)?),
+                None => None,
+            })),
+            ColumnKind::Time => Ok(Self::Time(match value.as_cql_time() {
+                Some(value) => Some(conversion::scylla_cql_time_to_naivetime(&value)?),
+                None => None,
+            })),
+            ColumnKind::DateTime => Ok(Self::DateTime(match value.as_cql_timestamp() {
+                Some(value) => Some(conversion::scylla_cql_timestamp_to_datetime_utc(&value)?),
+                None => None,
+            })),
+            ColumnKind::Timestamp => Ok(Self::DateTime(match value.as_cql_timestamp() {
+                Some(value) => Some(conversion::scylla_cql_timestamp_to_datetime_utc(&value)?),
+                None => None,
+            })),
+            ColumnKind::Json => Ok(Self::Json(match value.as_blob() {
+                Some(value) => Some(std::str::from_utf8(&value)?.to_owned()),
+                None => None,
+            })),
         }
     }
 
@@ -711,32 +625,38 @@ impl ColumnValue {
         value: &sqlx::postgres::PgRow,
     ) -> Result<Self> {
         match kind {
-            ColumnKind::Boolean => Ok(Self::Boolean(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::TinyInt => Ok(Self::TinyInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::SmallInt => Ok(Self::SmallInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Int => Ok(Self::Integer(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::BigInt => Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_str(
-                &sqlx::Row::try_get::<sqlx::types::BigDecimal, _>(value, index)?.to_string(),
-            )?))),
-            ColumnKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                &sqlx::Row::try_get::<sqlx::types::BigDecimal, _>(value, index)?.to_string(),
-            )?))),
-            ColumnKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Uuid => Ok(Self::Uuid(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Date => Ok(Self::Date(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Time => Ok(Self::Time(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::DateTime => Ok(Self::DateTime(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Timestamp => Ok(Self::Timestamp(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Json => Ok(Self::Json(Some(
-                std::str::from_utf8(
-                    &(sqlx::Row::try_get::<sqlx::types::Json<Vec<u8>>, _>(value, index)?).0,
-                )?
-                .to_owned(),
-            ))),
+            ColumnKind::Boolean => Ok(Self::Boolean(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::TinyInt => Ok(Self::TinyInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::SmallInt => Ok(Self::SmallInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Int => Ok(Self::Integer(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::BigInt => Ok(Self::BigInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Varint => Ok(Self::VarInteger(
+                match sqlx::Row::try_get::<Option<sqlx::types::BigDecimal>, _>(value, index)? {
+                    Some(value) => Some(BigInt::from_str(&value.to_string())?),
+                    None => None,
+                },
+            )),
+            ColumnKind::Float => Ok(Self::Float(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Double => Ok(Self::Double(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Decimal => Ok(Self::Decimal(
+                match sqlx::Row::try_get::<Option<sqlx::types::BigDecimal>, _>(value, index)? {
+                    Some(value) => Some(BigDecimal::from_str(&value.to_string())?),
+                    None => None,
+                },
+            )),
+            ColumnKind::String => Ok(Self::String(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Binary => Ok(Self::Binary(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Uuid => Ok(Self::Uuid(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Date => Ok(Self::Date(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Time => Ok(Self::Time(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::DateTime => Ok(Self::DateTime(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Timestamp => Ok(Self::Timestamp(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Json => Ok(Self::Json(
+                match sqlx::Row::try_get::<Option<sqlx::types::Json<Vec<u8>>>, _>(value, index)? {
+                    Some(value) => Some(std::str::from_utf8(&value.0)?.to_string()),
+                    None => None,
+                },
+            )),
         }
     }
 
@@ -814,36 +734,42 @@ impl ColumnValue {
         value: &sqlx::mysql::MySqlRow,
     ) -> Result<Self> {
         match kind {
-            ColumnKind::Boolean => Ok(Self::Boolean(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::TinyInt => Ok(Self::TinyInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::SmallInt => Ok(Self::SmallInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Int => Ok(Self::Integer(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::BigInt => Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
-                sqlx::Row::try_get::<&[u8], _>(value, index)?,
-            )))),
-            ColumnKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                std::str::from_utf8(sqlx::Row::try_get::<&[u8], _>(value, index)?)?,
-            )?))),
-            ColumnKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Uuid => Ok(Self::Uuid(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Date => Ok(Self::Date(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Time => Ok(Self::Time(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::DateTime => Ok(Self::DateTime(Some(
+            ColumnKind::Boolean => Ok(Self::Boolean(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::TinyInt => Ok(Self::TinyInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::SmallInt => Ok(Self::SmallInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Int => Ok(Self::Integer(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::BigInt => Ok(Self::BigInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Varint => Ok(Self::VarInteger(
+                match sqlx::Row::try_get::<Option<&[u8]>, _>(value, index)? {
+                    Some(value) => Some(BigInt::from_signed_bytes_be(value)),
+                    None => None,
+                },
+            )),
+            ColumnKind::Float => Ok(Self::Float(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Double => Ok(Self::Double(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Decimal => Ok(Self::Decimal(
+                match sqlx::Row::try_get::<Option<&[u8]>, _>(value, index)? {
+                    Some(value) => Some(BigDecimal::from_str(std::str::from_utf8(value)?)?),
+                    None => None,
+                },
+            )),
+            ColumnKind::String => Ok(Self::String(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Binary => Ok(Self::Binary(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Uuid => Ok(Self::Uuid(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Date => Ok(Self::Date(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Time => Ok(Self::Time(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::DateTime => Ok(Self::DateTime(
                 sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
-            ))),
-            ColumnKind::Timestamp => Ok(Self::DateTime(Some(
+            )),
+            ColumnKind::Timestamp => Ok(Self::DateTime(
                 sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
-            ))),
-            ColumnKind::Json => Ok(Self::Json(Some(
-                std::str::from_utf8(
-                    &sqlx::Row::try_get::<sqlx::types::Json<Vec<u8>>, _>(value, index)?.0,
-                )?
-                .to_owned(),
-            ))),
+            )),
+            ColumnKind::Json => Ok(Self::Json(
+                match sqlx::Row::try_get::<Option<sqlx::types::Json<Vec<u8>>>, _>(value, index)? {
+                    Some(value) => Some(std::str::from_utf8(&value.0)?.to_owned()),
+                    None => None,
+                },
+            )),
         }
     }
 
@@ -921,29 +847,38 @@ impl ColumnValue {
         value: &sqlx::sqlite::SqliteRow,
     ) -> Result<Self> {
         match kind {
-            ColumnKind::Boolean => Ok(Self::Boolean(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::TinyInt => Ok(Self::TinyInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::SmallInt => Ok(Self::SmallInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Int => Ok(Self::Integer(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::BigInt => Ok(Self::BigInteger(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Varint => Ok(Self::VarInteger(Some(BigInt::from_signed_bytes_be(
-                sqlx::Row::try_get::<&[u8], _>(value, index)?,
-            )))),
-            ColumnKind::Float => Ok(Self::Float(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Double => Ok(Self::Double(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Decimal => Ok(Self::Decimal(Some(BigDecimal::from_str(
-                std::str::from_utf8(sqlx::Row::try_get::<&[u8], _>(value, index)?)?,
-            )?))),
-            ColumnKind::String => Ok(Self::String(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Binary => Ok(Self::Binary(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Uuid => Ok(Self::Uuid(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Date => Ok(Self::Date(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Time => Ok(Self::Time(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::DateTime => Ok(Self::DateTime(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Timestamp => Ok(Self::Timestamp(Some(sqlx::Row::try_get(value, index)?))),
-            ColumnKind::Json => Ok(Self::Json(Some(
-                std::str::from_utf8(&sqlx::Row::try_get::<Vec<u8>, _>(value, index)?)?.to_owned(),
-            ))),
+            ColumnKind::Boolean => Ok(Self::Boolean(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::TinyInt => Ok(Self::TinyInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::SmallInt => Ok(Self::SmallInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Int => Ok(Self::Integer(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::BigInt => Ok(Self::BigInteger(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Varint => Ok(Self::VarInteger(
+                match sqlx::Row::try_get::<Option<&[u8]>, _>(value, index)? {
+                    Some(value) => Some(BigInt::from_signed_bytes_be(value)),
+                    None => None,
+                },
+            )),
+            ColumnKind::Float => Ok(Self::Float(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Double => Ok(Self::Double(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Decimal => Ok(Self::Decimal(
+                match sqlx::Row::try_get::<Option<&[u8]>, _>(value, index)? {
+                    Some(value) => Some(BigDecimal::from_str(std::str::from_utf8(value)?)?),
+                    None => None,
+                },
+            )),
+            ColumnKind::String => Ok(Self::String(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Binary => Ok(Self::Binary(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Uuid => Ok(Self::Uuid(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Date => Ok(Self::Date(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Time => Ok(Self::Time(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::DateTime => Ok(Self::DateTime(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Timestamp => Ok(Self::Timestamp(sqlx::Row::try_get(value, index)?)),
+            ColumnKind::Json => Ok(Self::Json(
+                match sqlx::Row::try_get::<Option<Vec<u8>>, _>(value, index)? {
+                    Some(value) => Some(std::str::from_utf8(&value)?.to_owned()),
+                    None => None,
+                },
+            )),
         }
     }
 
