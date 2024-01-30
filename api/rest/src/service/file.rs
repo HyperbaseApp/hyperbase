@@ -57,7 +57,7 @@ async fn insert_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -168,7 +168,7 @@ async fn find_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -254,7 +254,7 @@ async fn update_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -349,7 +349,7 @@ async fn delete_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -434,7 +434,7 @@ async fn find_many(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(

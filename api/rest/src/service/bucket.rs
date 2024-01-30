@@ -45,7 +45,7 @@ async fn insert_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::User {
+    if token_claim.kind() != &JwtTokenKind::Admin {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
@@ -102,7 +102,7 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::User {
+    if token_claim.kind() != &JwtTokenKind::Admin {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
@@ -158,7 +158,7 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::User {
+    if token_claim.kind() != &JwtTokenKind::Admin {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
@@ -223,7 +223,7 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::User {
+    if token_claim.kind() != &JwtTokenKind::Admin {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",
@@ -276,7 +276,7 @@ async fn find_many(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::User {
+    if token_claim.kind() != &JwtTokenKind::Admin {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             "Must be logged in using password-based login",

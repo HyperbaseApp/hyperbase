@@ -4,7 +4,10 @@ use anyhow::Result;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use uuid::Uuid;
 
-use crate::{claim::Claim, kind::JwtTokenKind};
+use crate::{
+    claim::{Claim, UserClaim},
+    kind::JwtTokenKind,
+};
 
 pub struct JwtToken {
     header: Header,
@@ -26,7 +29,12 @@ impl JwtToken {
         }
     }
 
-    pub fn encode(&self, id: &Uuid, kind: &JwtTokenKind) -> Result<String> {
+    pub fn encode(
+        &self,
+        id: &Uuid,
+        user_id: &Option<UserClaim>,
+        kind: &JwtTokenKind,
+    ) -> Result<String> {
         let expiration_time = match usize::try_from(
             time::SystemTime::now()
                 .duration_since(time::UNIX_EPOCH)?
@@ -39,7 +47,7 @@ impl JwtToken {
 
         Ok(encode(
             &self.header,
-            &Claim::new(id, kind, &expiration_time),
+            &Claim::new(id, user_id, kind, &expiration_time),
             &self.encoding_key,
         )?)
     }
@@ -65,6 +73,6 @@ impl JwtToken {
     }
 
     pub fn renew(&self, claim: &Claim) -> Result<String> {
-        self.encode(claim.id(), claim.kind())
+        self.encode(claim.id(), claim.user_id(), claim.kind())
     }
 }

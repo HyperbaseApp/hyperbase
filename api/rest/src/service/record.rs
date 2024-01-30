@@ -16,8 +16,9 @@ use crate::{
     model::{
         record::{
             DeleteOneRecordReqPath, DeleteRecordResJson, FindManyRecordReqJson,
-            FindManyRecordReqPath, FindOneRecordReqPath, InsertOneRecordReqJson,
-            InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson, UpdateOneRecordReqPath,
+            FindManyRecordReqPath, FindOneRecordReqPath, FindOneRecordReqQuery,
+            InsertOneRecordReqJson, InsertOneRecordReqPath, RecordResJson, UpdateOneRecordReqJson,
+            UpdateOneRecordReqPath,
         },
         PaginationRes, Response,
     },
@@ -60,7 +61,7 @@ async fn insert_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -180,6 +181,7 @@ async fn find_one(
     ctx: web::Data<ApiRestCtx>,
     auth: BearerAuth,
     path: web::Path<FindOneRecordReqPath>,
+    query: web::Query<FindOneRecordReqQuery>,
 ) -> HttpResponse {
     let token = auth.token();
 
@@ -189,7 +191,7 @@ async fn find_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -237,8 +239,28 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let fields = match query.fields() {
+        Some(origin_fields) => {
+            let mut fields = HashSet::with_capacity(origin_fields.len());
+            for field in origin_fields {
+                if collection_data.schema_fields().contains_key(field) || field == "_id" {
+                    fields.insert(field.as_str());
+                } else {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Field '{field}' is not exist in the collection"),
+                    );
+                }
+            }
+            fields
+        }
+        None => HashSet::new(),
+    };
+
     let record_data =
-        match RecordDao::db_select(ctx.dao().db(), &collection_data, path.record_id()).await {
+        match RecordDao::db_select(ctx.dao().db(), path.record_id(), &fields, &collection_data)
+            .await
+        {
             Ok(data) => data,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
@@ -271,7 +293,7 @@ async fn update_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -328,11 +350,17 @@ async fn update_one(
         }
     }
 
-    let mut record_data =
-        match RecordDao::db_select(ctx.dao().db(), &collection_data, path.record_id()).await {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let mut record_data = match RecordDao::db_select(
+        ctx.dao().db(),
+        path.record_id(),
+        &HashSet::new(),
+        &collection_data,
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if value.is_null() {
@@ -401,7 +429,7 @@ async fn delete_one(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -476,7 +504,7 @@ async fn find_many(
     };
 
     let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::User => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.id(), None),
             Err(err) => {
                 return Response::error_raw(
@@ -585,8 +613,8 @@ async fn find_many(
     let pagination = RecordPagination::new(query_data.limit());
     let (records_data, total) = match RecordDao::db_select_many(
         ctx.dao().db(),
-        &collection_data,
         &fields,
+        &collection_data,
         &filters,
         &groups,
         &orders,

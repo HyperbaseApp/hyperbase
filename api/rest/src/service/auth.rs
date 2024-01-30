@@ -1,11 +1,20 @@
+use std::str::FromStr;
+
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
+use ahash::HashSet;
 use hb_dao::{
-    admin::AdminDao, admin_password_reset::AdminPasswordResetDao, register::RegistrationDao,
+    admin::AdminDao,
+    admin_password_reset::AdminPasswordResetDao,
+    collection::CollectionDao,
+    record::{RecordDao, RecordFilter, RecordFilters, RecordPagination},
+    register::RegistrationDao,
     token::TokenDao,
+    value::ColumnValue,
 };
 use hb_mailer::MailPayload;
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::{claim::UserClaim, kind::JwtTokenKind};
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
@@ -49,7 +58,7 @@ async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
     };
 
     match token_claim.kind() {
-        JwtTokenKind::User => {
+        JwtTokenKind::Admin => {
             if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
@@ -214,7 +223,7 @@ async fn password_based(
     let token = match ctx
         .token()
         .jwt()
-        .encode(admin_data.id(), &JwtTokenKind::User)
+        .encode(admin_data.id(), &None, &JwtTokenKind::Admin)
     {
         Ok(token) => token,
         Err(err) => {
@@ -229,27 +238,195 @@ async fn token_based(
     ctx: web::Data<ApiRestCtx>,
     data: web::Json<TokenBasedReqJson>,
 ) -> HttpResponse {
-    let token_data = match TokenDao::db_select(ctx.dao().db(), data.token_id()).await {
-        Ok(data) => data,
-        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-    };
+    if data.contains_key("token_id") && data.contains_key("collection_id") {
+        let token_id = match data.get("token_id").unwrap() {
+            serde_json::Value::String(collection_id) => match Uuid::from_str(&collection_id) {
+                Ok(collection_id) => collection_id,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            },
+            _ => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "'collection_id' field must be of type uuid",
+                )
+            }
+        };
+        let collection_id = match data.get("collection_id").unwrap() {
+            serde_json::Value::String(collection_id) => match Uuid::from_str(&collection_id) {
+                Ok(collection_id) => collection_id,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            },
+            _ => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "'collection_id' field must be of type uuid",
+                )
+            }
+        };
 
-    if token_data.token() != data.token() {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "Token doesn't match");
-    }
+        let (token_data, collection_data) = match tokio::try_join!(
+            TokenDao::db_select(ctx.dao().db(), &token_id),
+            CollectionDao::db_select(ctx.dao().db(), &collection_id)
+        ) {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
 
-    let token = match ctx
-        .token()
-        .jwt()
-        .encode(token_data.id(), &JwtTokenKind::Token)
-    {
-        Ok(token) => token,
-        Err(err) => {
-            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        let fields = HashSet::from_iter([("_id")]);
+
+        let mut filters = Vec::with_capacity(data.len() - 1);
+        for (field_name, field_value) in data.iter() {
+            if collection_data.schema_fields().contains_key(field_name) || field_name == "_id" {
+                if field_name != "collection_id" {
+                    let field_kind = collection_data.schema_fields().get(field_name).unwrap();
+                    let column_value =
+                        match ColumnValue::from_serde_json(field_kind.kind(), field_value) {
+                            Ok(value) => value,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &format!("Error in field '{}': {}", field_name, err),
+                                )
+                            }
+                        };
+                    filters.push(RecordFilter::new(
+                        &Some(field_name.to_owned()),
+                        "=",
+                        &Some(column_value),
+                        &None,
+                    ));
+                }
+            } else {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Field '{field_name}' is not exist in the collection"),
+                );
+            }
         }
-    };
 
-    Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
+        let (records_data, total) = match RecordDao::db_select_many(
+            ctx.dao().db(),
+            &fields,
+            &collection_data,
+            &RecordFilters::new(&filters),
+            &Vec::new(),
+            &Vec::new(),
+            &RecordPagination::new(&None),
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(_) => todo!(),
+        };
+
+        if total != 1 {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "The record doesn't exist or more than one was found",
+            );
+        }
+
+        let record_id = match records_data[0].data().get("_id") {
+            Some(record_id) => match record_id {
+                ColumnValue::Uuid(record_id) => match record_id {
+                    Some(record_id) => record_id,
+                    None => {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "The '_id' field in the record is null",
+                        )
+                    }
+                },
+                _ => {
+                    return Response::error_raw(
+                        &StatusCode::INTERNAL_SERVER_ERROR,
+                        "The '_id' field in the record is not of type uuid",
+                    )
+                }
+            },
+            None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "The record doesn't have '_id' field",
+                )
+            }
+        };
+
+        let token = match ctx.token().jwt().encode(
+            token_data.id(),
+            &Some(UserClaim::new(collection_data.id(), record_id)),
+            &JwtTokenKind::Token,
+        ) {
+            Ok(token) => token,
+            Err(err) => {
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        };
+
+        Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
+    } else {
+        let token_id = match data.get("token_id") {
+            Some(token_id) => match token_id {
+                serde_json::Value::String(token_id) => match Uuid::from_str(&token_id) {
+                    Ok(token_id) => token_id,
+                    Err(err) => {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                    }
+                },
+                _ => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        "'token_id' field must be of type uuid",
+                    )
+                }
+            },
+            None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "Auth without collection requires 'token_id' field of type uuid",
+                )
+            }
+        };
+        let token = match data.get("token") {
+            Some(token) => match token {
+                serde_json::Value::String(token) => token,
+                _ => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        "'token' field must be of type string",
+                    )
+                }
+            },
+            None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "Auth without collection requires 'token' field of type string",
+                )
+            }
+        };
+
+        let token_data = match TokenDao::db_select(ctx.dao().db(), &token_id).await {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        if token_data.token() != token {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "Token doesn't match");
+        }
+
+        let token = match ctx
+            .token()
+            .jwt()
+            .encode(token_data.id(), &None, &JwtTokenKind::Token)
+        {
+            Ok(token) => token,
+            Err(err) => {
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        };
+
+        Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
+    }
 }
 
 async fn request_password_reset(

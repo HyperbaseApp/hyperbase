@@ -49,6 +49,17 @@ impl FindOneRecordReqPath {
 }
 
 #[derive(Deserialize)]
+pub struct FindOneRecordReqQuery {
+    fields: Option<HashSet<String>>,
+}
+
+impl FindOneRecordReqQuery {
+    pub fn fields(&self) -> &Option<HashSet<String>> {
+        &self.fields
+    }
+}
+
+#[derive(Deserialize)]
 pub struct UpdateOneRecordReqPath {
     project_id: Uuid,
     collection_id: Uuid,

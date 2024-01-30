@@ -1,4 +1,6 @@
+use ahash::HashMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 use validator::Validate;
 
@@ -52,21 +54,7 @@ impl PasswordBasedReqJson {
     }
 }
 
-#[derive(Deserialize)]
-pub struct TokenBasedReqJson {
-    token_id: Uuid,
-    token: String,
-}
-
-impl TokenBasedReqJson {
-    pub fn token_id(&self) -> &Uuid {
-        &self.token_id
-    }
-
-    pub fn token(&self) -> &str {
-        &self.token
-    }
-}
+pub type TokenBasedReqJson = HashMap<String, Value>;
 
 #[derive(Deserialize, Validate)]
 pub struct RequestPasswordResetReqJson {

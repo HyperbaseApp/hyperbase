@@ -366,21 +366,39 @@ impl RecordDao {
         }
     }
 
-    pub async fn db_select(db: &Db, collection_data: &CollectionDao, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(
+        db: &Db,
+        id: &Uuid,
+        fields: &HashSet<&str>,
+        collection_data: &CollectionDao,
+    ) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                let mut columns_props =
-                    Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                let mut columns;
+                let mut columns_props;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+                    columns_props = Vec::with_capacity(fields.len());
 
-                columns.push("_id");
-                columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
+                    for column in fields {
+                        columns.push(*column);
+                        if let Some(column_props) = collection_data.schema_fields().get(*column) {
+                            columns_props.push(*column_props)
+                        }
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                    columns_props = Vec::with_capacity(collection_data.schema_fields().len() + 1);
 
-                for (column, props) in collection_data.schema_fields() {
-                    columns.push(column);
-                    columns_props.push(*props)
+                    columns.push("_id");
+                    columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
+
+                    for (column, props) in collection_data.schema_fields() {
+                        columns.push(column);
+                        columns_props.push(*props)
+                    }
                 }
 
                 let scylladb_data = Self::scylladb_select(db, &table_name, &columns, id).await?;
@@ -493,8 +511,8 @@ impl RecordDao {
 
     pub async fn db_select_many(
         db: &Db,
-        collection_data: &CollectionDao,
         fields: &HashSet<&str>,
+        collection_data: &CollectionDao,
         filters: &RecordFilters,
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
