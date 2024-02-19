@@ -7,7 +7,11 @@ use uuid::Uuid;
 pub struct Payload {
     token_id: Uuid,
     token: String,
-    method: Method,
+
+    device: DevicePayload,
+
+    method: MethodPayload,
+
     project_id: Uuid,
     collection_id: Uuid,
     data: Option<HashMap<String, Value>>,
@@ -22,7 +26,11 @@ impl Payload {
         &self.token
     }
 
-    pub fn method(&self) -> &Method {
+    pub fn device(&self) -> &DevicePayload {
+        &self.device
+    }
+
+    pub fn method(&self) -> &MethodPayload {
         &self.method
     }
 
@@ -40,7 +48,23 @@ impl Payload {
 }
 
 #[derive(Deserialize)]
+pub struct DevicePayload {
+    collection_id: Uuid,
+    id: Uuid,
+}
+
+impl DevicePayload {
+    pub fn collection_id(&self) -> &Uuid {
+        &self.collection_id
+    }
+
+    pub fn id(&self) -> &Uuid {
+        &self.id
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Method {
+pub enum MethodPayload {
     InsertOne,
 }

@@ -6,16 +6,16 @@ use crate::kind::JwtTokenKind;
 #[derive(Deserialize, Serialize)]
 pub struct Claim {
     id: Uuid,
-    user_id: Option<UserClaim>,
+    user: Option<UserClaim>,
     kind: JwtTokenKind,
     exp: usize,
 }
 
 impl Claim {
-    pub fn new(id: &Uuid, user_id: &Option<UserClaim>, kind: &JwtTokenKind, exp: &usize) -> Self {
+    pub fn new(id: &Uuid, user: &Option<UserClaim>, kind: &JwtTokenKind, exp: &usize) -> Self {
         Self {
             id: *id,
-            user_id: *user_id,
+            user: *user,
             kind: *kind,
             exp: *exp,
         }
@@ -25,8 +25,8 @@ impl Claim {
         &self.id
     }
 
-    pub fn user_id(&self) -> &Option<UserClaim> {
-        &self.user_id
+    pub fn user(&self) -> &Option<UserClaim> {
+        &self.user
     }
 
     pub fn kind(&self) -> &JwtTokenKind {
@@ -50,5 +50,13 @@ impl UserClaim {
             collection_id: *collection_id,
             id: *id,
         }
+    }
+
+    pub fn collection_id(&self) -> &Uuid {
+        &self.collection_id
+    }
+
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 }

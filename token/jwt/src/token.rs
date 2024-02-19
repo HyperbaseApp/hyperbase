@@ -32,7 +32,7 @@ impl JwtToken {
     pub fn encode(
         &self,
         id: &Uuid,
-        user_id: &Option<UserClaim>,
+        user: &Option<UserClaim>,
         kind: &JwtTokenKind,
     ) -> Result<String> {
         let expiration_time = match usize::try_from(
@@ -47,7 +47,7 @@ impl JwtToken {
 
         Ok(encode(
             &self.header,
-            &Claim::new(id, user_id, kind, &expiration_time),
+            &Claim::new(id, user, kind, &expiration_time),
             &self.encoding_key,
         )?)
     }
@@ -73,6 +73,6 @@ impl JwtToken {
     }
 
     pub fn renew(&self, claim: &Claim) -> Result<String> {
-        self.encode(claim.id(), claim.user_id(), claim.kind())
+        self.encode(claim.id(), claim.user(), claim.kind())
     }
 }

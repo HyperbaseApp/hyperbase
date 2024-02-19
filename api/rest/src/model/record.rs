@@ -166,7 +166,7 @@ impl FindManyRecordFiltersReqJson {
                 Some(field) => match collection_data.schema_fields().get(field) {
                     Some(field) => Some(field.kind()),
                     None => match field.as_str() {
-                        "_id" => Some(&ColumnKind::Uuid),
+                        "_id" | "_created_by" => Some(&ColumnKind::Uuid),
                         _ => {
                             return Err(Error::msg(format!(
                                 "Field '{field}' is not exist in the collection",

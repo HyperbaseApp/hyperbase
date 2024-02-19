@@ -135,7 +135,6 @@ pub struct TokenBucketRuleMethodJson {
     insert: Option<bool>,
     update: Option<bool>,
     delete: Option<bool>,
-    download_one: Option<bool>,
 }
 
 impl TokenBucketRuleMethodJson {
@@ -146,7 +145,6 @@ impl TokenBucketRuleMethodJson {
             insert: Some(*dao.insert()),
             update: Some(*dao.update()),
             delete: Some(*dao.delete()),
-            download_one: Some(*dao.download_one()),
         })
     }
 
@@ -170,10 +168,6 @@ impl TokenBucketRuleMethodJson {
             },
             &match self.delete {
                 Some(delete) => delete,
-                None => false,
-            },
-            &match self.download_one {
-                Some(download_one) => download_one,
                 None => false,
             },
         ))

@@ -61,11 +61,15 @@ pub struct RecordDao {
 }
 
 impl RecordDao {
-    pub fn new(collection_id: &Uuid, capacity: &Option<usize>) -> Self {
+    pub fn new(created_by: &Uuid, collection_id: &Uuid, capacity: &Option<usize>) -> Self {
         let mut data = HashMap::with_capacity(match capacity {
-            Some(capacity) => capacity + 1,
-            None => 1,
+            Some(capacity) => capacity + 2,
+            None => 2,
         });
+        data.insert(
+            "_created_by".to_owned(),
+            ColumnValue::Uuid(Some(*created_by)),
+        );
         data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::now_v7())));
 
         Self {
@@ -369,6 +373,7 @@ impl RecordDao {
     pub async fn db_select(
         db: &Db,
         id: &Uuid,
+        created_by: &Option<Uuid>,
         fields: &HashSet<&str>,
         collection_data: &CollectionDao,
     ) -> Result<Self> {
@@ -389,10 +394,12 @@ impl RecordDao {
                         }
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                    columns_props = Vec::with_capacity(collection_data.schema_fields().len() + 1);
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns_props = Vec::with_capacity(collection_data.schema_fields().len() + 2);
 
                     columns.push("_id");
+                    columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
+                    columns.push("_created_by");
                     columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
 
                     for (column, props) in collection_data.schema_fields() {
@@ -401,7 +408,8 @@ impl RecordDao {
                     }
                 }
 
-                let scylladb_data = Self::scylladb_select(db, &table_name, &columns, id).await?;
+                let scylladb_data =
+                    Self::scylladb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(scylladb_data.len());
                 for (idx, value) in scylladb_data.iter().enumerate() {
@@ -432,7 +440,7 @@ impl RecordDao {
                 }
 
                 let postgresdb_data =
-                    Self::postgresdb_select(db, &table_name, &columns, id).await?;
+                    Self::postgresdb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(columns.len());
                 data.insert(
@@ -461,7 +469,8 @@ impl RecordDao {
                     columns.push(column);
                 }
 
-                let mysqldb_data = Self::mysqldb_select(db, &table_name, &columns, id).await?;
+                let mysqldb_data =
+                    Self::mysqldb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(columns.len());
                 data.insert(
@@ -486,7 +495,8 @@ impl RecordDao {
                     columns.push(column);
                 }
 
-                let sqlitedb_data = Self::sqlitedb_select(db, &table_name, &columns, id).await?;
+                let sqlitedb_data =
+                    Self::sqlitedb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(columns.len());
                 data.insert(
@@ -513,6 +523,7 @@ impl RecordDao {
         db: &Db,
         fields: &HashSet<&str>,
         collection_data: &CollectionDao,
+        created_by: &Option<Uuid>,
         filters: &RecordFilters,
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
@@ -576,6 +587,17 @@ impl RecordDao {
                             ),
                         };
                     }
+                    if let Some(created_by) = created_by {
+                        if let Some(created_by_data) = data.get("_created_by") {
+                            if let ColumnValue::Uuid(id) = created_by_data {
+                                if let Some(id) = id {
+                                    if *created_by != *id {
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
                     data_many.push(Self {
                         table_name: table_name.to_owned(),
                         data,
@@ -597,6 +619,7 @@ impl RecordDao {
                     db,
                     &table_name,
                     &columns,
+                    created_by,
                     filters,
                     groups,
                     orders,
@@ -646,6 +669,7 @@ impl RecordDao {
                     db,
                     &table_name,
                     &columns,
+                    created_by,
                     filters,
                     groups,
                     orders,
@@ -688,6 +712,7 @@ impl RecordDao {
                     db,
                     &table_name,
                     &columns,
+                    created_by,
                     filters,
                     groups,
                     orders,
@@ -733,12 +758,19 @@ impl RecordDao {
         }
     }
 
-    pub async fn db_delete(db: &Db, collection_id: &Uuid, id: &Uuid) -> Result<()> {
+    pub async fn db_delete(
+        db: &Db,
+        collection_id: &Uuid,
+        id: &Uuid,
+        created_by: &Option<Uuid>,
+    ) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_delete(db, collection_id, id).await,
-            Db::PostgresqlDb(db) => Self::postgresdb_delete(db, collection_id, id).await,
-            Db::MysqlDb(db) => Self::mysqldb_delete(db, collection_id, id).await,
-            Db::SqliteDb(db) => Self::sqlitedb_delete(db, collection_id, id).await,
+            Db::ScyllaDb(db) => Self::scylladb_delete(db, collection_id, id, created_by).await,
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_delete(db, collection_id, id, created_by).await
+            }
+            Db::MysqlDb(db) => Self::mysqldb_delete(db, collection_id, id, created_by).await,
+            Db::SqliteDb(db) => Self::sqlitedb_delete(db, collection_id, id, created_by).await,
         }
     }
 
@@ -850,12 +882,24 @@ impl RecordDao {
         table_name: &str,
         columns: &Vec<&str>,
         id: &Uuid,
+        created_by: &Option<Uuid>,
     ) -> Result<Vec<Option<ScyllaCqlValue>>> {
-        Ok(db
-            .execute(&scylla_record::select(table_name, columns), [id].as_ref())
-            .await?
-            .first_row()?
-            .columns)
+        if let Some(created_by) = created_by {
+            Ok(db
+                .execute(
+                    &scylla_record::select_by_id_and_created_by(table_name, columns),
+                    [id, created_by].as_ref(),
+                )
+                .await?
+                .first_row()?
+                .columns)
+        } else {
+            Ok(db
+                .execute(&scylla_record::select(table_name, columns), [id].as_ref())
+                .await?
+                .first_row()?
+                .columns)
+        }
     }
 
     async fn scylladb_select_many(
@@ -929,14 +973,28 @@ impl RecordDao {
         Ok(())
     }
 
-    async fn scylladb_delete(db: &ScyllaDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(1);
+    async fn scylladb_delete(
+        db: &ScyllaDb,
+        collection_id: &Uuid,
+        id: &Uuid,
+        created_by: &Option<Uuid>,
+    ) -> Result<()> {
+        let mut column = HashSet::<String>::with_capacity(2);
         column.insert("_id".to_owned());
-        db.execute(
-            &scylla_record::delete(&Self::new_table_name(collection_id), &column),
-            [id].as_ref(),
-        )
-        .await?;
+        if let Some(created_by) = created_by {
+            column.insert("_created_by".to_owned());
+            db.execute(
+                &scylla_record::delete(&Self::new_table_name(collection_id), &column),
+                [id, created_by].as_ref(),
+            )
+            .await?;
+        } else {
+            db.execute(
+                &scylla_record::delete(&Self::new_table_name(collection_id), &column),
+                [id].as_ref(),
+            )
+            .await?;
+        }
         Ok(())
     }
 
@@ -1061,23 +1119,41 @@ impl RecordDao {
         table_name: &str,
         columns: &Vec<&str>,
         id: &Uuid,
+        created_by: &Option<Uuid>,
     ) -> Result<sqlx::postgres::PgRow> {
-        Ok(db
-            .fetch_one_row(sqlx::query(&postgres_record::select(table_name, columns)).bind(id))
-            .await?)
+        if let Some(created_by) = created_by {
+            Ok(db
+                .fetch_one_row(
+                    sqlx::query(&postgres_record::select_by_id_and_created_by(
+                        table_name, columns,
+                    ))
+                    .bind(id)
+                    .bind(created_by),
+                )
+                .await?)
+        } else {
+            Ok(db
+                .fetch_one_row(sqlx::query(&postgres_record::select(table_name, columns)).bind(id))
+                .await?)
+        }
     }
 
     async fn postgresdb_select_many(
         db: &PostgresDb,
         table_name: &str,
         columns: &Vec<&str>,
+        created_by: &Option<Uuid>,
         filters: &RecordFilters,
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<sqlx::postgres::PgRow>, i64)> {
         let mut argument_idx = 1;
-        let filter = filters.postgresdb_filter_query(&None, 0, &mut argument_idx)?;
+        let mut filter = filters.postgresdb_filter_query(&None, 0, &mut argument_idx)?;
+        if created_by.is_some() {
+            filter = format!("\"_created_by\" = ${argument_idx} AND ({filter})");
+            argument_idx += 1;
+        }
 
         let mut order = Vec::with_capacity(orders.len());
         for o in orders {
@@ -1105,6 +1181,9 @@ impl RecordDao {
         let mut query_total = sqlx::query_as(&query_total);
 
         query_select_many = filters.postgresdb_values(query_select_many)?;
+        if let Some(created_by) = created_by {
+            query_select_many = query_select_many.bind(created_by);
+        }
         if let Some(limit) = pagination.limit() {
             query_select_many = query_select_many.bind(limit);
         }
@@ -1140,17 +1219,35 @@ impl RecordDao {
         Ok(())
     }
 
-    async fn postgresdb_delete(db: &PostgresDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(1);
+    async fn postgresdb_delete(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        id: &Uuid,
+        created_by: &Option<Uuid>,
+    ) -> Result<()> {
+        let mut column = HashSet::<String>::with_capacity(2);
         column.insert("_id".to_owned());
-        db.execute(
-            sqlx::query(&postgres_record::delete(
-                &Self::new_table_name(collection_id),
-                &column,
-            ))
-            .bind(id),
-        )
-        .await?;
+        if let Some(created_by) = created_by {
+            column.insert("_created_by".to_owned());
+            db.execute(
+                sqlx::query(&postgres_record::delete(
+                    &Self::new_table_name(collection_id),
+                    &column,
+                ))
+                .bind(id)
+                .bind(created_by),
+            )
+            .await?;
+        } else {
+            db.execute(
+                sqlx::query(&postgres_record::delete(
+                    &Self::new_table_name(collection_id),
+                    &column,
+                ))
+                .bind(id),
+            )
+            .await?;
+        }
         Ok(())
     }
 
@@ -1289,22 +1386,39 @@ impl RecordDao {
         table_name: &str,
         columns: &Vec<&str>,
         id: &Uuid,
+        created_by: &Option<Uuid>,
     ) -> Result<sqlx::mysql::MySqlRow> {
-        Ok(db
-            .fetch_one_row(sqlx::query(&mysql_record::select(table_name, columns)).bind(id))
-            .await?)
+        if let Some(created_by) = created_by {
+            Ok(db
+                .fetch_one_row(
+                    sqlx::query(&mysql_record::select_by_id_and_created_by(
+                        table_name, columns,
+                    ))
+                    .bind(id)
+                    .bind(created_by),
+                )
+                .await?)
+        } else {
+            Ok(db
+                .fetch_one_row(sqlx::query(&mysql_record::select(table_name, columns)).bind(id))
+                .await?)
+        }
     }
 
     async fn mysqldb_select_many(
         db: &MysqlDb,
         table_name: &str,
         columns: &Vec<&str>,
+        created_by: &Option<Uuid>,
         filters: &RecordFilters,
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<sqlx::mysql::MySqlRow>, i64)> {
-        let filter = filters.mysqldb_filter_query(&None, 0)?;
+        let mut filter = filters.mysqldb_filter_query(&None, 0)?;
+        if created_by.is_some() {
+            filter = format!("`_created_by` = ? AND ({filter})")
+        }
 
         let mut order = Vec::with_capacity(orders.len());
         for o in orders {
@@ -1330,6 +1444,9 @@ impl RecordDao {
         let query_total = mysql_record::count(table_name, &filter);
         let mut query_total = sqlx::query_as(&query_total);
 
+        if let Some(created_by) = created_by {
+            query_select_many = query_select_many.bind(created_by);
+        }
         query_select_many = filters.mysqldb_values(query_select_many)?;
         if let Some(limit) = pagination.limit() {
             query_select_many = query_select_many.bind(limit);
@@ -1366,17 +1483,35 @@ impl RecordDao {
         Ok(())
     }
 
-    async fn mysqldb_delete(db: &MysqlDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(1);
+    async fn mysqldb_delete(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        id: &Uuid,
+        created_by: &Option<Uuid>,
+    ) -> Result<()> {
+        let mut column = HashSet::<String>::with_capacity(2);
         column.insert("_id".to_owned());
-        db.execute(
-            sqlx::query(&mysql_record::delete(
-                &Self::new_table_name(collection_id),
-                &column,
-            ))
-            .bind(id),
-        )
-        .await?;
+        if let Some(created_by) = created_by {
+            column.insert("_created_by".to_owned());
+            db.execute(
+                sqlx::query(&mysql_record::delete(
+                    &Self::new_table_name(collection_id),
+                    &column,
+                ))
+                .bind(id)
+                .bind(created_by),
+            )
+            .await?;
+        } else {
+            db.execute(
+                sqlx::query(&mysql_record::delete(
+                    &Self::new_table_name(collection_id),
+                    &column,
+                ))
+                .bind(id),
+            )
+            .await?;
+        }
         Ok(())
     }
 
@@ -1489,22 +1624,39 @@ impl RecordDao {
         table_name: &str,
         columns: &Vec<&str>,
         id: &Uuid,
+        created_by: &Option<Uuid>,
     ) -> Result<sqlx::sqlite::SqliteRow> {
-        Ok(db
-            .fetch_one_row(sqlx::query(&sqlite_record::select(table_name, columns)).bind(id))
-            .await?)
+        if let Some(created_by) = created_by {
+            Ok(db
+                .fetch_one_row(
+                    sqlx::query(&sqlite_record::select_by_id_and_created_by(
+                        table_name, columns,
+                    ))
+                    .bind(id)
+                    .bind(created_by),
+                )
+                .await?)
+        } else {
+            Ok(db
+                .fetch_one_row(sqlx::query(&sqlite_record::select(table_name, columns)).bind(id))
+                .await?)
+        }
     }
 
     async fn sqlitedb_select_many(
         db: &SqliteDb,
         table_name: &str,
         columns: &Vec<&str>,
+        created_by: &Option<Uuid>,
         filters: &RecordFilters,
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<sqlx::sqlite::SqliteRow>, i64)> {
-        let filter = filters.sqlitedb_filter_query(&None, 0)?;
+        let mut filter = filters.sqlitedb_filter_query(&None, 0)?;
+        if created_by.is_some() {
+            filter = format!("\"_created_by\" = ? AND ({filter})");
+        }
 
         let mut order = Vec::with_capacity(orders.len());
         for o in orders {
@@ -1530,6 +1682,9 @@ impl RecordDao {
         let query_total = sqlite_record::count(table_name, &filter);
         let mut query_total = sqlx::query_as(&query_total);
 
+        if let Some(created_by) = created_by {
+            query_select_many = query_select_many.bind(created_by);
+        }
         query_select_many = filters.sqlitedb_values(query_select_many)?;
         if let Some(limit) = pagination.limit() {
             query_select_many = query_select_many.bind(limit);
@@ -1566,17 +1721,35 @@ impl RecordDao {
         Ok(())
     }
 
-    async fn sqlitedb_delete(db: &SqliteDb, collection_id: &Uuid, id: &Uuid) -> Result<()> {
+    async fn sqlitedb_delete(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        id: &Uuid,
+        created_by: &Option<Uuid>,
+    ) -> Result<()> {
         let mut column = HashSet::<String>::with_capacity(1);
         column.insert("_id".to_owned());
-        db.execute(
-            sqlx::query(&sqlite_record::delete(
-                &Self::new_table_name(collection_id),
-                &column,
-            ))
-            .bind(id),
-        )
-        .await?;
+        if let Some(created_by) = created_by {
+            column.insert("_created_by".to_owned());
+            db.execute(
+                sqlx::query(&sqlite_record::delete(
+                    &Self::new_table_name(collection_id),
+                    &column,
+                ))
+                .bind(id)
+                .bind(created_by),
+            )
+            .await?;
+        } else {
+            db.execute(
+                sqlx::query(&sqlite_record::delete(
+                    &Self::new_table_name(collection_id),
+                    &column,
+                ))
+                .bind(id),
+            )
+            .await?;
+        }
         Ok(())
     }
 }

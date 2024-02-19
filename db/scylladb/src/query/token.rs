@@ -13,7 +13,7 @@ const DELETE: &str = "DELETE FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up tokens table");
 
-    cached_session.get_session().query("CREATE TYPE IF NOT EXISTS \"hyperbase\".\"token_bucket_rules\" (\"find_one\" boolean, \"find_many\" boolean, \"insert\" boolean, \"update\" boolean, \"delete\" boolean, \"download_one\" boolean)", &[]).await.unwrap();
+    cached_session.get_session().query("CREATE TYPE IF NOT EXISTS \"hyperbase\".\"token_bucket_rules\" (\"find_one\" boolean, \"find_many\" boolean, \"insert\" boolean, \"update\" boolean, \"delete\" boolean)", &[]).await.unwrap();
     cached_session.get_session().query("CREATE TYPE IF NOT EXISTS \"hyperbase\".\"token_collection_rules\" (\"find_one\" boolean, \"find_many\" boolean, \"insert\" boolean, \"update\" boolean, \"delete\" boolean)", &[]).await.unwrap();
     cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"tokens\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"token\" text, \"bucket_rules\" map<uuid, frozen<token_bucket_rules>>, \"collection_rules\" map<uuid, frozen<token_collection_rules>>, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
     cached_session

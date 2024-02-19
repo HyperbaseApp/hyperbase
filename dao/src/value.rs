@@ -532,14 +532,20 @@ impl ColumnValue {
             ColumnKind::SmallInt => Ok(Self::SmallInteger(value.as_smallint())),
             ColumnKind::Int => Ok(Self::Integer(value.as_int())),
             ColumnKind::BigInt => Ok(Self::BigInteger(value.as_bigint())),
-            ColumnKind::Varint => Ok(Self::VarInteger(match value.clone().into_varint() {
-                Some(value) => Some(BigInt::from_signed_bytes_be(&value.to_signed_bytes_be())),
+            ColumnKind::Varint => Ok(Self::VarInteger(match value.clone().into_cql_varint() {
+                Some(value) => Some(BigInt::from_signed_bytes_be(
+                    value.as_signed_bytes_be_slice(),
+                )),
                 None => None,
             })),
             ColumnKind::Float => Ok(Self::Float(value.as_float())),
             ColumnKind::Double => Ok(Self::Double(value.as_double())),
-            ColumnKind::Decimal => Ok(Self::Decimal(match value.clone().into_decimal() {
-                Some(value) => Some(BigDecimal::from_str(&value.to_string())?),
+            ColumnKind::Decimal => Ok(Self::Decimal(match value.clone().into_cql_decimal() {
+                Some(value) => Some({
+                    let (digits, scale) = value.as_signed_be_bytes_slice_and_exponent();
+                    let digits = BigInt::from_signed_bytes_be(digits);
+                    BigDecimal::new(digits, scale.into())
+                }),
                 None => None,
             })),
             ColumnKind::String => Ok(Self::String(match value.as_text() {
@@ -582,15 +588,13 @@ impl ColumnValue {
             Self::Integer(data) => Ok(Box::new(*data)),
             Self::BigInteger(data) => Ok(Box::new(*data)),
             Self::VarInteger(data) => Ok(Box::new(match data {
-                Some(data) => Some(num_bigint_03::BigInt::from_signed_bytes_be(
-                    &data.to_signed_bytes_be(),
-                )),
+                Some(data) => Some(BigInt::from_signed_bytes_be(&data.to_signed_bytes_be())),
                 None => None,
             })),
             Self::Float(data) => Ok(Box::new(*data)),
             Self::Double(data) => Ok(Box::new(*data)),
             Self::Decimal(data) => Ok(Box::new(match data {
-                Some(data) => Some(bigdecimal_02::BigDecimal::from_str(&data.to_string())?),
+                Some(data) => Some(BigDecimal::from_str(&data.to_string())?),
                 None => None,
             })),
             Self::String(data) => Ok(Box::new(data.to_owned())),

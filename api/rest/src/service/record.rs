@@ -118,7 +118,46 @@ async fn insert_one(
         }
     }
 
-    let mut record_data = RecordDao::new(collection_data.id(), &Some(data.len()));
+    let created_by = if let Some(user_claim) = token_claim.user() {
+        let collection_data =
+            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+        let user_data = match RecordDao::db_select(
+            ctx.dao().db(),
+            user_claim.id(),
+            &None,
+            &HashSet::from_iter(["_id"]),
+            &collection_data,
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        let mut user_id = None;
+        if let Some(id) = user_data.get("_id") {
+            if let ColumnValue::Uuid(id) = id {
+                if let Some(id) = id {
+                    user_id = Some(*id);
+                }
+            }
+        }
+
+        if let Some(user_id) = user_id {
+            user_id
+        } else {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        }
+    } else if *token_claim.kind() == JwtTokenKind::Admin {
+        admin_id
+    } else {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+    };
+
+    let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if !value.is_null() {
@@ -239,6 +278,45 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if let Some(user_claim) = token_claim.user() {
+        let collection_data =
+            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+        let user_data = match RecordDao::db_select(
+            ctx.dao().db(),
+            user_claim.id(),
+            &None,
+            &HashSet::from_iter(["_id"]),
+            &collection_data,
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        let mut user_id = None;
+        if let Some(id) = user_data.get("_id") {
+            if let ColumnValue::Uuid(id) = id {
+                if let Some(id) = id {
+                    user_id = Some(*id);
+                }
+            }
+        }
+
+        if user_id.is_none() {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        }
+
+        user_id
+    } else if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+    };
+
     let fields = match query.fields() {
         Some(origin_fields) => {
             let mut fields = HashSet::with_capacity(origin_fields.len());
@@ -257,13 +335,18 @@ async fn find_one(
         None => HashSet::new(),
     };
 
-    let record_data =
-        match RecordDao::db_select(ctx.dao().db(), path.record_id(), &fields, &collection_data)
-            .await
-        {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let record_data = match RecordDao::db_select(
+        ctx.dao().db(),
+        path.record_id(),
+        &created_by,
+        &fields,
+        &collection_data,
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
 
     let mut record = HashMap::with_capacity(record_data.len());
     for (key, value) in record_data.data() {
@@ -341,6 +424,45 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if let Some(user_claim) = token_claim.user() {
+        let collection_data =
+            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+        let user_data = match RecordDao::db_select(
+            ctx.dao().db(),
+            user_claim.id(),
+            &None,
+            &HashSet::from_iter(["_id"]),
+            &collection_data,
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        let mut user_id = None;
+        if let Some(id) = user_data.get("_id") {
+            if let ColumnValue::Uuid(id) = id {
+                if let Some(id) = id {
+                    user_id = Some(*id);
+                }
+            }
+        }
+
+        if user_id.is_none() {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        }
+
+        user_id
+    } else if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+    };
+
     for field_name in data.keys() {
         if !collection_data.schema_fields().contains_key(field_name) {
             return Response::error_raw(
@@ -353,6 +475,7 @@ async fn update_one(
     let mut record_data = match RecordDao::db_select(
         ctx.dao().db(),
         path.record_id(),
+        &created_by,
         &HashSet::new(),
         &collection_data,
     )
@@ -361,6 +484,7 @@ async fn update_one(
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if value.is_null() {
@@ -477,8 +601,52 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    if let Err(err) =
-        RecordDao::db_delete(ctx.dao().db(), collection_data.id(), path.record_id()).await
+    let created_by = if let Some(user_claim) = token_claim.user() {
+        let collection_data =
+            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+        let user_data = match RecordDao::db_select(
+            ctx.dao().db(),
+            user_claim.id(),
+            &None,
+            &HashSet::from_iter(["_id"]),
+            &collection_data,
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        let mut user_id = None;
+        if let Some(id) = user_data.get("_id") {
+            if let ColumnValue::Uuid(id) = id {
+                if let Some(id) = id {
+                    user_id = Some(*id);
+                }
+            }
+        }
+
+        if user_id.is_none() {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        }
+
+        user_id
+    } else if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+    };
+
+    if let Err(err) = RecordDao::db_delete(
+        ctx.dao().db(),
+        collection_data.id(),
+        path.record_id(),
+        &created_by,
+    )
+    .await
     {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
@@ -552,6 +720,45 @@ async fn find_many(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if let Some(user_claim) = token_claim.user() {
+        let collection_data =
+            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+        let user_data = match RecordDao::db_select(
+            ctx.dao().db(),
+            user_claim.id(),
+            &None,
+            &HashSet::from_iter(["_id"]),
+            &collection_data,
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        let mut user_id = None;
+        if let Some(id) = user_data.get("_id") {
+            if let ColumnValue::Uuid(id) = id {
+                if let Some(id) = id {
+                    user_id = Some(*id);
+                }
+            }
+        }
+
+        if user_id.is_none() {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        }
+
+        user_id
+    } else if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+    };
+
     let fields = match query_data.fields() {
         Some(origin_fields) => {
             let mut fields = HashSet::with_capacity(origin_fields.len());
@@ -615,6 +822,7 @@ async fn find_many(
         ctx.dao().db(),
         &fields,
         &collection_data,
+        &created_by,
         &filters,
         &groups,
         &orders,

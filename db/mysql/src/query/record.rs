@@ -99,6 +99,10 @@ pub fn select(record_table: &str, columns: &Vec<&str>) -> String {
     )
 }
 
+pub fn select_by_id_and_created_by(record_table: &str, columns: &Vec<&str>) -> String {
+    select(record_table, columns) + " AND `_created_by` = ?"
+}
+
 pub fn select_many(
     record_table: &str,
     columns: &Vec<&str>,

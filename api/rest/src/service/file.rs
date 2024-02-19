@@ -1,5 +1,6 @@
+use actix_files::NamedFile;
 use actix_multipart::form::MultipartForm;
-use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::{
     admin::AdminDao, bucket::BucketDao, file::FileDao, project::ProjectDao, token::TokenDao,
@@ -157,6 +158,7 @@ async fn insert_one(
 
 async fn find_one(
     ctx: web::Data<ApiRestCtx>,
+    req: HttpRequest,
     auth: BearerAuth,
     path: web::Path<FindOneFileReqPath>,
 ) -> HttpResponse {
@@ -225,19 +227,13 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
     }
 
-    Response::data(
-        &StatusCode::OK,
-        &None,
-        &FileResJson::new(
-            file_data.id(),
-            file_data.created_at(),
-            file_data.updated_at(),
-            file_data.bucket_id(),
-            file_data.file_name(),
-            &file_data.content_type().to_string(),
-            file_data.size(),
-        ),
-    )
+    let file =
+        match NamedFile::open_async(format!("{}/{}", ctx.bucket_path(), file_data.id())).await {
+            Ok(file) => file,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+    file.into_response(&req)
 }
 
 async fn update_one(

@@ -34,6 +34,7 @@ hb_mailer = { path = "./mailer" }
 hb_token_jwt = { path = "./token/jwt" }
 
 actix-cors = "0.7"
+actix-files = "0.6"
 actix-multipart = "0.6"
 actix-web = "4"
 actix-web-httpauth = "0.8"
@@ -41,8 +42,8 @@ ahash = "0.8"
 anyhow = "1"
 argon2 = "0.5"
 backtrace = "0.3"
-bigdecimal = "0.4"
-chrono = { version = "0.4", default-features = false }
+bigdecimal = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde"] }
 futures = "0.3"
 itertools = "0.12"
 jsonwebtoken = "9"
@@ -54,10 +55,10 @@ lettre = { version = "0.11", default-features = false, features = [
     "pool",
 ] }
 mime = "0.3"
-num-bigint = "0.4"
+num-bigint = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 rumqttc = "0.23"
-scylla = { version = "0.11" }
+scylla = { version = "0.12", features = ["num-bigint-04", "bigdecimal-04"] }
 serde = { version = "1", default-features = false }
 serde_json = { version = "1", default-features = false }
 serde_with = { version = "3", default-features = false }
@@ -69,12 +70,15 @@ sqlx = { version = "0.7", features = [
     "chrono",
     "bigdecimal",
     "json",
+    "postgres",
+    "mysql",
+    "sqlite",
 ] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-uuid = "1"
-validator = "0.16"
+uuid = { version = "1", features = ["v7", "fast-rng", "serde"] }
+validator = { version = "0.16", features = ["derive"] }
 
 
 [workspace.lints.rust]

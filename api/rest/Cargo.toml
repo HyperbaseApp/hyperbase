@@ -15,12 +15,13 @@ hb_mailer = { workspace = true }
 hb_token_jwt = { workspace = true }
 
 actix-cors = { workspace = true }
+actix-files = { workspace = true }
 actix-multipart = { workspace = true }
 actix-web = { workspace = true }
 actix-web-httpauth = { workspace = true }
 ahash = { workspace = true }
 anyhow = { workspace = true }
-chrono = { workspace = true, features = ["serde"] }
+chrono = { workspace = true }
 futures = { workspace = true }
 mime = { workspace = true }
 serde = { workspace = true }
@@ -28,7 +29,7 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
-validator = { workspace = true, features = ["derive"] }
+validator = { workspace = true }
 
 
 [lints]

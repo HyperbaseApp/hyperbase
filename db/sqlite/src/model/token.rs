@@ -131,7 +131,6 @@ pub struct TokenBucketRuleMethodModel {
     insert: bool,
     update: bool,
     delete: bool,
-    download_one: bool,
 }
 
 impl TokenBucketRuleMethodModel {
@@ -141,7 +140,6 @@ impl TokenBucketRuleMethodModel {
         insert: &bool,
         update: &bool,
         delete: &bool,
-        download_one: &bool,
     ) -> Self {
         Self {
             find_one: *find_one,
@@ -149,7 +147,6 @@ impl TokenBucketRuleMethodModel {
             insert: *insert,
             update: *update,
             delete: *delete,
-            download_one: *download_one,
         }
     }
 
@@ -171,9 +168,5 @@ impl TokenBucketRuleMethodModel {
 
     pub fn delete(&self) -> &bool {
         &self.delete
-    }
-
-    pub fn download_one(&self) -> &bool {
-        &self.download_one
     }
 }

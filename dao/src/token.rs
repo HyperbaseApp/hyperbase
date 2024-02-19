@@ -617,7 +617,6 @@ pub struct TokenBucketRuleMethod {
     insert: bool,
     update: bool,
     delete: bool,
-    download_one: bool,
 }
 
 impl TokenBucketRuleMethod {
@@ -627,7 +626,6 @@ impl TokenBucketRuleMethod {
         insert: &bool,
         update: &bool,
         delete: &bool,
-        download_one: &bool,
     ) -> Self {
         Self {
             find_one: *find_one,
@@ -635,7 +633,6 @@ impl TokenBucketRuleMethod {
             insert: *insert,
             update: *update,
             delete: *delete,
-            download_one: *download_one,
         }
     }
 
@@ -659,10 +656,6 @@ impl TokenBucketRuleMethod {
         &self.delete
     }
 
-    pub fn download_one(&self) -> &bool {
-        &self.download_one
-    }
-
     pub fn from_scylladb_model(model: &TokenBucketRuleMethodScyllaModel) -> Self {
         Self {
             find_one: *model.find_one(),
@@ -670,7 +663,6 @@ impl TokenBucketRuleMethod {
             insert: *model.insert(),
             update: *model.update(),
             delete: *model.delete(),
-            download_one: *model.download_one(),
         }
     }
 
@@ -681,7 +673,6 @@ impl TokenBucketRuleMethod {
             &self.insert,
             &self.update,
             &self.delete,
-            &self.download_one,
         )
     }
 
@@ -692,7 +683,6 @@ impl TokenBucketRuleMethod {
             insert: *model.insert(),
             update: *model.update(),
             delete: *model.delete(),
-            download_one: *model.download_one(),
         }
     }
 
@@ -703,7 +693,6 @@ impl TokenBucketRuleMethod {
             &self.insert,
             &self.update,
             &self.delete,
-            &self.download_one,
         )
     }
 
@@ -714,7 +703,6 @@ impl TokenBucketRuleMethod {
             insert: *model.insert(),
             update: *model.update(),
             delete: *model.delete(),
-            download_one: *model.download_one(),
         }
     }
 
@@ -725,7 +713,6 @@ impl TokenBucketRuleMethod {
             &self.insert,
             &self.update,
             &self.delete,
-            &self.download_one,
         )
     }
 
@@ -736,7 +723,6 @@ impl TokenBucketRuleMethod {
             insert: *model.insert(),
             update: *model.update(),
             delete: *model.delete(),
-            download_one: *model.download_one(),
         }
     }
 
@@ -747,7 +733,6 @@ impl TokenBucketRuleMethod {
             &self.insert,
             &self.update,
             &self.delete,
-            &self.download_one,
         )
     }
 }

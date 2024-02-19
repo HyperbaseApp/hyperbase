@@ -1,3 +1,4 @@
+use ahash::HashSet;
 use anyhow::{Error, Result};
 use hb_dao::{
     collection::CollectionDao,
@@ -9,12 +10,12 @@ use hb_dao::{
 
 use crate::{
     context::ApiMqttCtx,
-    model::payload::{Method, Payload},
+    model::payload::{MethodPayload, Payload},
 };
 
 pub async fn record_service(ctx: &ApiMqttCtx, payload: &Payload) {
     match payload.method() {
-        Method::InsertOne => match insert_one(ctx, payload).await {
+        MethodPayload::InsertOne => match insert_one(ctx, payload).await {
             Ok(_) => hb_log::info(None, "ApiMqttClient: Successfully insert one payload"),
             Err(err) => hb_log::error(None, err),
         },
@@ -71,7 +72,44 @@ async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
             }
         }
 
-        let mut record_data = RecordDao::new(collection_data.id(), &Some(data.len()));
+        let created_by = {
+            let collection_data =
+                match CollectionDao::db_select(ctx.dao().db(), payload.device().collection_id())
+                    .await
+                {
+                    Ok(data) => data,
+                    Err(err) => return Err(Error::msg(err.to_string())),
+                };
+            let record_data = match RecordDao::db_select(
+                ctx.dao().db(),
+                payload.device().id(),
+                &None,
+                &HashSet::from_iter(vec!["_id"]),
+                &collection_data,
+            )
+            .await
+            {
+                Ok(data) => data,
+                Err(err) => return Err(Error::msg(err.to_string())),
+            };
+
+            let mut device_id = None;
+            if let Some(id) = record_data.get("_id") {
+                if let ColumnValue::Uuid(id) = id {
+                    if let Some(id) = id {
+                        device_id = Some(*id)
+                    }
+                }
+            }
+
+            if let Some(device_id) = device_id {
+                device_id
+            } else {
+                return Err(Error::msg("Device doesn't found".to_owned()));
+            }
+        };
+
+        let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
         for (field_name, field_props) in collection_data.schema_fields() {
             if let Some(value) = data.get(field_name) {
                 if !value.is_null() {

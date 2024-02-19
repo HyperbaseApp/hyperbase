@@ -11,7 +11,7 @@ hb_log = { workspace = true }
 anyhow = { workspace = true }
 jsonwebtoken = { workspace = true }
 serde = { workspace = true }
-uuid = { workspace = true, features = ["serde"] }
+uuid = { workspace = true }
 
 
 [lints]
