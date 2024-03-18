@@ -7,12 +7,17 @@ use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct InsertOneTokenReqJson {
+    project_id: Uuid,
     bucket_rules: Option<HashMap<Uuid, TokenBucketRuleMethodJson>>,
     collection_rules: Option<HashMap<Uuid, TokenCollectionRuleMethodJson>>,
     expired_at: Option<DateTime<Utc>>,
 }
 
 impl InsertOneTokenReqJson {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+
     pub fn bucket_rules(&self) -> &Option<HashMap<Uuid, TokenBucketRuleMethodJson>> {
         &self.bucket_rules
     }
@@ -38,6 +43,17 @@ impl FindOneTokenReqPath {
 }
 
 #[derive(Deserialize)]
+pub struct FindOneTokenReqQuery {
+    project_id: Uuid,
+}
+
+impl FindOneTokenReqQuery {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+}
+
+#[derive(Deserialize)]
 pub struct UpdateOneTokenReqPath {
     token_id: Uuid,
 }
@@ -45,6 +61,17 @@ pub struct UpdateOneTokenReqPath {
 impl UpdateOneTokenReqPath {
     pub fn token_id(&self) -> &Uuid {
         &self.token_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateOneTokenReqQuery {
+    project_id: Uuid,
+}
+
+impl UpdateOneTokenReqQuery {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
     }
 }
 
@@ -81,6 +108,28 @@ pub struct DeleteOneTokenReqPath {
 impl DeleteOneTokenReqPath {
     pub fn token_id(&self) -> &Uuid {
         &self.token_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DeleteOneTokenReqQuery {
+    project_id: Uuid,
+}
+
+impl DeleteOneTokenReqQuery {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct FindManyTokenReqQuery {
+    project_id: Uuid,
+}
+
+impl FindManyTokenReqQuery {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
     }
 }
 

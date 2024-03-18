@@ -125,19 +125,10 @@ async fn insert_one(
     };
     let file_data = FileDao::new(path.bucket_id(), &file_name, &content_type, &size);
 
-    if let Err(err) = fs::copy(
-        form.file_path(),
-        &format!("{}/{}", ctx.bucket_path(), file_data.id()),
-    )
-    .await
+    if let Err(err) = file_data
+        .save(ctx.dao().db(), ctx.bucket_path(), form.file_path())
+        .await
     {
-        return Response::error_raw(
-            &StatusCode::INTERNAL_SERVER_ERROR,
-            &format!("Failed to save file to the bucket: {}", err),
-        );
-    }
-
-    if let Err(err) = file_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
@@ -406,7 +397,7 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    if let Err(err) = FileDao::db_delete(ctx.dao().db(), path.file_id()).await {
+    if let Err(err) = FileDao::delete(ctx.dao().db(), ctx.bucket_path(), path.file_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 

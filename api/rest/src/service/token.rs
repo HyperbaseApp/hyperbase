@@ -13,9 +13,10 @@ use crate::{
     context::ApiRestCtx,
     model::{
         token::{
-            DeleteOneTokenReqPath, DeleteTokenResJson, FindOneTokenReqPath, InsertOneTokenReqJson,
-            TokenBucketRuleMethodJson, TokenCollectionRuleMethodJson, TokenResJson,
-            UpdateOneTokenReqJson, UpdateOneTokenReqPath,
+            DeleteOneTokenReqPath, DeleteOneTokenReqQuery, DeleteTokenResJson,
+            FindManyTokenReqQuery, FindOneTokenReqPath, FindOneTokenReqQuery,
+            InsertOneTokenReqJson, TokenBucketRuleMethodJson, TokenCollectionRuleMethodJson,
+            TokenResJson, UpdateOneTokenReqJson, UpdateOneTokenReqPath, UpdateOneTokenReqQuery,
         },
         PaginationRes, Response,
     },
@@ -52,6 +53,18 @@ async fn insert_one(
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
+        );
+    }
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), data.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
         );
     }
 
@@ -134,7 +147,8 @@ async fn insert_one(
         }
     }
 
-    let token_data = TokenDao::new(
+    let token_data: TokenDao = TokenDao::new(
+        project_data.id(),
         token_claim.id(),
         ctx.access_token_length(),
         &data_bucket_rules,
@@ -183,6 +197,7 @@ async fn find_one(
     ctx: web::Data<ApiRestCtx>,
     auth: BearerAuth,
     path: web::Path<FindOneTokenReqPath>,
+    query: web::Query<FindOneTokenReqQuery>,
 ) -> HttpResponse {
     let token = auth.token();
 
@@ -202,6 +217,18 @@ async fn find_one(
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
+        );
+    }
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), query.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
         );
     }
 
@@ -252,6 +279,7 @@ async fn update_one(
     ctx: web::Data<ApiRestCtx>,
     auth: BearerAuth,
     path: web::Path<UpdateOneTokenReqPath>,
+    query: web::Query<UpdateOneTokenReqQuery>,
     data: web::Json<UpdateOneTokenReqJson>,
 ) -> HttpResponse {
     let token = auth.token();
@@ -272,6 +300,18 @@ async fn update_one(
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
+        );
+    }
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), query.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
         );
     }
 
@@ -402,6 +442,7 @@ async fn delete_one(
     ctx: web::Data<ApiRestCtx>,
     auth: BearerAuth,
     path: web::Path<DeleteOneTokenReqPath>,
+    query: web::Query<DeleteOneTokenReqQuery>,
 ) -> HttpResponse {
     let token = auth.token();
 
@@ -421,6 +462,18 @@ async fn delete_one(
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
+        );
+    }
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), query.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
         );
     }
 
@@ -444,7 +497,11 @@ async fn delete_one(
     )
 }
 
-async fn find_many(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
+async fn find_many(
+    ctx: web::Data<ApiRestCtx>,
+    auth: BearerAuth,
+    query: web::Query<FindManyTokenReqQuery>,
+) -> HttpResponse {
     let token = auth.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
@@ -463,6 +520,18 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
             &format!("Failed to get user data: {err}"),
+        );
+    }
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), query.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
         );
     }
 

@@ -11,6 +11,7 @@ pub struct BucketModel {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
+    path: String,
 }
 
 impl BucketModel {
@@ -20,6 +21,7 @@ impl BucketModel {
         updated_at: &DateTime<Utc>,
         project_id: &Uuid,
         name: &str,
+        path: &str,
     ) -> Self {
         Self {
             id: *id,
@@ -27,6 +29,7 @@ impl BucketModel {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_owned(),
+            path: path.to_owned(),
         }
     }
 
@@ -48,5 +51,9 @@ impl BucketModel {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
     }
 }

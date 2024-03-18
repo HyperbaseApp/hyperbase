@@ -32,6 +32,7 @@ pub struct TokenDao {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    project_id: Uuid,
     admin_id: Uuid,
     token: String,
     bucket_rules: HashMap<Uuid, TokenBucketRuleMethod>,
@@ -41,6 +42,7 @@ pub struct TokenDao {
 
 impl TokenDao {
     pub fn new(
+        project_id: &Uuid,
         admin_id: &Uuid,
         token_length: &usize,
         bucket_rules: &HashMap<Uuid, TokenBucketRuleMethod>,
@@ -52,6 +54,7 @@ impl TokenDao {
             id: Uuid::now_v7(),
             created_at: now,
             updated_at: now,
+            project_id: *project_id,
             admin_id: *admin_id,
             token: thread_rng()
                 .sample_iter(&Alphanumeric)
@@ -249,6 +252,7 @@ impl TokenDao {
             id: *model.id(),
             created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
             updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
+            project_id: *model.project_id(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
             bucket_rules: match model.bucket_rules() {
@@ -289,6 +293,7 @@ impl TokenDao {
             &self.id,
             &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
             &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &self.project_id,
             &self.admin_id,
             &self.token,
             &Some(
@@ -317,6 +322,7 @@ impl TokenDao {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
+            project_id: *model.project_id(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
             bucket_rules: model
@@ -348,6 +354,7 @@ impl TokenDao {
             &self.id,
             &self.created_at,
             &self.updated_at,
+            &self.project_id,
             &self.admin_id,
             &self.token,
             &sqlx::types::Json(
@@ -375,6 +382,7 @@ impl TokenDao {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
+            project_id: *model.project_id(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
             bucket_rules: model
@@ -406,6 +414,7 @@ impl TokenDao {
             &self.id,
             &self.created_at,
             &self.updated_at,
+            &self.project_id,
             &self.admin_id,
             &self.token,
             &sqlx::types::Json(
@@ -431,6 +440,7 @@ impl TokenDao {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
+            project_id: *model.project_id(),
             admin_id: *model.admin_id(),
             token: model.token().to_owned(),
             bucket_rules: model
@@ -462,6 +472,7 @@ impl TokenDao {
             &self.id,
             &self.created_at,
             &self.updated_at,
+            &self.project_id,
             &self.admin_id,
             &self.token,
             &sqlx::types::Json(

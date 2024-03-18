@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -8,6 +8,7 @@ use hb_db_scylladb::model::file::FileModel as FileScyllaModel;
 use hb_db_sqlite::model::file::FileModel as FileSqliteModel;
 use mime::Mime;
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
+use tokio::fs;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -69,7 +70,19 @@ impl FileDao {
         self.file_name = file_name.to_owned();
     }
 
-    pub async fn db_insert(&self, db: &Db) -> Result<()> {
+    pub async fn save(&self, db: &Db, bucket_path: &str, path: impl AsRef<Path>) -> Result<()> {
+        fs::copy(path, &format!("{}/{}", bucket_path, &self.id)).await?;
+
+        self.db_insert(db).await
+    }
+
+    pub async fn delete(db: &Db, bucket_path: &str, id: &Uuid) -> Result<()> {
+        fs::remove_file(&format!("{}/{}", bucket_path, id)).await?;
+
+        Self::db_delete(db, id).await
+    }
+
+    async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => db.insert_file(&self.to_scylladb_model()).await,
             Db::PostgresqlDb(db) => db.insert_file(&self.to_postgresdb_model()).await,
@@ -134,7 +147,7 @@ impl FileDao {
         }
     }
 
-    pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
+    async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => db.delete_file(id).await,
             Db::PostgresqlDb(db) => db.delete_file(id).await,

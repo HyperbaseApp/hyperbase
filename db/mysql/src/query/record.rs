@@ -8,7 +8,7 @@ pub fn create_table(
     columns: &HashMap<String, SchemaFieldPropsModel>,
 ) -> String {
     format!(
-        "CREATE TABLE IF NOT EXISTS `{}` (`_id` binary(16), {}, PRIMARY KEY (`_id`)) ",
+        "CREATE TABLE IF NOT EXISTS `{}` (`_id` binary(16), `_created_by` binary(16), {}, PRIMARY KEY (`_id`)) ",
         record_table,
         columns
             .iter()

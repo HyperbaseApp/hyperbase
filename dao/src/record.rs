@@ -382,29 +382,22 @@ impl RecordDao {
                 let table_name = Self::new_table_name(collection_data.id());
 
                 let mut columns;
-                let mut columns_props;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-                    columns_props = Vec::with_capacity(fields.len());
 
                     for column in fields {
-                        columns.push(*column);
-                        if let Some(column_props) = collection_data.schema_fields().get(*column) {
-                            columns_props.push(*column_props)
+                        if collection_data.schema_fields().get(*column).is_some() {
+                            columns.push(*column);
                         }
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns_props = Vec::with_capacity(collection_data.schema_fields().len() + 2);
 
-                    columns.push("_id");
-                    columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
-                    columns.push("_created_by");
-                    columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
-
-                    for (column, props) in collection_data.schema_fields() {
+                    for column in ["_id", "_created_by"] {
                         columns.push(column);
-                        columns_props.push(*props)
+                    }
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
                     }
                 }
 
@@ -413,18 +406,27 @@ impl RecordDao {
 
                 let mut data = HashMap::with_capacity(scylladb_data.len());
                 for (idx, value) in scylladb_data.iter().enumerate() {
+                    let kind;
+                    if ["_id", "_created_by"].contains(&columns[idx]) {
+                        kind = &ColumnKind::Uuid;
+                    } else {
+                        kind = collection_data
+                            .schema_fields()
+                            .get(columns[idx])
+                            .ok_or_else(|| {
+                                Error::msg(format!(
+                                    "Field {} is not found in the collection",
+                                    columns[idx]
+                                ))
+                            })?
+                            .kind();
+                    }
                     match value {
-                        Some(value) => {
-                            match ColumnValue::from_scylladb_model(columns_props[idx].kind(), value)
-                            {
-                                Ok(value) => data.insert(columns[idx].to_owned(), value),
-                                Err(err) => return Err(err.into()),
-                            }
-                        }
-                        None => data.insert(
-                            columns[idx].to_owned(),
-                            ColumnValue::none(columns_props[idx].kind()),
-                        ),
+                        Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
+                            Ok(value) => data.insert(columns[idx].to_owned(), value),
+                            Err(err) => return Err(err.into()),
+                        },
+                        None => data.insert(columns[idx].to_owned(), ColumnValue::none(kind)),
                     };
                 }
 
@@ -433,28 +435,41 @@ impl RecordDao {
             Db::PostgresqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id");
-                for column in collection_data.schema_fields().keys() {
-                    columns.push(column);
+                let mut columns;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+
+                    for column in fields {
+                        columns.push(*column);
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
+                    }
                 }
 
                 let postgresdb_data =
                     Self::postgresdb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(columns.len());
-                data.insert(
-                    "_id".to_owned(),
-                    ColumnValue::from_postgresdb_model(&ColumnKind::Uuid, "_id", &postgresdb_data)?,
-                );
-                for (field, field_props) in collection_data.schema_fields() {
+                for column in columns {
+                    let kind;
+                    if ["_id", "_created_by"].contains(&column) {
+                        kind = &ColumnKind::Uuid;
+                    } else {
+                        kind = collection_data
+                            .schema_fields()
+                            .get(column)
+                            .ok_or_else(|| {
+                                Error::msg(format!("Field {column} is not found in the collection"))
+                            })?
+                            .kind();
+                    }
                     data.insert(
-                        field.to_owned(),
-                        ColumnValue::from_postgresdb_model(
-                            field_props.kind(),
-                            field,
-                            &postgresdb_data,
-                        )?,
+                        column.to_owned(),
+                        ColumnValue::from_postgresdb_model(kind, column, &postgresdb_data)?,
                     );
                 }
 
@@ -463,24 +478,41 @@ impl RecordDao {
             Db::MysqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id");
-                for column in collection_data.schema_fields().keys() {
-                    columns.push(column);
+                let mut columns;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+
+                    for column in fields {
+                        columns.push(*column)
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
+                    }
                 }
 
                 let mysqldb_data =
                     Self::mysqldb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(columns.len());
-                data.insert(
-                    "_id".to_owned(),
-                    ColumnValue::from_mysqldb_model(&ColumnKind::Uuid, "_id", &mysqldb_data)?,
-                );
-                for (field, field_props) in collection_data.schema_fields() {
+                for column in columns {
+                    let kind;
+                    if ["_id", "_created_by"].contains(&column) {
+                        kind = &ColumnKind::Uuid;
+                    } else {
+                        kind = collection_data
+                            .schema_fields()
+                            .get(column)
+                            .ok_or_else(|| {
+                                Error::msg(format!("Field {column} is not found in the collection"))
+                            })?
+                            .kind();
+                    }
                     data.insert(
-                        field.to_owned(),
-                        ColumnValue::from_mysqldb_model(field_props.kind(), field, &mysqldb_data)?,
+                        column.to_owned(),
+                        ColumnValue::from_mysqldb_model(kind, column, &mysqldb_data)?,
                     );
                 }
 
@@ -489,28 +521,41 @@ impl RecordDao {
             Db::SqliteDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id");
-                for column in collection_data.schema_fields().keys() {
-                    columns.push(column);
+                let mut columns;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+
+                    for column in fields {
+                        columns.push(*column);
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
+                    }
                 }
 
                 let sqlitedb_data =
                     Self::sqlitedb_select(db, &table_name, &columns, id, created_by).await?;
 
                 let mut data = HashMap::with_capacity(columns.len());
-                data.insert(
-                    "_id".to_owned(),
-                    ColumnValue::from_sqlitedb_model(&ColumnKind::Uuid, "_id", &sqlitedb_data)?,
-                );
-                for (field, field_props) in collection_data.schema_fields() {
+                for column in columns {
+                    let kind;
+                    if ["_id", "_created_by"].contains(&column) {
+                        kind = &ColumnKind::Uuid;
+                    } else {
+                        kind = collection_data
+                            .schema_fields()
+                            .get(column)
+                            .ok_or_else(|| {
+                                Error::msg(format!("Field {column} is not found in the collection"))
+                            })?
+                            .kind();
+                    }
                     data.insert(
-                        field.to_owned(),
-                        ColumnValue::from_sqlitedb_model(
-                            field_props.kind(),
-                            field,
-                            &sqlitedb_data,
-                        )?,
+                        column.to_owned(),
+                        ColumnValue::from_sqlitedb_model(kind, column, &sqlitedb_data)?,
                     );
                 }
 
@@ -534,27 +579,23 @@ impl RecordDao {
                 let table_name = Self::new_table_name(collection_data.id());
 
                 let mut columns;
-                let mut columns_props;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-                    columns_props = Vec::with_capacity(fields.len());
 
                     for column in fields {
-                        columns.push(*column);
-                        if let Some(column_props) = collection_data.schema_fields().get(*column) {
-                            columns_props.push(*column_props)
+                        if collection_data.schema_fields().get(*column).is_some() {
+                            columns.push(*column);
                         }
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                    columns_props = Vec::with_capacity(collection_data.schema_fields().len() + 1);
 
-                    columns.push("_id");
-                    columns_props.push(SchemaFieldProps::new(&ColumnKind::Uuid, &true));
-
-                    for (column, props) in collection_data.schema_fields() {
+                    for column in ["_id", "_created_by"] {
                         columns.push(column);
-                        columns_props.push(*props)
+                    }
+
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
                     }
                 }
 
@@ -573,18 +614,27 @@ impl RecordDao {
                 for scylladb_data in scylladb_data_many {
                     let mut data = HashMap::with_capacity(scylladb_data.len());
                     for (idx, value) in scylladb_data.iter().enumerate() {
+                        let kind;
+                        if ["_id", "_created_by"].contains(&columns[idx]) {
+                            kind = &ColumnKind::Uuid;
+                        } else {
+                            kind = collection_data
+                                .schema_fields()
+                                .get(columns[idx])
+                                .ok_or_else(|| {
+                                    Error::msg(format!(
+                                        "Field {} is not found in the collection",
+                                        columns[idx]
+                                    ))
+                                })?
+                                .kind();
+                        }
                         match value {
-                            Some(value) => match ColumnValue::from_scylladb_model(
-                                columns_props[idx].kind(),
-                                value,
-                            ) {
+                            Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
                                 Ok(value) => data.insert(columns[idx].to_owned(), value),
                                 Err(err) => return Err(err.into()),
                             },
-                            None => data.insert(
-                                columns[idx].to_owned(),
-                                ColumnValue::none(columns_props[idx].kind()),
-                            ),
+                            None => data.insert(columns[idx].to_owned(), ColumnValue::none(kind)),
                         };
                     }
                     if let Some(created_by) = created_by {
@@ -609,10 +659,19 @@ impl RecordDao {
             Db::PostgresqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id");
-                for column in collection_data.schema_fields().keys() {
-                    columns.push(column);
+                let mut columns;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+
+                    for column in fields {
+                        columns.push(*column);
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
+                    }
                 }
 
                 let (postgres_data_many, total) = Self::postgresdb_select_many(
@@ -630,22 +689,24 @@ impl RecordDao {
                 let mut data_many = Vec::with_capacity(postgres_data_many.len());
                 for postgres_data in &postgres_data_many {
                     let mut data = HashMap::with_capacity(columns.len());
-                    data.insert(
-                        "_id".to_owned(),
-                        ColumnValue::from_postgresdb_model(
-                            &ColumnKind::Uuid,
-                            "_id",
-                            postgres_data,
-                        )?,
-                    );
-                    for (field, field_props) in collection_data.schema_fields() {
+                    for column in &columns {
+                        let kind;
+                        if ["_id", "_created_by"].contains(&column) {
+                            kind = &ColumnKind::Uuid;
+                        } else {
+                            kind = collection_data
+                                .schema_fields()
+                                .get(*column)
+                                .ok_or_else(|| {
+                                    Error::msg(format!(
+                                        "Field {column} is not found in the collection"
+                                    ))
+                                })?
+                                .kind();
+                        }
                         data.insert(
-                            field.to_owned(),
-                            ColumnValue::from_postgresdb_model(
-                                field_props.kind(),
-                                field,
-                                postgres_data,
-                            )?,
+                            column.to_string(),
+                            ColumnValue::from_postgresdb_model(kind, column, &postgres_data)?,
                         );
                     }
                     data_many.push(Self {
@@ -659,10 +720,19 @@ impl RecordDao {
             Db::MysqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id");
-                for column in collection_data.schema_fields().keys() {
-                    columns.push(column);
+                let mut columns;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+
+                    for column in fields {
+                        columns.push(*column);
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
+                    }
                 }
 
                 let (mysql_data_many, total) = Self::mysqldb_select_many(
@@ -679,16 +749,25 @@ impl RecordDao {
 
                 let mut data_many = Vec::with_capacity(mysql_data_many.len());
                 for mysql_data in &mysql_data_many {
-                    let mut data: std::collections::HashMap<_, _, ahash::RandomState> =
-                        HashMap::with_capacity(columns.len());
-                    data.insert(
-                        "_id".to_owned(),
-                        ColumnValue::from_mysqldb_model(&ColumnKind::Uuid, "_id", mysql_data)?,
-                    );
-                    for (field, field_props) in collection_data.schema_fields() {
+                    let mut data = HashMap::with_capacity(columns.len());
+                    for column in &columns {
+                        let kind;
+                        if ["_id", "_created_by"].contains(&column) {
+                            kind = &ColumnKind::Uuid;
+                        } else {
+                            kind = collection_data
+                                .schema_fields()
+                                .get(*column)
+                                .ok_or_else(|| {
+                                    Error::msg(format!(
+                                        "Field {column} is not found in the collection"
+                                    ))
+                                })?
+                                .kind();
+                        }
                         data.insert(
-                            field.to_owned(),
-                            ColumnValue::from_mysqldb_model(field_props.kind(), field, mysql_data)?,
+                            column.to_string(),
+                            ColumnValue::from_mysqldb_model(kind, column, &mysql_data)?,
                         );
                     }
                     data_many.push(Self {
@@ -702,10 +781,19 @@ impl RecordDao {
             Db::SqliteDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
-                let mut columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-                columns.push("_id");
-                for column in collection_data.schema_fields().keys() {
-                    columns.push(column);
+                let mut columns;
+                if fields.len() > 0 {
+                    columns = Vec::with_capacity(fields.len());
+
+                    for column in fields {
+                        columns.push(*column);
+                    }
+                } else {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
+                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    for column in collection_data.schema_fields().keys() {
+                        columns.push(column);
+                    }
                 }
 
                 let (sqlite_data_many, total) = Self::sqlitedb_select_many(
@@ -722,20 +810,25 @@ impl RecordDao {
 
                 let mut data_many = Vec::with_capacity(sqlite_data_many.len());
                 for sqlite_data in &sqlite_data_many {
-                    let mut data: std::collections::HashMap<_, _, ahash::RandomState> =
-                        HashMap::with_capacity(columns.len());
-                    data.insert(
-                        "_id".to_owned(),
-                        ColumnValue::from_sqlitedb_model(&ColumnKind::Uuid, "_id", sqlite_data)?,
-                    );
-                    for (field, field_props) in collection_data.schema_fields() {
+                    let mut data = HashMap::with_capacity(columns.len());
+                    for column in &columns {
+                        let kind;
+                        if ["_id", "_created_by"].contains(&column) {
+                            kind = &ColumnKind::Uuid;
+                        } else {
+                            kind = collection_data
+                                .schema_fields()
+                                .get(*column)
+                                .ok_or_else(|| {
+                                    Error::msg(format!(
+                                        "Field {column} is not found in the collection"
+                                    ))
+                                })?
+                                .kind();
+                        }
                         data.insert(
-                            field.to_owned(),
-                            ColumnValue::from_sqlitedb_model(
-                                field_props.kind(),
-                                field,
-                                sqlite_data,
-                            )?,
+                            column.to_string(),
+                            ColumnValue::from_sqlitedb_model(kind, column, &sqlite_data)?,
                         );
                     }
                     data_many.push(Self {

@@ -4,16 +4,16 @@ use uuid::Uuid;
 
 use crate::{db::PostgresDb, model::token::TokenModel};
 
-const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = $1";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = $1";
+const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = $1";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = $1";
 const UPDATE: &str = "UPDATE \"tokens\" SET \"updated_at\" = $1, \"bucket_rules\" = $2, \"collection_rules\" = $3, \"expired_at\" = $4 WHERE \"id\" = $5";
 const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up tokens table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"admin_id\" uuid, \"token\" text, \"bucket_rules\" jsonb, \"collection_rules\" jsonb, \"expired_at\" timestamptz, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"admin_id\" uuid, \"token\" text, \"bucket_rules\" jsonb, \"collection_rules\" jsonb, \"expired_at\" timestamptz, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
@@ -29,6 +29,7 @@ impl PostgresDb {
                 .bind(value.id())
                 .bind(value.created_at())
                 .bind(value.updated_at())
+                .bind(value.project_id())
                 .bind(value.admin_id())
                 .bind(value.token())
                 .bind(value.bucket_rules())

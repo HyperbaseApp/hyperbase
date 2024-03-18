@@ -71,7 +71,7 @@ async fn insert_one(
         );
     }
 
-    let bucket_data = BucketDao::new(project_data.id(), data.name());
+    let bucket_data = BucketDao::new(project_data.id(), ctx.bucket_path(), data.name());
 
     if let Err(err) = bucket_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());

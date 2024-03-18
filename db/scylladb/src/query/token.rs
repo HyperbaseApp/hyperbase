@@ -4,9 +4,9 @@ use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::token::TokenModel};
 
-const INSERT: &str = "INSERT INTO \"hyperbase\".\"tokens\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"admin_id\" = ?";
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"tokens\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"admin_id\" = ?";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"tokens\" SET \"updated_at\" = ?, \"bucket_rules\" = ?, \"collection_rules\" = ?, \"expired_at\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 
@@ -15,7 +15,7 @@ pub async fn init(cached_session: &CachingSession) {
 
     cached_session.get_session().query("CREATE TYPE IF NOT EXISTS \"hyperbase\".\"token_bucket_rules\" (\"find_one\" boolean, \"find_many\" boolean, \"insert\" boolean, \"update\" boolean, \"delete\" boolean)", &[]).await.unwrap();
     cached_session.get_session().query("CREATE TYPE IF NOT EXISTS \"hyperbase\".\"token_collection_rules\" (\"find_one\" boolean, \"find_many\" boolean, \"insert\" boolean, \"update\" boolean, \"delete\" boolean)", &[]).await.unwrap();
-    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"tokens\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"token\" text, \"bucket_rules\" map<uuid, frozen<token_bucket_rules>>, \"collection_rules\" map<uuid, frozen<token_collection_rules>>, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
+    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"tokens\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"admin_id\" uuid, \"token\" text, \"bucket_rules\" map<uuid, frozen<token_bucket_rules>>, \"collection_rules\" map<uuid, frozen<token_collection_rules>>, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
     cached_session
         .get_session()
         .query(

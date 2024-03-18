@@ -7,7 +7,7 @@ use hb_db_sqlite::model::project::ProjectModel as ProjectSqliteModel;
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{util::conversion, Db};
+use crate::{bucket::BucketDao, collection::CollectionDao, util::conversion, Db};
 
 pub struct ProjectDao {
     id: Uuid,
@@ -119,6 +119,16 @@ impl ProjectDao {
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
+        let collections_data = CollectionDao::db_select_many_by_project_id(db, id).await?;
+        for collection_data in &collections_data {
+            CollectionDao::db_delete(db, collection_data.id()).await?;
+        }
+
+        let buckets_data = BucketDao::db_select_many_by_project_id(db, id).await?;
+        for bucket_data in &buckets_data {
+            BucketDao::db_delete(db, bucket_data.id()).await?;
+        }
+
         match db {
             Db::ScyllaDb(db) => db.delete_project(id).await,
             Db::PostgresqlDb(db) => db.delete_project(id).await,

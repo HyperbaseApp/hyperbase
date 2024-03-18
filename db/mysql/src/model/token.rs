@@ -14,6 +14,7 @@ pub struct TokenModel {
     id: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    project_id: Uuid,
     admin_id: Uuid,
     token: String,
     bucket_rules: Json<HashMap<Uuid, TokenBucketRuleMethodModel>>,
@@ -26,6 +27,7 @@ impl TokenModel {
         id: &Uuid,
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
+        project_id: &Uuid,
         admin_id: &Uuid,
         token: &str,
         bucket_rules: &Json<HashMap<Uuid, TokenBucketRuleMethodModel>>,
@@ -36,6 +38,7 @@ impl TokenModel {
             id: *id,
             created_at: *created_at,
             updated_at: *updated_at,
+            project_id: *project_id,
             admin_id: *admin_id,
             token: token.to_owned(),
             bucket_rules: bucket_rules.clone(),
@@ -54,6 +57,10 @@ impl TokenModel {
 
     pub fn updated_at(&self) -> &DateTime<Utc> {
         &self.updated_at
+    }
+
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
     }
 
     pub fn admin_id(&self) -> &Uuid {

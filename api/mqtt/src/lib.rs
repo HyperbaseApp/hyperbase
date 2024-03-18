@@ -3,6 +3,7 @@ use context::ApiMqttCtx;
 use model::payload::Payload;
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use service::record::record_service;
+use uuid::Uuid;
 
 pub mod context;
 mod model;
@@ -38,7 +39,11 @@ impl ApiMqttClient {
     pub async fn run(&self) -> Result<()> {
         hb_log::info(Some("💫"), "ApiMqttClient: Running component");
 
-        let mqtt_opts = MqttOptions::new("rumqtt-async", &self.host, self.port);
+        let mqtt_opts = MqttOptions::new(
+            format!("hyperbase-{}", Uuid::now_v7()),
+            &self.host,
+            self.port,
+        );
 
         let (client, mut eventloop) = AsyncClient::new(mqtt_opts, self.channel_capacity);
         client

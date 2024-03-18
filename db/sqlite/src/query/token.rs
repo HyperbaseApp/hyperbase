@@ -4,16 +4,16 @@ use uuid::Uuid;
 
 use crate::{db::SqliteDb, model::token::TokenModel};
 
-const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = ?";
+const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"token\", \"bucket_rules\", \"collection_rules\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = ?";
 const UPDATE: &str = "UPDATE \"tokens\" SET \"updated_at\" = ?, \"bucket_rules\" = ?, \"collection_rules\" = ?, \"expired_at\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "SQLite: Setting up tokens table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" blob, \"created_at\" datetime, \"updated_at\" datetime, \"admin_id\" blob, \"token\" text, \"bucket_rules\" blob, \"collection_rules\" blob, \"expired_at\" datetime, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" blob, \"created_at\" datetime, \"updated_at\" datetime, \"project_id\" blob, \"admin_id\" blob, \"token\" text, \"bucket_rules\" blob, \"collection_rules\" blob, \"expired_at\" datetime, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
@@ -29,6 +29,7 @@ impl SqliteDb {
                 .bind(value.id())
                 .bind(value.created_at())
                 .bind(value.updated_at())
+                .bind(value.project_id())
                 .bind(value.admin_id())
                 .bind(value.token())
                 .bind(value.bucket_rules())

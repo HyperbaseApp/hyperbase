@@ -7,7 +7,7 @@ use hb_db_sqlite::model::bucket::BucketModel as BucketSqliteModel;
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{util::conversion, Db};
+use crate::{file::FileDao, util::conversion, Db};
 
 pub struct BucketDao {
     id: Uuid,
@@ -15,10 +15,11 @@ pub struct BucketDao {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
+    path: String,
 }
 
 impl BucketDao {
-    pub fn new(project_id: &Uuid, name: &str) -> Self {
+    pub fn new(project_id: &Uuid, name: &str, path: &str) -> Self {
         let now = Utc::now();
 
         Self {
@@ -27,6 +28,7 @@ impl BucketDao {
             updated_at: now,
             project_id: *project_id,
             name: name.to_owned(),
+            path: path.to_owned(),
         }
     }
 
@@ -48,6 +50,10 @@ impl BucketDao {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn path(&self) -> &str {
+        &self.path
     }
 
     pub fn set_name(&mut self, name: &str) {
@@ -120,6 +126,13 @@ impl BucketDao {
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
+        let bucket_data = Self::db_select(db, id).await?;
+
+        let files_data = FileDao::db_select_many_by_bucket_id(db, id).await?;
+        for file_data in &files_data {
+            FileDao::delete(db, &bucket_data.path, file_data.id()).await?;
+        }
+
         match db {
             Db::ScyllaDb(db) => db.delete_project(id).await,
             Db::PostgresqlDb(db) => db.delete_project(id).await,
@@ -135,6 +148,7 @@ impl BucketDao {
             updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             project_id: *model.project_id(),
             name: model.name().to_owned(),
+            path: model.path().to_owned(),
         })
     }
 
@@ -145,6 +159,7 @@ impl BucketDao {
             &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.project_id,
             &self.name,
+            &self.path,
         )
     }
 
@@ -155,6 +170,7 @@ impl BucketDao {
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             name: model.name().to_owned(),
+            path: model.path().to_owned(),
         }
     }
 
@@ -165,6 +181,7 @@ impl BucketDao {
             &self.updated_at,
             &self.project_id,
             &self.name,
+            &self.path,
         )
     }
 
@@ -175,6 +192,7 @@ impl BucketDao {
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             name: model.name().to_owned(),
+            path: model.path().to_owned(),
         }
     }
 
@@ -185,6 +203,7 @@ impl BucketDao {
             &self.updated_at,
             &self.project_id,
             &self.name,
+            &self.path,
         )
     }
 
@@ -195,6 +214,7 @@ impl BucketDao {
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             name: model.name().to_owned(),
+            path: model.path().to_owned(),
         }
     }
 
@@ -205,6 +225,7 @@ impl BucketDao {
             &self.updated_at,
             &self.project_id,
             &self.name,
+            &self.path,
         )
     }
 }

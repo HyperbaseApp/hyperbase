@@ -7,7 +7,7 @@ use hb_db_sqlite::model::admin::AdminModel as AdminSqliteModel;
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{util::conversion, Db};
+use crate::{project::ProjectDao, util::conversion, Db};
 
 pub struct AdminDao {
     id: Uuid,
@@ -101,6 +101,11 @@ impl AdminDao {
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
+        let projects_data = ProjectDao::db_select_many_by_admin_id(db, id).await?;
+        for project_data in &projects_data {
+            ProjectDao::db_delete(db, project_data.id()).await?;
+        }
+
         match db {
             Db::ScyllaDb(db) => db.delete_admin(id).await,
             Db::PostgresqlDb(db) => db.delete_admin(id).await,

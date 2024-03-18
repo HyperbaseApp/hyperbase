@@ -9,7 +9,7 @@ pub enum ColumnKind {
     Real,
     Text,
     Blob,
-    Datetime,
+    Timestamp,
     Date,
     Time,
 }
@@ -24,7 +24,7 @@ impl ColumnKind {
             Self::Real => "real",
             Self::Text => "text",
             Self::Blob => "blob",
-            Self::Datetime => "datetime",
+            Self::Timestamp => "timestamp",
             Self::Date => "date",
             Self::Time => "time",
         }
@@ -39,7 +39,7 @@ impl ColumnKind {
             "real" => Ok(Self::Real),
             "text" => Ok(Self::Text),
             "blob" => Ok(Self::Blob),
-            "datetime" => Ok(Self::Datetime),
+            "timestamp" => Ok(Self::Timestamp),
             "date" => Ok(Self::Date),
             "time" => Ok(Self::Time),
             _ => Err(format!("Unknown schema field kind '{str}'")),

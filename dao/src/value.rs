@@ -15,11 +15,12 @@ use scylla::{
     serialize::value::SerializeCql as ScyllaSerializeCql,
 };
 use serde::Serialize;
+use strum_macros::EnumIter;
 use uuid::Uuid;
 
 use crate::util::conversion;
 
-#[derive(Serialize, PartialEq, Clone, Copy)]
+#[derive(Serialize, EnumIter, PartialEq, Clone, Copy)]
 pub enum ColumnKind {
     Boolean,   // boolean
     TinyInt,   // 8-bit signed int
@@ -35,7 +36,6 @@ pub enum ColumnKind {
     Uuid,      // A UUID (of any version)
     Date,      // A date (with no corresponding time value)
     Time,      // A time (with no corresponding date value)
-    DateTime,  // A datetime
     Timestamp, // A timestamp (date and time)
     Json,      // A json data format
 }
@@ -57,7 +57,6 @@ impl ColumnKind {
             Self::Uuid => "uuid",
             Self::Date => "date",
             Self::Time => "time",
-            Self::DateTime => "datetime",
             Self::Timestamp => "timestamp",
             Self::Json => "json",
         }
@@ -79,7 +78,6 @@ impl ColumnKind {
             "uuid" => Ok(Self::Uuid),
             "date" => Ok(Self::Date),
             "time" => Ok(Self::Time),
-            "datetime" => Ok(Self::DateTime),
             "timestamp" => Ok(Self::Timestamp),
             "json" => Ok(Self::Json),
             _ => Err(Error::msg(format!("Unknown schema field kind '{str}'"))),
@@ -102,7 +100,7 @@ impl ColumnKind {
             Self::Uuid => ColumnKindScylla::Uuid,
             Self::Date => ColumnKindScylla::Date,
             Self::Time => ColumnKindScylla::Time,
-            Self::DateTime | Self::Timestamp => ColumnKindScylla::Timestamp,
+            Self::Timestamp => ColumnKindScylla::Timestamp,
         }
     }
 
@@ -122,7 +120,7 @@ impl ColumnKind {
             Self::Uuid => ColumnKindPostgres::Uuid,
             Self::Date => ColumnKindPostgres::Date,
             Self::Time => ColumnKindPostgres::Time,
-            Self::DateTime | Self::Timestamp => ColumnKindPostgres::Timestamptz,
+            Self::Timestamp => ColumnKindPostgres::Timestamptz,
             Self::Json => ColumnKindPostgres::Jsonb,
         }
     }
@@ -141,7 +139,6 @@ impl ColumnKind {
             Self::Uuid => ColumnKindMysql::Binary16,
             Self::Date => ColumnKindMysql::Date,
             Self::Time => ColumnKindMysql::Time,
-            Self::DateTime => ColumnKindMysql::Datetime,
             Self::Timestamp => ColumnKindMysql::Timestamp,
             Self::Json => ColumnKindMysql::Json,
         }
@@ -159,7 +156,7 @@ impl ColumnKind {
             Self::String => ColumnKindSqlite::Text,
             Self::Date => ColumnKindSqlite::Date,
             Self::Time => ColumnKindSqlite::Time,
-            Self::DateTime | Self::Timestamp => ColumnKindSqlite::Datetime,
+            Self::Timestamp => ColumnKindSqlite::Timestamp,
         }
     }
 }
@@ -180,7 +177,6 @@ pub enum ColumnValue {
     Uuid(Option<Uuid>),
     Date(Option<NaiveDate>),
     Time(Option<NaiveTime>),
-    DateTime(Option<DateTime<Utc>>),
     Timestamp(Option<DateTime<Utc>>),
     Json(Option<String>),
 }
@@ -202,7 +198,6 @@ impl ColumnValue {
             ColumnKind::Uuid => Self::Uuid(None),
             ColumnKind::Date => Self::Date(None),
             ColumnKind::Time => Self::Time(None),
-            ColumnKind::DateTime => Self::DateTime(None),
             ColumnKind::Timestamp => Self::Timestamp(None),
             ColumnKind::Json => Self::Json(None),
         }
@@ -269,10 +264,6 @@ impl ColumnValue {
                 Some(data) => data.to_string().into_bytes(),
                 None => Vec::new(),
             },
-            ColumnValue::DateTime(data) => match data {
-                Some(data) => data.to_string().into_bytes(),
-                None => Vec::new(),
-            },
             ColumnValue::Timestamp(data) => match data {
                 Some(data) => data.to_string().into_bytes(),
                 None => Vec::new(),
@@ -329,9 +320,6 @@ impl ColumnValue {
             ColumnKind::Time => Ok(Self::Time(Some(NaiveTime::from_str(std::str::from_utf8(
                 data,
             )?)?))),
-            ColumnKind::DateTime => Ok(Self::DateTime(Some(DateTime::from_str(
-                std::str::from_utf8(data)?,
-            )?))),
             ColumnKind::Timestamp => Ok(Self::Timestamp(Some(DateTime::from_str(
                 std::str::from_utf8(data)?,
             )?))),
@@ -412,10 +400,6 @@ impl ColumnValue {
                 },
                 ColumnKind::Time => match NaiveTime::parse_from_str(value, "%H:%M:%S%.f") {
                     Ok(time) => Ok(Self::Time(Some(time))),
-                    Err(err) => Err(err.into()),
-                },
-                ColumnKind::DateTime => match DateTime::parse_from_rfc3339(value) {
-                    Ok(datetime) => Ok(Self::DateTime(Some(datetime.with_timezone(&Utc)))),
                     Err(err) => Err(err.into()),
                 },
                 ColumnKind::Timestamp => match DateTime::parse_from_rfc3339(value) {
@@ -507,10 +491,6 @@ impl ColumnValue {
                 Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
             },
-            Self::DateTime(data) => match data {
-                Some(data) => Ok(serde_json::json!(data)),
-                None => Ok(serde_json::Value::Null),
-            },
             Self::Timestamp(data) => match data {
                 Some(data) => Ok(serde_json::json!(data)),
                 None => Ok(serde_json::Value::Null),
@@ -565,11 +545,7 @@ impl ColumnValue {
                 Some(value) => Some(conversion::scylla_cql_time_to_naivetime(&value)?),
                 None => None,
             })),
-            ColumnKind::DateTime => Ok(Self::DateTime(match value.as_cql_timestamp() {
-                Some(value) => Some(conversion::scylla_cql_timestamp_to_datetime_utc(&value)?),
-                None => None,
-            })),
-            ColumnKind::Timestamp => Ok(Self::DateTime(match value.as_cql_timestamp() {
+            ColumnKind::Timestamp => Ok(Self::Timestamp(match value.as_cql_timestamp() {
                 Some(value) => Some(conversion::scylla_cql_timestamp_to_datetime_utc(&value)?),
                 None => None,
             })),
@@ -606,10 +582,6 @@ impl ColumnValue {
             })),
             Self::Time(data) => Ok(Box::new(match data {
                 Some(data) => Some(conversion::naivetime_to_scylla_cql_time(data)?),
-                None => None,
-            })),
-            Self::DateTime(data) => Ok(Box::new(match data {
-                Some(data) => Some(ScyllaCqlTimestamp(data.timestamp_millis())),
                 None => None,
             })),
             Self::Timestamp(data) => Ok(Box::new(match data {
@@ -653,7 +625,6 @@ impl ColumnValue {
             ColumnKind::Uuid => Ok(Self::Uuid(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Date => Ok(Self::Date(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Time => Ok(Self::Time(sqlx::Row::try_get(value, index)?)),
-            ColumnKind::DateTime => Ok(Self::DateTime(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Timestamp => Ok(Self::Timestamp(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Json => Ok(Self::Json(
                 match sqlx::Row::try_get::<Option<sqlx::types::Json<Vec<u8>>>, _>(value, index)? {
@@ -689,7 +660,6 @@ impl ColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
             Self::Json(data) => Ok(query.bind(match data {
                 Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
@@ -723,7 +693,6 @@ impl ColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
             Self::Json(data) => Ok(query.bind(match data {
                 Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
@@ -762,10 +731,7 @@ impl ColumnValue {
             ColumnKind::Uuid => Ok(Self::Uuid(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Date => Ok(Self::Date(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Time => Ok(Self::Time(sqlx::Row::try_get(value, index)?)),
-            ColumnKind::DateTime => Ok(Self::DateTime(
-                sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
-            )),
-            ColumnKind::Timestamp => Ok(Self::DateTime(
+            ColumnKind::Timestamp => Ok(Self::Timestamp(
                 sqlx::Row::try_get::<DateTime<Utc>, _>(value, index)?.into(),
             )),
             ColumnKind::Json => Ok(Self::Json(
@@ -802,7 +768,6 @@ impl ColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
             Self::Json(data) => Ok(query.bind(match data {
                 Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
@@ -836,7 +801,6 @@ impl ColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
             Self::Json(data) => Ok(query.bind(match data {
                 Some(data) => Some(sqlx::types::Json(data.to_owned().into_bytes())),
@@ -875,7 +839,6 @@ impl ColumnValue {
             ColumnKind::Uuid => Ok(Self::Uuid(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Date => Ok(Self::Date(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Time => Ok(Self::Time(sqlx::Row::try_get(value, index)?)),
-            ColumnKind::DateTime => Ok(Self::DateTime(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Timestamp => Ok(Self::Timestamp(sqlx::Row::try_get(value, index)?)),
             ColumnKind::Json => Ok(Self::Json(
                 match sqlx::Row::try_get::<Option<Vec<u8>>, _>(value, index)? {
@@ -911,7 +874,6 @@ impl ColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
             Self::Json(data) => Ok(query.bind(match data {
                 Some(data) => Some(data.to_owned().into_bytes()),
@@ -945,7 +907,6 @@ impl ColumnValue {
             Self::Uuid(data) => Ok(query.bind(*data)),
             Self::Date(data) => Ok(query.bind(*data)),
             Self::Time(data) => Ok(query.bind(*data)),
-            Self::DateTime(data) => Ok(query.bind(*data)),
             Self::Timestamp(data) => Ok(query.bind(*data)),
             Self::Json(data) => Ok(query.bind(match data {
                 Some(data) => Some(data.to_owned().into_bytes()),

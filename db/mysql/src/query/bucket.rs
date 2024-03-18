@@ -4,16 +4,16 @@ use uuid::Uuid;
 
 use crate::{db::MysqlDb, model::bucket::BucketModel};
 
-const INSERT: &str = "INSERT INTO `buckets` (`id`, `created_at`, `updated_at`, `project_id`, `name`) VALUES (?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name` FROM `buckets` WHERE `id` = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name` FROM `buckets` WHERE `project_id` = ?";
+const INSERT: &str = "INSERT INTO `buckets` (`id`, `created_at`, `updated_at`, `project_id`, `name`, `path`) VALUES (?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path FROM `buckets` WHERE `id` = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path` FROM `buckets` WHERE `project_id` = ?";
 const UPDATE: &str = "UPDATE `buckets` SET `updated_at` = ?, `name` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `buckets` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up buckets table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `buckets` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `name` text, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `buckets` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `name` text, `path` text, PRIMARY KEY (`id`))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
@@ -29,7 +29,8 @@ impl MysqlDb {
                 .bind(value.created_at())
                 .bind(value.updated_at())
                 .bind(value.project_id())
-                .bind(value.name()),
+                .bind(value.name())
+                .bind(value.path()),
         )
         .await?;
         Ok(())

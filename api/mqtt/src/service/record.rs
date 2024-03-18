@@ -8,18 +8,19 @@ use hb_dao::{
     value::{ColumnKind, ColumnValue},
 };
 
-use crate::{
-    context::ApiMqttCtx,
-    model::payload::{MethodPayload, Payload},
-};
+use crate::{context::ApiMqttCtx, model::payload::Payload};
 
 pub async fn record_service(ctx: &ApiMqttCtx, payload: &Payload) {
-    match payload.method() {
-        MethodPayload::InsertOne => match insert_one(ctx, payload).await {
-            Ok(_) => hb_log::info(None, "ApiMqttClient: Successfully insert one payload"),
-            Err(err) => hb_log::error(None, err),
-        },
-    }
+    match insert_one(ctx, payload).await {
+        Ok(_) => hb_log::info(
+            None,
+            format!(
+                "ApiMqttClient: Successfully insert one payload to collection_id {}",
+                payload.collection_id()
+            ),
+        ),
+        Err(err) => hb_log::error(None, err),
+    };
 }
 
 async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
@@ -146,6 +147,8 @@ async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
                 record_data.upsert(field_name, &ColumnValue::none(field_props.kind()));
             }
         }
+
+        record_data.db_insert(ctx.dao().db()).await?;
     } else {
         return Err(Error::msg("'data' field in payload is required"));
     }
