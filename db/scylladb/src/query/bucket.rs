@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{db::ScyllaDb, model::bucket::BucketModel};
 
 pub const INSERT: &str = "INSERT INTO \"hyperbase\".\"buckets\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\") VALUES (?, ?, ?, ?, ?, ?)";
-pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\" FROM \"hyperbase\".\"buckets\", \"path\" WHERE \"id\" = ?";
+pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\" FROM \"hyperbase\".\"buckets\" WHERE \"id\" = ?";
 pub const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\" FROM \"hyperbase\".\"buckets\" WHERE \"project_id\" = ?";
 pub const UPDATE: &str = "UPDATE \"hyperbase\".\"buckets\" SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?";
 pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"buckets\" WHERE \"id\" = ?";

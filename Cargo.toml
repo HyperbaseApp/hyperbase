@@ -59,8 +59,8 @@ num-bigint = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 rumqttc = "0.23"
 scylla = { version = "0.12", features = ["num-bigint-04", "bigdecimal-04"] }
-serde = { version = "1", default-features = false }
-serde_json = { version = "1", default-features = false }
+serde = { version = "1" }
+serde_json = { version = "1" }
 serde_with = { version = "3", default-features = false }
 serde_yaml = "0.9"
 sqlx = { version = "0.7", features = [

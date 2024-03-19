@@ -37,7 +37,7 @@ pub fn naivetime_to_scylla_cql_time(time: &NaiveTime) -> Result<ScyllaCqlTime> {
 pub fn scylla_cql_date_to_naivedate(date: &ScyllaCqlDate) -> Result<NaiveDate> {
     Ok(NaiveDate::from_yo_opt(1970, 1)
         .unwrap()
-        .checked_add_signed(chrono::Duration::days(date.0 as i64 - (1 << 31)))
+        .checked_add_signed(chrono::Duration::try_days(date.0 as i64 - (1 << 31)).unwrap())
         .ok_or_else(|| {
             Error::msg(
             "Can't convert value with type 'date' from ScyllaDB to 'date'. Value is out of range.",

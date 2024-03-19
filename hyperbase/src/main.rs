@@ -51,6 +51,8 @@ async fn main() {
     let db = if let Some(scylla) = config.db().scylla() {
         Arc::new(Db::ScyllaDb(
             ScyllaDb::new(
+                scylla.user(),
+                scylla.password(),
                 scylla.host(),
                 scylla.port(),
                 scylla.replication_factor(),

@@ -14,6 +14,8 @@ pub struct ScyllaDb {
 
 impl ScyllaDb {
     pub async fn new(
+        user: &str,
+        password: &str,
         host: &str,
         port: &str,
         replication_factor: &i64,
@@ -27,6 +29,7 @@ impl ScyllaDb {
         let cached_session: CachingSession = CachingSession::from(
             SessionBuilder::new()
                 .known_node(&hostname)
+                .user(user, password)
                 .build()
                 .await
                 .unwrap(),

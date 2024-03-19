@@ -386,6 +386,9 @@ impl RecordDao {
                     columns = Vec::with_capacity(fields.len());
 
                     for column in fields {
+                        for column in ["_id", "_created_by"] {
+                            columns.push(column);
+                        }
                         if collection_data.schema_fields().get(*column).is_some() {
                             columns.push(*column);
                         }
@@ -440,7 +443,12 @@ impl RecordDao {
                     columns = Vec::with_capacity(fields.len());
 
                     for column in fields {
-                        columns.push(*column);
+                        for column in ["_id", "_created_by"] {
+                            columns.push(column);
+                        }
+                        if collection_data.schema_fields().get(*column).is_some() {
+                            columns.push(*column);
+                        }
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
@@ -483,7 +491,12 @@ impl RecordDao {
                     columns = Vec::with_capacity(fields.len());
 
                     for column in fields {
-                        columns.push(*column)
+                        for column in ["_id", "_created_by"] {
+                            columns.push(column);
+                        }
+                        if collection_data.schema_fields().get(*column).is_some() {
+                            columns.push(*column);
+                        }
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
@@ -526,7 +539,12 @@ impl RecordDao {
                     columns = Vec::with_capacity(fields.len());
 
                     for column in fields {
-                        columns.push(*column);
+                        for column in ["_id", "_created_by"] {
+                            columns.push(column);
+                        }
+                        if collection_data.schema_fields().get(*column).is_some() {
+                            columns.push(*column);
+                        }
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);

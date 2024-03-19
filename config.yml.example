@@ -25,6 +25,8 @@ mailer:
 
 db:
   scylla:
+    user: "user"
+    password: "password"
     host: "10.42.28.104"
     port: "19042"
     replication_factor: 3

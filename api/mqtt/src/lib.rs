@@ -1,7 +1,10 @@
 use anyhow::Result;
 use context::ApiMqttCtx;
 use model::payload::Payload;
-use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
+use rumqttc::v5::{
+    mqttbytes::{v5::Packet, QoS},
+    AsyncClient, Event, MqttOptions,
+};
 use service::record::record_service;
 use uuid::Uuid;
 

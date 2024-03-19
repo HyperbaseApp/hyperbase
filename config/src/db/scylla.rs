@@ -2,6 +2,8 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct DbScyllaConfig {
+    user: String,
+    password: String,
     host: String,
     port: String,
     replication_factor: i64,
@@ -9,6 +11,14 @@ pub struct DbScyllaConfig {
 }
 
 impl DbScyllaConfig {
+    pub fn user(&self) -> &str {
+        &self.user
+    }
+
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+
     pub fn host(&self) -> &str {
         &self.host
     }
