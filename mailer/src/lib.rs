@@ -1,17 +1,18 @@
-use std::sync::mpsc::{channel, Receiver, Sender};
-
 use anyhow::Result;
 use lettre::{
     message::{Mailbox, MessageBuilder},
     transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
 };
-use tokio::sync::Mutex;
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
 
 pub struct Mailer {
     message_builder: MessageBuilder,
     smtp_transport: SmtpTransport,
-    channel_receiver: Mutex<Receiver<MailPayload>>,
+    channel_receiver: mpsc::Receiver<MailPayload>,
 }
 
 impl Mailer {
@@ -21,10 +22,10 @@ impl Mailer {
         smtp_password: &str,
         sender_name: &str,
         sender_email: &str,
-    ) -> (Self, Sender<MailPayload>) {
+    ) -> (Self, mpsc::Sender<MailPayload>) {
         hb_log::info(Some("⚡"), "Mailer: Initializing component");
 
-        let (sender, receiver) = channel::<MailPayload>();
+        let (sender, receiver) = mpsc::channel::<MailPayload>(32);
 
         (
             Self {
@@ -37,7 +38,7 @@ impl Mailer {
                         smtp_password.to_owned(),
                     ))
                     .build(),
-                channel_receiver: Mutex::new(receiver),
+                channel_receiver: receiver,
             },
             sender,
         )
@@ -55,49 +56,55 @@ impl Mailer {
         Ok(())
     }
 
-    pub fn run(self) {
-        tokio::spawn((|| async {
-            hb_log::info(Some("💫"), "Mailer: Running component");
+    pub fn run(mut self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+        hb_log::info(Some("💫"), "Mailer: Running component");
 
-            let channel_receiver = self.channel_receiver;
-            let message_builder = self.message_builder;
-            let smtp_transport = self.smtp_transport;
-
+        tokio::spawn((|| async move {
             loop {
-                match channel_receiver.lock().await.recv() {
-                    Ok(payload) => {
-                        let mailbox = match payload.to.parse::<Mailbox>() {
-                            Ok(mailbox) => mailbox,
-                            Err(err) => {
-                                hb_log::error(None, &err);
-                                continue;
-                            }
-                        };
+                tokio::select! {
+                    _ = stop_rx.recv() => {
+                        hb_log::info(None, "Mailer: Shutting down component");
+                        return;
+                    },
+                    recv = self.channel_receiver.recv() => {
+                        match recv {
+                            Some(payload) => {
+                                let mailbox = match payload.to.parse::<Mailbox>() {
+                                    Ok(mailbox) => mailbox,
+                                    Err(err) => {
+                                        hb_log::error(None, &err);
+                                        continue;
+                                    }
+                                };
 
-                        let message = match message_builder
-                            .to_owned()
-                            .to(mailbox)
-                            .subject(payload.subject)
-                            .body(payload.body)
-                        {
-                            Ok(message) => message,
-                            Err(err) => {
-                                hb_log::error(None, &err);
-                                continue;
-                            }
-                        };
+                                let message = match self
+                                    .message_builder
+                                    .to_owned()
+                                    .to(mailbox)
+                                    .subject(payload.subject)
+                                    .body(payload.body)
+                                {
+                                    Ok(message) => message,
+                                    Err(err) => {
+                                        hb_log::error(None, &err);
+                                        continue;
+                                    }
+                                };
 
-                        if let Err(err) = smtp_transport.send(&message) {
-                            hb_log::error(None, &err);
-                            continue;
+                                if let Err(err) = self.smtp_transport.send(&message) {
+                                    hb_log::error(None, &err);
+                                    continue;
+                                }
+                            },
+                            None => {
+                                hb_log::info(None, "Mailer: Shutting down component");
+                                return;
+                            }
                         }
-                    }
-                    Err(_) => {
-                        break;
                     }
                 }
             }
-        })());
+        })())
     }
 }
 

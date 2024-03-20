@@ -137,15 +137,20 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         }
     };
 
-    if let Err(err) = ctx.mailer().sender().send(MailPayload::new(
-        data.email(),
-        "Registration Verification Code",
-        &format!(
-            "Your registration verification code is {}. This code will expire in {} seconds",
-            registration_data.code(),
-            ctx.registration_ttl()
-        ),
-    )) {
+    if let Err(err) = ctx
+        .mailer()
+        .sender()
+        .send(MailPayload::new(
+            data.email(),
+            "Registration Verification Code",
+            &format!(
+                "Your registration verification code is {}. This code will expire in {} seconds",
+                registration_data.code(),
+                ctx.registration_ttl()
+            ),
+        ))
+        .await
+    {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
@@ -261,7 +266,7 @@ async fn request_password_reset(
                 password_reset_data.code(),
                 ctx.reset_password_ttl()
             ),
-        )) {
+        )).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
 
         }
@@ -310,11 +315,16 @@ async fn confirm_password_reset(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    if let Err(err) = ctx.mailer().sender().send(MailPayload::new(
-        admin_data.email(),
-        "Your Password Has Been Reset Successfully",
-        "Your account password has been successfully changed",
-    )) {
+    if let Err(err) = ctx
+        .mailer()
+        .sender()
+        .send(MailPayload::new(
+            admin_data.email(),
+            "Your Password Has Been Reset Successfully",
+            "Your account password has been successfully changed",
+        ))
+        .await
+    {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 

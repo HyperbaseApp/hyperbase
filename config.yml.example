@@ -62,6 +62,7 @@ api:
     port: 1883
     topic: "hyperbase"
     channel_capacity: 100
+    timeout: "10s"
 
 auth:
   admin_registration: true

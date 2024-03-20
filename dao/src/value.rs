@@ -556,7 +556,7 @@ impl ColumnValue {
         }
     }
 
-    pub fn to_scylladb_model(&self) -> Result<Box<dyn ScyllaSerializeCql>> {
+    pub fn to_scylladb_model(&self) -> Result<Box<dyn ScyllaSerializeCql + Send + Sync>> {
         match self {
             Self::Boolean(data) => Ok(Box::new(*data)),
             Self::TinyInteger(data) => Ok(Box::new(*data)),

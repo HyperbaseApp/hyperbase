@@ -9,6 +9,7 @@ use context::ApiRestCtx;
 use error_handler::default_error_handler;
 use hb_config::app::AppConfigMode;
 use logger::logger_format;
+use tokio::{sync::broadcast, task::JoinHandle};
 
 mod configure;
 pub mod context;
@@ -45,30 +46,44 @@ impl ApiRestServer {
         }
     }
 
-    pub async fn run(self) -> Result<()> {
+    pub fn run(self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<Result<()>> {
         hb_log::info(Some("💫"), "ApiRestServer: Running component");
 
-        Ok(HttpServer::new(move || {
-            App::new()
-                .wrap((|| -> Cors {
-                    if matches!(self.app_mode, AppConfigMode::Production) {
-                        let cors = Cors::default().allow_any_header().allow_any_method();
-                        if let Some(origin) = &self.allowed_origin {
-                            cors.allowed_origin(origin)
+        tokio::spawn((|| async move {
+            let server = HttpServer::new(move || {
+                App::new()
+                    .wrap((|| -> Cors {
+                        if matches!(self.app_mode, AppConfigMode::Production) {
+                            let cors = Cors::default().allow_any_header().allow_any_method();
+                            if let Some(origin) = &self.allowed_origin {
+                                cors.allowed_origin(origin)
+                            } else {
+                                cors
+                            }
                         } else {
-                            cors
+                            Cors::permissive()
                         }
-                    } else {
-                        Cors::permissive()
-                    }
-                })())
-                .wrap(Logger::new(logger_format()))
-                .wrap(ErrorHandlers::new().default_handler(default_error_handler))
-                .app_data(self.context.clone())
-                .configure(configure)
-        })
-        .bind(self.address)?
-        .run()
-        .await?)
+                    })())
+                    .wrap(Logger::new(logger_format()))
+                    .wrap(ErrorHandlers::new().default_handler(default_error_handler))
+                    .app_data(self.context.clone())
+                    .configure(configure)
+            })
+            .bind(self.address)
+            .unwrap()
+            .run();
+
+            let server_handle = server.handle();
+
+            tokio::select! {
+                _ = stop_rx.recv() => {
+                    hb_log::info(None, "ApiRestServer: Shutting down component");
+                    server_handle.stop(true).await;
+                },
+                _ = server => {}
+            }
+            
+            Ok(())
+        })())
     }
 }

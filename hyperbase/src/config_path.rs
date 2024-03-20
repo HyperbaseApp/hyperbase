@@ -1,6 +1,6 @@
-use std::fs;
+use std::{fs, path::PathBuf, str::FromStr};
 
-pub fn get() -> String {
+pub fn get() -> PathBuf {
     let config_path = match std::env::var("HB_CONFIG_PATH") {
         Ok(path) => path,
         Err(_) => "config.yml".to_owned(),
@@ -10,5 +10,5 @@ pub fn get() -> String {
         panic!("config.yml file specified in HB_CONFIG_PATH environment variable or current directory must exist")
     }
 
-    config_path
+    PathBuf::from_str(&config_path).unwrap()
 }

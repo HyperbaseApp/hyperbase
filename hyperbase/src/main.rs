@@ -22,7 +22,7 @@ mod config_path;
 #[tokio::main]
 async fn main() {
     let config_path = config_path::get();
-    let config = hb_config::new(&config_path);
+    let config = hb_config::from_path(&config_path);
 
     hb_log::init(config.log().display_level(), config.log().level_filter());
 
@@ -46,7 +46,6 @@ async fn main() {
         config.mailer().sender_name(),
         config.mailer().sender_email(),
     );
-    mailer.run();
 
     let db = if let Some(scylla) = config.db().scylla() {
         Arc::new(Db::ScyllaDb(
@@ -101,7 +100,8 @@ async fn main() {
             .await,
         ))
     } else {
-        panic!("No database configuration is specified")
+        hb_log::panic(None, "Hyperbase: No database configuration is specified");
+        return;
     };
 
     let api_rest_server = ApiRestServer::new(
@@ -127,10 +127,31 @@ async fn main() {
         config.api().mqtt().port(),
         config.api().mqtt().topic(),
         config.api().mqtt().channel_capacity(),
+        config.api().mqtt().timeout(),
         ApiMqttCtx::new(ApiMqttDaoCtx::new(db)),
     );
 
-    tokio::try_join!(api_rest_server.run(), api_mqtt_client.run()).unwrap();
+    let (stop_tx, stop_rx) = tokio::sync::broadcast::channel(1);
 
-    hb_log::info(Some("👋"), "Hyperbase: turned off");
+    match tokio::try_join!(
+        mailer.run(stop_tx.subscribe()),
+        api_mqtt_client.run(stop_tx.subscribe()),
+        api_rest_server.run(stop_rx)
+    ) {
+        Ok(_) => hb_log::info(Some("👋"), "Hyperbase: Turned off"),
+        Err(err) => {
+            hb_log::warn(None, "Hyperbase: Shutting down all running components");
+            if stop_tx.send(()).is_err() {
+                hb_log::warn(
+                    None,
+                    "Hyperbase: Failed to shut down all running components",
+                );
+                return;
+            }
+            hb_log::warn(
+                Some("👋"),
+                format!("Hyperbase: Turned off with error: {err}"),
+            );
+        }
+    }
 }

@@ -1,9 +1,10 @@
-use std::sync::{mpsc::Sender, Arc};
+use std::sync::Arc;
 
 use hb_dao::Db;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::MailPayload;
 use hb_token_jwt::token::JwtToken;
+use tokio::sync::mpsc;
 
 pub struct ApiRestCtx {
     hash: ApiRestHashCtx,
@@ -108,15 +109,15 @@ impl ApiRestTokenCtx {
 }
 
 pub struct ApiRestMailerCtx {
-    sender: Sender<MailPayload>,
+    sender: mpsc::Sender<MailPayload>,
 }
 
 impl ApiRestMailerCtx {
-    pub fn new(sender: Sender<MailPayload>) -> Self {
+    pub fn new(sender: mpsc::Sender<MailPayload>) -> Self {
         Self { sender }
     }
 
-    pub fn sender(&self) -> &Sender<MailPayload> {
+    pub fn sender(&self) -> &mpsc::Sender<MailPayload> {
         &self.sender
     }
 }

@@ -1,11 +1,13 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
 use context::ApiMqttCtx;
 use model::payload::Payload;
 use rumqttc::v5::{
     mqttbytes::{v5::Packet, QoS},
-    AsyncClient, Event, MqttOptions,
+    AsyncClient, Event, EventLoop, MqttOptions,
 };
 use service::record::record_service;
+use tokio::{sync::broadcast, task::JoinHandle};
 use uuid::Uuid;
 
 pub mod context;
@@ -13,10 +15,10 @@ mod model;
 mod service;
 
 pub struct ApiMqttClient {
-    host: String,
-    port: u16,
+    client: AsyncClient,
+    eventloop: EventLoop,
     topic: String,
-    channel_capacity: usize,
+    timeout: Duration,
     context: ApiMqttCtx,
 }
 
@@ -26,45 +28,61 @@ impl ApiMqttClient {
         port: &u16,
         topic: &str,
         channel_capacity: &usize,
+        timeout: &Duration,
         ctx: ApiMqttCtx,
     ) -> Self {
         hb_log::info(Some("⚡"), "ApiMqttClient: Initializing component");
 
+        let mqtt_opts = MqttOptions::new(format!("hyperbase-{}", Uuid::now_v7()), host, *port);
+
+        let (client, eventloop) = AsyncClient::new(mqtt_opts, *channel_capacity);
+
         Self {
-            host: host.to_owned(),
-            port: *port,
+            client,
+            eventloop,
             topic: topic.to_owned(),
-            channel_capacity: *channel_capacity,
+            timeout: *timeout,
             context: ctx,
         }
     }
 
-    pub async fn run(&self) -> Result<()> {
+    pub fn run(mut self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<Result<()>> {
         hb_log::info(Some("💫"), "ApiMqttClient: Running component");
 
-        let mqtt_opts = MqttOptions::new(
-            format!("hyperbase-{}", Uuid::now_v7()),
-            &self.host,
-            self.port,
-        );
+        tokio::spawn((|| async move {
+            self.client.subscribe(self.topic, QoS::AtMostOnce).await?;
 
-        let (client, mut eventloop) = AsyncClient::new(mqtt_opts, self.channel_capacity);
-        client
-            .subscribe(&self.topic, QoS::AtMostOnce)
-            .await
-            .unwrap();
+            let mut now = Utc::now();
 
-        loop {
-            if let Ok(event) = eventloop.poll().await {
-                if let Event::Incoming(packet) = event {
-                    if let Packet::Publish(publish) = packet {
-                        match serde_json::from_slice::<Payload>(&publish.payload) {
-                            Ok(payload) => record_service(&self.context, &payload).await,
-                            Err(err) => hb_log::error(None, err),
+            loop {
+                tokio::select! {
+                    _ = stop_rx.recv() => {
+                        hb_log::info(None, "ApiMqttClient: Shutting down component");
+                        return Ok(());
+                    },
+                    poll_result = self.eventloop.poll() => {
+                        if let Ok(event) = poll_result {
+                            now = Utc::now();
+                            if let Event::Incoming(packet) = &event {
+                                if let Packet::Publish(publish) = packet {
+                                    match serde_json::from_slice::<Payload>(&publish.payload) {
+                                        Ok(payload) => record_service(&self.context, &payload).await,
+                                        Err(err) => hb_log::error(None, err),
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+                if Utc::now().signed_duration_since(now) > self.timeout {
+                    let err = Error::msg(format!(
+                        "Failed to connect to MQTT broker {:?}",
+                        self.eventloop.options.broker_address()
+                    ));
+                    hb_log::panic(None, &format!("ApiMqttClient: {err}"));
+                    return Err(err);
+                }
             }
-        }
+        })())
     }
 }

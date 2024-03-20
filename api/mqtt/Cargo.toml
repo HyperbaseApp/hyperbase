@@ -11,6 +11,7 @@ hb_log = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 rumqttc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

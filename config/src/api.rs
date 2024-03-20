@@ -1,3 +1,5 @@
+use chrono::Duration;
+use duration_str::deserialize_duration_chrono;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -43,6 +45,8 @@ pub struct ApiMqttConfig {
     port: u16,
     topic: String,
     channel_capacity: usize,
+    #[serde(deserialize_with = "deserialize_duration_chrono")]
+    timeout: Duration,
 }
 
 impl ApiMqttConfig {
@@ -60,5 +64,9 @@ impl ApiMqttConfig {
 
     pub fn channel_capacity(&self) -> &usize {
         &self.channel_capacity
+    }
+
+    pub fn timeout(&self) -> &Duration {
+        &self.timeout
     }
 }

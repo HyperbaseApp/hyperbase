@@ -1919,7 +1919,7 @@ impl RecordFilters {
         Ok(filter)
     }
 
-    pub fn scylladb_values(&self) -> Result<Vec<Box<dyn SerializeCql>>> {
+    pub fn scylladb_values(&self) -> Result<Vec<Box<dyn SerializeCql + Send + Sync>>> {
         let mut values = Vec::with_capacity(self.values_capacity());
         for f in &self.0 {
             if let Some(value) = &f.value {

@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{fs::File, path::Path};
 
 use api::ApiConfig;
 use app::AppConfig;
@@ -72,7 +72,7 @@ impl Config {
     }
 }
 
-pub fn new(path: &str) -> Config {
+pub fn from_path(path: &Path) -> Config {
     let file = File::open(path).expect("");
     serde_yaml::from_reader::<_, Config>(file).unwrap()
 }
