@@ -4,20 +4,22 @@ use uuid::Uuid;
 
 use crate::{db::MysqlDb, model::token::TokenModel};
 
-const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at` FROM `tokens` WHERE `id` = ?";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `bucket_rules`, `collection_rules`, `expired_at` FROM `tokens` WHERE `admin_id` = ?";
-const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `bucket_rules` = ?, `collection_rules` = ?, `expired_at` = ? WHERE `id` = ?";
+const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `id` = ?";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ?";
+const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `allow_anonymous` = ?, `expired_at` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `tokens` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up tokens table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `tokens` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `admin_id` binary(16), `token` text, `bucket_rules` json, `collection_rules` json, `expired_at` timestamp, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `tokens` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `admin_id` binary(16), `token` text, `allow_anonymous` boolean, `expired_at` timestamp, PRIMARY KEY (`id`))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
     pool.prepare(SELECT_MANY_BY_ADMIN_ID).await.unwrap();
+    pool.prepare(SELECT_MANY_BY_PROJECT_ID).await.unwrap();
     pool.prepare(UPDATE).await.unwrap();
     pool.prepare(DELETE).await.unwrap();
 }
@@ -32,8 +34,7 @@ impl MysqlDb {
                 .bind(value.project_id())
                 .bind(value.admin_id())
                 .bind(value.token())
-                .bind(value.bucket_rules())
-                .bind(value.collection_rules())
+                .bind(value.allow_anonymous())
                 .bind(value.expired_at()),
         )
         .await?;
@@ -50,12 +51,20 @@ impl MysqlDb {
             .await?)
     }
 
+    pub async fn select_many_tokens_by_project_id(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<Vec<TokenModel>> {
+        Ok(self
+            .fetch_all(sqlx::query_as(SELECT_MANY_BY_PROJECT_ID).bind(project_id))
+            .await?)
+    }
+
     pub async fn update_token(&self, value: &TokenModel) -> Result<()> {
         self.execute(
             sqlx::query(UPDATE)
                 .bind(value.updated_at())
-                .bind(&sqlx::types::Json(value.bucket_rules()))
-                .bind(&sqlx::types::Json(value.collection_rules()))
+                .bind(value.allow_anonymous())
                 .bind(value.expired_at())
                 .bind(value.id()),
         )

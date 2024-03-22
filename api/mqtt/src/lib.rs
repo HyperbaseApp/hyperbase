@@ -58,8 +58,14 @@ impl ApiMqttClient {
                 tokio::select! {
                     _ = stop_rx.recv() => {
                         hb_log::info(None, "ApiMqttClient: Shutting down component");
+                        self.client.disconnect().await.ok();
                         return Ok(());
-                    },
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        hb_log::info(None, "ApiMqttClient: Shutting down component");
+                        self.client.disconnect().await.ok();
+                        return Ok(());
+                    }
                     poll_result = self.eventloop.poll() => {
                         if let Ok(event) = poll_result {
                             now = Utc::now();

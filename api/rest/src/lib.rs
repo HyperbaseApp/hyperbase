@@ -79,8 +79,10 @@ impl ApiRestServer {
                 _ = stop_rx.recv() => {
                     hb_log::info(None, "ApiRestServer: Shutting down component");
                     server_handle.stop(true).await;
-                },
-                _ = server => {}
+                }
+                _ = server => {
+                    hb_log::info(None, "ApiRestServer: Shutting down component");
+                }
             }
             
             Ok(())

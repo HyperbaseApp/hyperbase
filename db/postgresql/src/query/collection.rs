@@ -4,16 +4,16 @@ use uuid::Uuid;
 
 use crate::{db::PostgresDb, model::collection::CollectionModel};
 
-const INSERT: &str = "INSERT INTO \"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\") VALUES ($1, $2, $3, $4, $5, $6, $7)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\" FROM \"collections\" WHERE \"id\" = $1";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\" FROM \"collections\" WHERE \"project_id\" = $1";
-const UPDATE: &str = "UPDATE \"collections\" SET \"updated_at\" = $1, \"name\" = $2, \"schema_fields\" = $3, \"indexes\" = $4 WHERE \"id\" = $5";
+const INSERT: &str = "INSERT INTO \"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\", \"auth_columns\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\", \"auth_columns\" FROM \"collections\" WHERE \"id\" = $1";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\", \"auth_columns\" FROM \"collections\" WHERE \"project_id\" = $1";
+const UPDATE: &str = "UPDATE \"collections\" SET \"updated_at\" = $1, \"name\" = $2, \"schema_fields\" = $3, \"indexes\" = $4, \"auth_columns\" = $5 WHERE \"id\" = $6";
 const DELETE: &str = "DELETE FROM \"collections\" WHERE \"id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up collections table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"collections\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"name\" text, \"schema_fields\" jsonb, \"indexes\" jsonb, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"collections\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"name\" text, \"schema_fields\" jsonb, \"indexes\" jsonb, \"auth_columns\" jsonb, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
@@ -32,7 +32,8 @@ impl PostgresDb {
                 .bind(value.project_id())
                 .bind(value.name())
                 .bind(value.schema_fields())
-                .bind(value.indexes()),
+                .bind(value.indexes())
+                .bind(value.auth_columns()),
         )
         .await?;
         Ok(())
@@ -58,6 +59,7 @@ impl PostgresDb {
                 .bind(value.name())
                 .bind(value.schema_fields())
                 .bind(value.indexes())
+                .bind(value.auth_columns())
                 .bind(value.id()),
         )
         .await?;

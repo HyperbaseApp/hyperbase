@@ -70,7 +70,7 @@ async fn insert_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -79,10 +79,14 @@ async fn insert_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_insert_record(path.collection_id()) {
+        if !token_data
+            .is_allow_insert_record(ctx.dao().db(), path.collection_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to write data to this collection",
@@ -239,7 +243,7 @@ async fn find_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -248,10 +252,14 @@ async fn find_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_find_one_record(path.collection_id()) {
+        if !token_data
+            .is_allow_find_one_record(ctx.dao().db(), path.collection_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read this record",
@@ -385,7 +393,7 @@ async fn update_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -394,10 +402,14 @@ async fn update_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_update_record(path.collection_id()) {
+        if !token_data
+            .is_allow_update_record(ctx.dao().db(), path.collection_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to update this record",
@@ -562,7 +574,7 @@ async fn delete_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -571,10 +583,14 @@ async fn delete_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_delete_record(path.collection_id()) {
+        if !token_data
+            .is_allow_delete_record(ctx.dao().db(), path.collection_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to delete this record",
@@ -681,7 +697,7 @@ async fn find_many(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -690,10 +706,14 @@ async fn find_many(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_find_many_records(path.collection_id()) {
+        if !token_data
+            .is_allow_find_many_records(ctx.dao().db(), path.collection_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read these records",

@@ -17,7 +17,7 @@ const DELETE_EXPIRE: &str = "DELETE FROM \"registrations\" WHERE \"updated_at\" 
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "SQLite: Setting up registrations table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"registrations\" (\"id\" blob, \"created_at\" datetime, \"updated_at\" datetime, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"registrations\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();

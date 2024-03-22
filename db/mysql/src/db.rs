@@ -5,7 +5,8 @@ use sqlx::{
 };
 
 use crate::query::{
-    admin, admin_password_reset, bucket, collection, file, project, registration, token,
+    admin, admin_password_reset, bucket, bucket_rule, collection, collection_rule, file, project,
+    registration, token,
 };
 
 pub struct MysqlDb {
@@ -105,7 +106,9 @@ impl MysqlDb {
         token::init(pool).await;
         project::init(pool).await;
         collection::init(pool).await;
+        collection_rule::init(pool).await;
         bucket::init(pool).await;
+        bucket_rule::init(pool).await;
         file::init(pool).await;
         registration::init(pool).await;
         admin_password_reset::init(pool).await;

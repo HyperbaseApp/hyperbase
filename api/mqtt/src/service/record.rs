@@ -36,7 +36,10 @@ async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
         )));
     }
 
-    if !token_data.is_allow_insert_record(payload.collection_id()) {
+    if !token_data
+        .is_allow_insert_record(ctx.dao().db(), payload.collection_id())
+        .await
+    {
         return Err(Error::msg(format!(
             "Token ({}) doesn't have permission to write data to this collection",
             payload.token()

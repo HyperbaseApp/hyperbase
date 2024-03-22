@@ -65,7 +65,11 @@ impl Mailer {
                     _ = stop_rx.recv() => {
                         hb_log::info(None, "Mailer: Shutting down component");
                         return;
-                    },
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        hb_log::info(None, "Mailer: Shutting down component");
+                        return;
+                    }
                     recv = self.channel_receiver.recv() => {
                         match recv {
                             Some(payload) => {

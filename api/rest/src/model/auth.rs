@@ -54,7 +54,31 @@ impl PasswordBasedReqJson {
     }
 }
 
-pub type TokenBasedReqJson = HashMap<String, Value>;
+#[derive(Deserialize)]
+pub struct TokenBasedReqJson {
+    token_id: Uuid,
+    token: String,
+    collection_id: Option<Uuid>,
+    data: Option<HashMap<String, Value>>,
+}
+
+impl TokenBasedReqJson {
+    pub fn token_id(&self) -> &Uuid {
+        &self.token_id
+    }
+
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    pub fn collection_id(&self) -> &Option<Uuid> {
+        &self.collection_id
+    }
+
+    pub fn data(&self) -> &Option<HashMap<String, Value>> {
+        &self.data
+    }
+}
 
 #[derive(Deserialize, Validate)]
 pub struct RequestPasswordResetReqJson {

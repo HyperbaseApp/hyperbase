@@ -154,12 +154,27 @@ async fn insert_one(
         }
     }
 
+    if let Some(auth_columns) = data.auth_columns() {
+        for auth_column in auth_columns {
+            if data.schema_fields().get(auth_column).is_none() {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Field '{auth_column}' is in auth_columns but not exist in the schema fields"),
+                );
+            }
+        }
+    }
+
     let collection_data = CollectionDao::new(
         path.project_id(),
         data.name(),
         &schema_fields,
         &match data.indexes() {
             Some(indexes) => indexes.clone(),
+            None => HashSet::new(),
+        },
+        &match data.auth_columns() {
+            Some(auth_columns) => auth_columns.clone(),
             None => HashSet::new(),
         },
     );
@@ -187,6 +202,7 @@ async fn insert_one(
                 })
                 .collect(),
             collection_data.indexes(),
+            collection_data.auth_columns(),
         ),
     )
 }
@@ -213,7 +229,7 @@ async fn find_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => {
                 return Response::error_raw(
@@ -222,6 +238,7 @@ async fn find_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     let (project_data, collection_data) = match tokio::try_join!(
@@ -263,6 +280,7 @@ async fn find_one(
                 })
                 .collect(),
             collection_data.indexes(),
+            collection_data.auth_columns(),
         ),
     )
 }
@@ -395,6 +413,18 @@ async fn update_one(
         collection_data.update_indexes(indexes);
     }
 
+    if let Some(auth_columns) = data.auth_columns() {
+        for auth_column in auth_columns {
+            if collection_data.schema_fields().get(auth_column).is_none() {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Field '{auth_column}' is in auth_columns but not exist in the schema fields"),
+                );
+            }
+        }
+        collection_data.set_auth_columns(auth_columns);
+    }
+
     if !data.is_all_none() {
         if let Err(err) = collection_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -421,6 +451,7 @@ async fn update_one(
                 })
                 .collect(),
             collection_data.indexes(),
+            collection_data.auth_columns(),
         ),
     )
 }
@@ -558,6 +589,7 @@ async fn find_many(
                         })
                         .collect(),
                     data.indexes(),
+                    data.auth_columns(),
                 )
             })
             .collect::<Vec<_>>(),

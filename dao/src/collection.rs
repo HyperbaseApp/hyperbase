@@ -29,6 +29,7 @@ pub struct CollectionDao {
     name: String,
     schema_fields: HashMap<String, SchemaFieldProps>,
     indexes: HashSet<String>,
+    auth_columns: HashSet<String>,
     _preserve: Option<Preserve>,
 }
 
@@ -38,6 +39,7 @@ impl CollectionDao {
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldProps>,
         indexes: &HashSet<String>,
+        auth_columns: &HashSet<String>,
     ) -> Self {
         let now = Utc::now();
 
@@ -49,6 +51,7 @@ impl CollectionDao {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             indexes: indexes.clone(),
+            auth_columns: auth_columns.clone(),
             _preserve: None,
         }
     }
@@ -81,6 +84,10 @@ impl CollectionDao {
         &self.indexes
     }
 
+    pub fn auth_columns(&self) -> &HashSet<String> {
+        &self.auth_columns
+    }
+
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_owned();
     }
@@ -107,6 +114,10 @@ impl CollectionDao {
             self._preserve.as_mut().unwrap().indexes = Some(self.indexes.clone());
         }
         self.indexes = indexes.to_owned();
+    }
+
+    pub fn set_auth_columns(&mut self, auth_columns: &HashSet<String>) {
+        self.auth_columns = auth_columns.clone();
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -343,6 +354,10 @@ impl CollectionDao {
                 Some(indexes) => indexes.to_owned(),
                 None => HashSet::new(),
             },
+            auth_columns: match model.auth_columns() {
+                Some(auth_columns) => auth_columns.to_owned(),
+                None => HashSet::new(),
+            },
             _preserve: None,
         })
     }
@@ -361,6 +376,11 @@ impl CollectionDao {
                 .collect(),
             &if self.indexes.len() > 0 {
                 Some(self.indexes.clone())
+            } else {
+                None
+            },
+            &if self.auth_columns.len() > 0 {
+                Some(self.auth_columns.clone())
             } else {
                 None
             },
@@ -384,6 +404,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             indexes: model.indexes().0.to_owned(),
+            auth_columns: model.auth_columns().0.to_owned(),
             _preserve: None,
         })
     }
@@ -402,6 +423,7 @@ impl CollectionDao {
                     .collect(),
             ),
             &sqlx::types::Json(self.indexes.to_owned()),
+            &sqlx::types::Json(self.auth_columns.to_owned()),
         )
     }
 
@@ -422,6 +444,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             indexes: model.indexes().0.to_owned(),
+            auth_columns: model.auth_columns().0.to_owned(),
             _preserve: None,
         })
     }
@@ -440,6 +463,7 @@ impl CollectionDao {
                     .collect(),
             ),
             &sqlx::types::Json(self.indexes.to_owned()),
+            &sqlx::types::Json(self.auth_columns.to_owned()),
         )
     }
 
@@ -460,6 +484,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             indexes: model.indexes().0.to_owned(),
+            auth_columns: model.auth_columns().0.to_owned(),
             _preserve: None,
         })
     }
@@ -478,6 +503,7 @@ impl CollectionDao {
                     .collect(),
             ),
             &sqlx::types::Json(self.indexes.to_owned()),
+            &sqlx::types::Json(self.auth_columns.to_owned()),
         )
     }
 }

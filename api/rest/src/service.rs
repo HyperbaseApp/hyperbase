@@ -1,7 +1,9 @@
 pub mod admin;
 pub mod auth;
 pub mod bucket;
+pub mod bucket_rule;
 pub mod collection;
+pub mod collection_rule;
 pub mod file;
 pub mod info;
 pub mod project;

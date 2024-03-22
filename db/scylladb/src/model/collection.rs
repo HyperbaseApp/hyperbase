@@ -13,6 +13,7 @@ pub struct CollectionModel {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsModel>,
     indexes: Option<HashSet<String>>,
+    auth_columns: Option<HashSet<String>>,
 }
 
 impl CollectionModel {
@@ -24,6 +25,7 @@ impl CollectionModel {
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsModel>,
         indexes: &Option<HashSet<String>>,
+        auth_columns: &Option<HashSet<String>>,
     ) -> Self {
         Self {
             id: *id,
@@ -33,6 +35,7 @@ impl CollectionModel {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             indexes: indexes.clone(),
+            auth_columns: auth_columns.clone(),
         }
     }
 
@@ -62,6 +65,10 @@ impl CollectionModel {
 
     pub fn indexes(&self) -> &Option<HashSet<String>> {
         &self.indexes
+    }
+
+    pub fn auth_columns(&self) -> &Option<HashSet<String>> {
+        &self.auth_columns
     }
 }
 

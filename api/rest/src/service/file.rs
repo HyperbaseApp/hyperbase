@@ -28,7 +28,11 @@ pub fn file_api(cfg: &mut web::ServiceConfig) {
     )
     .route(
         "/project/{project_id}/bucket/{bucket_id}/file/{file_id}",
-        web::get().to(find_one),
+        web::head().to(find_one),
+    )
+    .route(
+        "/project/{project_id}/bucket/{bucket_id}/file/{file_id}",
+        web::get().to(download_one),
     )
     .route(
         "/project/{project_id}/bucket/{bucket_id}/file/{file_id}",
@@ -67,7 +71,7 @@ async fn insert_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -76,10 +80,14 @@ async fn insert_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_insert_file(path.bucket_id()) {
+        if !token_data
+            .is_allow_insert_file(ctx.dao().db(), path.bucket_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to write data to this bucket",
@@ -126,7 +134,7 @@ async fn insert_one(
     let file_data = FileDao::new(path.bucket_id(), &file_name, &content_type, &size);
 
     if let Err(err) = file_data
-        .save(ctx.dao().db(), ctx.bucket_path(), form.file_path())
+        .save(ctx.dao().db(), bucket_data.path(), form.file_path())
         .await
     {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -170,7 +178,7 @@ async fn find_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -179,10 +187,14 @@ async fn find_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_find_one_file(path.bucket_id()) {
+        if !token_data
+            .is_allow_find_one_file(ctx.dao().db(), path.bucket_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read this bucket",
@@ -219,7 +231,96 @@ async fn find_one(
     }
 
     let file =
-        match NamedFile::open_async(format!("{}/{}", ctx.bucket_path(), file_data.id())).await {
+        match NamedFile::open_async(format!("{}/{}", bucket_data.path(), file_data.id())).await {
+            Ok(file) => file,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+    let mut res = HttpResponse::Ok();
+    for header in file.into_response(&req).headers() {
+        res.append_header(header);
+    }
+
+    res.finish()
+}
+
+async fn download_one(
+    ctx: web::Data<ApiRestCtx>,
+    req: HttpRequest,
+    auth: BearerAuth,
+    path: web::Path<FindOneFileReqPath>,
+) -> HttpResponse {
+    let token = auth.token();
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let (admin_id, token_data) = match token_claim.kind() {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => (*data.id(), None),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
+        },
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => (*data.admin_id(), Some(data)),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
+        },
+        _ => todo!(),
+    };
+
+    if let Some(token_data) = &token_data {
+        if !token_data
+            .is_allow_find_one_file(ctx.dao().db(), path.bucket_id())
+            .await
+        {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "This token doesn't have permission to read this bucket",
+            );
+        }
+    }
+
+    let (project_data, bucket_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        BucketDao::db_select(ctx.dao().db(), path.bucket_id())
+    ) {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if &admin_id != project_data.admin_id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
+    if project_data.id() != bucket_data.project_id() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
+    }
+
+    let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if file_data.bucket_id() != bucket_data.id() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
+    }
+
+    let file =
+        match NamedFile::open_async(format!("{}/{}", bucket_data.path(), file_data.id())).await {
             Ok(file) => file,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
@@ -250,7 +351,7 @@ async fn update_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -259,10 +360,14 @@ async fn update_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_update_file(path.bucket_id()) {
+        if !token_data
+            .is_allow_update_file(ctx.dao().db(), path.bucket_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to update this file",
@@ -345,7 +450,7 @@ async fn delete_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -354,10 +459,14 @@ async fn delete_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_delete_file(path.bucket_id()) {
+        if !token_data
+            .is_allow_delete_file(ctx.dao().db(), path.bucket_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to delete this file",
@@ -393,11 +502,11 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
     }
 
-    if let Err(err) = fs::remove_file(&format!("{}/{}", ctx.bucket_path(), file_data.id())).await {
+    if let Err(err) = fs::remove_file(&format!("{}/{}", bucket_data.path(), file_data.id())).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    if let Err(err) = FileDao::delete(ctx.dao().db(), ctx.bucket_path(), path.file_id()).await {
+    if let Err(err) = FileDao::delete(ctx.dao().db(), bucket_data.path(), path.file_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
@@ -430,7 +539,7 @@ async fn find_many(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => (*data.admin_id(), Some(data)),
             Err(err) => {
                 return Response::error_raw(
@@ -439,10 +548,14 @@ async fn find_many(
                 )
             }
         },
+        _ => todo!(),
     };
 
     if let Some(token_data) = &token_data {
-        if !token_data.is_allow_find_many_files(path.bucket_id()) {
+        if !token_data
+            .is_allow_find_many_files(ctx.dao().db(), path.bucket_id())
+            .await
+        {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read these files",

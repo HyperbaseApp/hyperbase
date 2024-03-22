@@ -13,7 +13,7 @@ const DELETE: &str = "DELETE FROM \"admins\" WHERE \"id\" = ?";
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "SQLite: Setting up admins table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"admins\" (\"id\" blob, \"created_at\" datetime, \"updated_at\" datetime, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"admins\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();

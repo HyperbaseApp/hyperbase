@@ -89,7 +89,7 @@ async fn find_one(
                 )
             }
         },
-        JwtTokenKind::Token => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
             Ok(data) => *data.admin_id(),
             Err(err) => {
                 return Response::error_raw(
@@ -98,6 +98,7 @@ async fn find_one(
                 )
             }
         },
+        _ => todo!(),
     };
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {

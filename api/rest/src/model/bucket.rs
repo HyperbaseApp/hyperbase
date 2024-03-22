@@ -65,10 +65,6 @@ impl UpdateOneBucketReqJson {
     pub fn name(&self) -> &Option<String> {
         &self.name
     }
-
-    pub fn is_all_none(&self) -> bool {
-        self.name.is_none()
-    }
 }
 
 #[derive(Deserialize)]

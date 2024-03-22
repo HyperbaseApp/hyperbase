@@ -1,11 +1,17 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
+use ahash::{HashSet, HashSetExt};
 use hb_dao::{
-    admin::AdminDao, admin_password_reset::AdminPasswordResetDao, register::RegistrationDao,
+    admin::AdminDao,
+    admin_password_reset::AdminPasswordResetDao,
+    collection::CollectionDao,
+    record::{RecordDao, RecordFilter, RecordFilters, RecordPagination},
+    register::RegistrationDao,
     token::TokenDao,
+    value::ColumnValue,
 };
 use hb_mailer::MailPayload;
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::{claim::UserClaim, kind::JwtTokenKind};
 use validator::Validate;
 
 use crate::{
@@ -57,7 +63,7 @@ async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
                 );
             }
         }
-        JwtTokenKind::Token => {
+        JwtTokenKind::User => {
             if let Err(err) = TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
@@ -65,6 +71,7 @@ async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
                 );
             }
         }
+        _ => todo!(),
     }
 
     let token = match ctx.token().jwt().need_renew(&token_claim) {
@@ -234,7 +241,134 @@ async fn token_based(
     ctx: web::Data<ApiRestCtx>,
     data: web::Json<TokenBasedReqJson>,
 ) -> HttpResponse {
-    todo!()
+    let token_data = match TokenDao::db_select(ctx.dao().db(), data.token_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if token_data.token() != data.token() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Token doesn't match");
+    }
+
+    let token = if let Some(collection_id) = data.collection_id() {
+        if data.data().is_none() {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "Field data must exist");
+        }
+
+        let collection_data = match CollectionDao::db_select(ctx.dao().db(), collection_id).await {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        for auth_column in collection_data.auth_columns() {
+            if !data.data().as_ref().unwrap().contains_key(auth_column) {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "Incorrect authentication data",
+                );
+            }
+        }
+
+        let mut record_fields = HashSet::with_capacity(data.data().as_ref().unwrap().len() + 1);
+        record_fields.insert("_id");
+        let mut record_filter_childs = Vec::with_capacity(data.data().as_ref().unwrap().len());
+        for (field, value) in data.data().as_ref().unwrap() {
+            if collection_data.auth_columns().contains(field) {
+                record_fields.insert(field.as_str());
+                let schema_field = match collection_data.schema_fields().get(field) {
+                    Some(schema_field) => schema_field,
+                    None => {
+                        return Response::error_raw(
+                            &StatusCode::BAD_REQUEST,
+                            &format!("Field {field} doesn't exist in the collection"),
+                        )
+                    }
+                };
+                let column_value = match ColumnValue::from_serde_json(schema_field.kind(), &value) {
+                    Ok(column_value) => column_value,
+                    Err(err) => {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                    }
+                };
+                record_filter_childs.push(RecordFilter::new(
+                    &Some(field.to_owned()),
+                    "=",
+                    &Some(column_value),
+                    &None,
+                ));
+            }
+        }
+        let record_filter = RecordFilters::new(&Vec::from([RecordFilter::new(
+            &None,
+            "AND",
+            &None,
+            &Some(RecordFilters::new(&record_filter_childs)),
+        )]));
+
+        let (records_data, total) = match RecordDao::db_select_many(
+            ctx.dao().db(),
+            &record_fields,
+            &collection_data,
+            &None,
+            &record_filter,
+            &Vec::new(),
+            &Vec::new(),
+            &RecordPagination::new(&Some(2)),
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        if total == 0 {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "Bad authentication data. Please ask admin to review auth columns in this collection.");
+        } else if total > 1 {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Multiple authentication data is found",
+            );
+        }
+
+        let record_id = if let ColumnValue::Uuid(Some(id)) = records_data[0].get("_id").unwrap() {
+            id
+        } else {
+            return Response::error_raw(
+                &StatusCode::INTERNAL_SERVER_ERROR,
+                "Can't parse id of authentication data",
+            );
+        };
+
+        match ctx.token().jwt().encode(
+            token_data.id(),
+            &Some(UserClaim::new(collection_id, record_id)),
+            &JwtTokenKind::User,
+        ) {
+            Ok(token) => token,
+            Err(err) => {
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        }
+    } else {
+        if !token_data.allow_anonymous() {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "Token is set to prevent anonymous login",
+            );
+        }
+        match ctx
+            .token()
+            .jwt()
+            .encode(token_data.id(), &None, &JwtTokenKind::UserAnonymous)
+        {
+            Ok(token) => token,
+            Err(err) => {
+                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+            }
+        }
+    };
+
+    Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
 }
 
 async fn request_password_reset(

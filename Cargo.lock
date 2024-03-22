@@ -1111,7 +1111,6 @@ dependencies = [
  "mime",
  "serde",
  "serde_json",
- "serde_with",
  "strum 0.26.2",
  "tokio",
  "uuid",
@@ -2417,16 +2416,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "serde_with"
-version = "3.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee80b0e361bbf88fd2f6e242ccd19cfda072cb0faa6ae694ecee08199938569a"
-dependencies = [
- "serde",
- "serde_derive",
 ]
 
 [[package]]

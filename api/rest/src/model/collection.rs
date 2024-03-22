@@ -19,6 +19,7 @@ pub struct InsertOneCollectionReqJson {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
     indexes: Option<HashSet<String>>,
+    auth_columns: Option<HashSet<String>>,
 }
 
 impl InsertOneCollectionReqJson {
@@ -32,6 +33,10 @@ impl InsertOneCollectionReqJson {
 
     pub fn indexes(&self) -> &Option<HashSet<String>> {
         &self.indexes
+    }
+
+    pub fn auth_columns(&self) -> &Option<HashSet<String>> {
+        &self.auth_columns
     }
 }
 
@@ -72,6 +77,7 @@ pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
     schema_fields: Option<HashMap<String, SchemaFieldPropsJson>>,
     indexes: Option<HashSet<String>>,
+    auth_columns: Option<HashSet<String>>,
 }
 
 impl UpdateOneCollectionReqJson {
@@ -87,8 +93,15 @@ impl UpdateOneCollectionReqJson {
         &self.indexes
     }
 
+    pub fn auth_columns(&self) -> &Option<HashSet<String>> {
+        &self.auth_columns
+    }
+
     pub fn is_all_none(&self) -> bool {
-        self.name.is_none() && self.schema_fields.is_none() && self.indexes.is_none()
+        self.name.is_none()
+            && self.schema_fields.is_none()
+            && self.indexes.is_none()
+            && self.auth_columns.is_none()
     }
 }
 
@@ -128,6 +141,7 @@ pub struct CollectionResJson {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
     indexes: HashSet<String>,
+    auth_columns: HashSet<String>,
 }
 
 impl CollectionResJson {
@@ -139,6 +153,7 @@ impl CollectionResJson {
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsJson>,
         indexes: &HashSet<String>,
+        auth_columns: &HashSet<String>,
     ) -> Self {
         Self {
             id: *id,
@@ -148,6 +163,7 @@ impl CollectionResJson {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             indexes: indexes.clone(),
+            auth_columns: auth_columns.clone(),
         }
     }
 }

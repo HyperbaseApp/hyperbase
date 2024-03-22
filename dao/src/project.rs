@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use futures::future;
 use hb_db_mysql::model::project::ProjectModel as ProjectMysqlModel;
 use hb_db_postgresql::model::project::ProjectModel as ProjectPostgresModel;
 use hb_db_scylladb::model::project::ProjectModel as ProjectScyllaModel;
@@ -7,7 +8,7 @@ use hb_db_sqlite::model::project::ProjectModel as ProjectSqliteModel;
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{bucket::BucketDao, collection::CollectionDao, util::conversion, Db};
+use crate::{bucket::BucketDao, collection::CollectionDao, token::TokenDao, util::conversion, Db};
 
 pub struct ProjectDao {
     id: Uuid,
@@ -119,15 +120,29 @@ impl ProjectDao {
     }
 
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
-        let collections_data = CollectionDao::db_select_many_by_project_id(db, id).await?;
-        for collection_data in &collections_data {
-            CollectionDao::db_delete(db, collection_data.id()).await?;
-        }
+        let (collections_data, buckets_data, tokens_data) = tokio::try_join!(
+            CollectionDao::db_select_many_by_project_id(db, id),
+            BucketDao::db_select_many_by_project_id(db, id),
+            TokenDao::db_select_many_by_project_id(db, id)
+        )?;
 
-        let buckets_data = BucketDao::db_select_many_by_project_id(db, id).await?;
-        for bucket_data in &buckets_data {
-            BucketDao::db_delete(db, bucket_data.id()).await?;
+        let mut remove_collections = Vec::with_capacity(collections_data.len());
+        for collection_data in &collections_data {
+            remove_collections.push(CollectionDao::db_delete(db, collection_data.id()));
         }
+        future::join_all(remove_collections).await;
+
+        let mut remove_buckets = Vec::with_capacity(buckets_data.len());
+        for bucket_data in &buckets_data {
+            remove_buckets.push(BucketDao::db_delete(db, bucket_data.id()));
+        }
+        future::join_all(remove_buckets).await;
+
+        let mut remove_tokens = Vec::with_capacity(tokens_data.len());
+        for token_data in &tokens_data {
+            remove_tokens.push(TokenDao::db_delete(db, token_data.id()));
+        }
+        future::join_all(remove_tokens).await;
 
         match db {
             Db::ScyllaDb(db) => db.delete_project(id).await,

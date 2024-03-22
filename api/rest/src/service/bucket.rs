@@ -124,12 +124,15 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() || project_data.id() != bucket_data.project_id()
-    {
+    if project_data.admin_id() != token_claim.id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
+    }
+
+    if bucket_data.project_id() != project_data.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This bucket does not belong to you");
     }
 
     Response::data(
@@ -180,19 +183,20 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() || project_data.id() != bucket_data.project_id()
-    {
+    if project_data.admin_id() != token_claim.id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
     }
 
-    if let Some(name) = data.name() {
-        bucket_data.set_name(name);
+    if bucket_data.project_id() != project_data.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This bucket does not belong to you");
     }
 
-    if !data.is_all_none() {
+    if let Some(name) = data.name() {
+        bucket_data.set_name(name);
+
         if let Err(err) = bucket_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
@@ -245,12 +249,15 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() || project_data.id() != bucket_data.project_id()
-    {
+    if project_data.admin_id() != token_claim.id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
         );
+    }
+
+    if bucket_data.project_id() != project_data.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This bucket does not belong to you");
     }
 
     if let Err(err) = BucketDao::db_delete(ctx.dao().db(), path.bucket_id()).await {

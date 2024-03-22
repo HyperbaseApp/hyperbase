@@ -20,6 +20,7 @@ pub struct CollectionModel {
     name: String,
     schema_fields: Json<HashMap<String, SchemaFieldPropsModel>>,
     indexes: Json<HashSet<String>>,
+    auth_columns: Json<HashSet<String>>,
 }
 
 impl CollectionModel {
@@ -31,6 +32,7 @@ impl CollectionModel {
         name: &str,
         schema_fields: &Json<HashMap<String, SchemaFieldPropsModel>>,
         indexes: &Json<HashSet<String>>,
+        auth_columns: &Json<HashSet<String>>,
     ) -> Self {
         Self {
             id: *id,
@@ -40,6 +42,7 @@ impl CollectionModel {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             indexes: indexes.clone(),
+            auth_columns: auth_columns.clone(),
         }
     }
 
@@ -69,6 +72,10 @@ impl CollectionModel {
 
     pub fn indexes(&self) -> &Json<HashSet<String>> {
         &self.indexes
+    }
+
+    pub fn auth_columns(&self) -> &Json<HashSet<String>> {
+        &self.auth_columns
     }
 }
 
