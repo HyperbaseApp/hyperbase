@@ -621,6 +621,7 @@ impl RecordDao {
                     db,
                     &table_name,
                     &columns,
+                    created_by,
                     filters,
                     groups,
                     orders,
@@ -995,34 +996,40 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<Vec<Option<ScyllaCqlValue>>> {
-        if let Some(created_by) = created_by {
-            Ok(db
-                .execute(
-                    &scylla_record::select_by_id_and_created_by(table_name, columns),
-                    [id, created_by].as_ref(),
-                )
-                .await?
-                .first_row()?
-                .columns)
+        Ok(if let Some(created_by) = created_by {
+            db.execute(
+                &scylla_record::select_by_id_and_created_by(table_name, columns),
+                [id, created_by].as_ref(),
+            )
+            .await?
+            .first_row()?
+            .columns
         } else {
-            Ok(db
-                .execute(&scylla_record::select(table_name, columns), [id].as_ref())
+            db.execute(&scylla_record::select(table_name, columns), [id].as_ref())
                 .await?
                 .first_row()?
-                .columns)
-        }
+                .columns
+        })
     }
 
     async fn scylladb_select_many(
         db: &ScyllaDb,
         table_name: &str,
         columns: &Vec<&str>,
+        created_by: &Option<Uuid>,
         filters: &RecordFilters,
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Vec<Option<ScyllaCqlValue>>>, i64)> {
-        let filter = filters.scylladb_filter_query(&None, 0)?;
+        let mut filter = filters.scylladb_filter_query(&None, 0)?;
+        if created_by.is_some() {
+            if filter.len() > 0 {
+                filter = format!("\"_created_by\" = ? AND ({filter})");
+            } else {
+                filter = format!("\"_created_by\" = ?");
+            }
+        }
 
         let mut order = Vec::with_capacity(orders.len());
         for o in orders {
@@ -1037,10 +1044,14 @@ impl RecordDao {
         }
 
         let mut values = filters.scylladb_values()?;
-        if let Some(limit) = pagination.limit() {
-            values.push(Box::new(limit))
+        let mut total_values = filters.scylladb_values()?;
+        if let Some(created_by) = created_by {
+            values.insert(0, Box::new(created_by));
+            total_values.insert(0, Box::new(created_by));
         }
-        let total_values = filters.scylladb_values()?;
+        if let Some(limit) = pagination.limit() {
+            values.push(Box::new(limit));
+        }
 
         let query_select_many = scylla_record::select_many(
             table_name,
@@ -1232,21 +1243,19 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<sqlx::postgres::PgRow> {
-        if let Some(created_by) = created_by {
-            Ok(db
-                .fetch_one_row(
-                    sqlx::query(&postgres_record::select_by_id_and_created_by(
-                        table_name, columns,
-                    ))
-                    .bind(id)
-                    .bind(created_by),
-                )
-                .await?)
+        Ok(if let Some(created_by) = created_by {
+            db.fetch_one_row(
+                sqlx::query(&postgres_record::select_by_id_and_created_by(
+                    table_name, columns,
+                ))
+                .bind(id)
+                .bind(created_by),
+            )
+            .await?
         } else {
-            Ok(db
-                .fetch_one_row(sqlx::query(&postgres_record::select(table_name, columns)).bind(id))
-                .await?)
-        }
+            db.fetch_one_row(sqlx::query(&postgres_record::select(table_name, columns)).bind(id))
+                .await?
+        })
     }
 
     async fn postgresdb_select_many(
@@ -1262,7 +1271,11 @@ impl RecordDao {
         let mut argument_idx = 1;
         let mut filter = filters.postgresdb_filter_query(&None, 0, &mut argument_idx)?;
         if created_by.is_some() {
-            filter = format!("\"_created_by\" = ${argument_idx} AND ({filter})");
+            if filter.len() > 0 {
+                filter = format!("\"_created_by\" = ${argument_idx} AND ({filter})");
+            } else {
+                filter = format!("\"_created_by\" = ${argument_idx}");
+            }
             argument_idx += 1;
         }
 
@@ -1291,10 +1304,11 @@ impl RecordDao {
         let query_total = postgres_record::count(table_name, &filter);
         let mut query_total = sqlx::query_as(&query_total);
 
-        query_select_many = filters.postgresdb_values(query_select_many)?;
         if let Some(created_by) = created_by {
             query_select_many = query_select_many.bind(created_by);
+            query_total = query_total.bind(created_by);
         }
+        query_select_many = filters.postgresdb_values(query_select_many)?;
         if let Some(limit) = pagination.limit() {
             query_select_many = query_select_many.bind(limit);
         }
@@ -1499,21 +1513,19 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<sqlx::mysql::MySqlRow> {
-        if let Some(created_by) = created_by {
-            Ok(db
-                .fetch_one_row(
-                    sqlx::query(&mysql_record::select_by_id_and_created_by(
-                        table_name, columns,
-                    ))
-                    .bind(id)
-                    .bind(created_by),
-                )
-                .await?)
+        Ok(if let Some(created_by) = created_by {
+            db.fetch_one_row(
+                sqlx::query(&mysql_record::select_by_id_and_created_by(
+                    table_name, columns,
+                ))
+                .bind(id)
+                .bind(created_by),
+            )
+            .await?
         } else {
-            Ok(db
-                .fetch_one_row(sqlx::query(&mysql_record::select(table_name, columns)).bind(id))
-                .await?)
-        }
+            db.fetch_one_row(sqlx::query(&mysql_record::select(table_name, columns)).bind(id))
+                .await?
+        })
     }
 
     async fn mysqldb_select_many(
@@ -1528,7 +1540,11 @@ impl RecordDao {
     ) -> Result<(Vec<sqlx::mysql::MySqlRow>, i64)> {
         let mut filter = filters.mysqldb_filter_query(&None, 0)?;
         if created_by.is_some() {
-            filter = format!("`_created_by` = ? AND ({filter})")
+            if filter.len() > 0 {
+                filter = format!("`_created_by` = ? AND ({filter})");
+            } else {
+                filter = format!("`_created_by` = ?");
+            }
         }
 
         let mut order = Vec::with_capacity(orders.len());
@@ -1557,6 +1573,7 @@ impl RecordDao {
 
         if let Some(created_by) = created_by {
             query_select_many = query_select_many.bind(created_by);
+            query_total = query_total.bind(created_by);
         }
         query_select_many = filters.mysqldb_values(query_select_many)?;
         if let Some(limit) = pagination.limit() {
@@ -1737,21 +1754,19 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<sqlx::sqlite::SqliteRow> {
-        if let Some(created_by) = created_by {
-            Ok(db
-                .fetch_one_row(
-                    sqlx::query(&sqlite_record::select_by_id_and_created_by(
-                        table_name, columns,
-                    ))
-                    .bind(id)
-                    .bind(created_by),
-                )
-                .await?)
+        Ok(if let Some(created_by) = created_by {
+            db.fetch_one_row(
+                sqlx::query(&sqlite_record::select_by_id_and_created_by(
+                    table_name, columns,
+                ))
+                .bind(id)
+                .bind(created_by),
+            )
+            .await?
         } else {
-            Ok(db
-                .fetch_one_row(sqlx::query(&sqlite_record::select(table_name, columns)).bind(id))
-                .await?)
-        }
+            db.fetch_one_row(sqlx::query(&sqlite_record::select(table_name, columns)).bind(id))
+                .await?
+        })
     }
 
     async fn sqlitedb_select_many(
@@ -1766,7 +1781,11 @@ impl RecordDao {
     ) -> Result<(Vec<sqlx::sqlite::SqliteRow>, i64)> {
         let mut filter = filters.sqlitedb_filter_query(&None, 0)?;
         if created_by.is_some() {
-            filter = format!("\"_created_by\" = ? AND ({filter})");
+            if filter.len() > 0 {
+                filter = format!("\"_created_by\" = ? AND ({filter})");
+            } else {
+                filter = format!("\"_created_by\" = ?");
+            }
         }
 
         let mut order = Vec::with_capacity(orders.len());
@@ -1795,6 +1814,7 @@ impl RecordDao {
 
         if let Some(created_by) = created_by {
             query_select_many = query_select_many.bind(created_by);
+            query_total = query_total.bind(created_by);
         }
         query_select_many = filters.sqlitedb_values(query_select_many)?;
         if let Some(limit) = pagination.limit() {

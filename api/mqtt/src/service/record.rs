@@ -76,41 +76,43 @@ async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
             }
         }
 
-        let created_by = {
+        let created_by = if let Some(user_claim) = payload.user() {
             let collection_data =
-                match CollectionDao::db_select(ctx.dao().db(), payload.device().collection_id())
-                    .await
-                {
+                match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
                     Ok(data) => data,
-                    Err(err) => return Err(Error::msg(err.to_string())),
+                    Err(err) => return Err(err),
                 };
-            let record_data = match RecordDao::db_select(
+            let user_data = match RecordDao::db_select(
                 ctx.dao().db(),
-                payload.device().id(),
+                user_claim.id(),
                 &None,
-                &HashSet::from_iter(vec!["_id"]),
+                &HashSet::from_iter(["_id"]),
                 &collection_data,
             )
             .await
             {
                 Ok(data) => data,
-                Err(err) => return Err(Error::msg(err.to_string())),
+                Err(err) => return Err(err),
             };
 
-            let mut device_id = None;
-            if let Some(id) = record_data.get("_id") {
+            let mut user_id = None;
+            if let Some(id) = user_data.get("_id") {
                 if let ColumnValue::Uuid(id) = id {
                     if let Some(id) = id {
-                        device_id = Some(*id)
+                        user_id = Some(*id);
                     }
                 }
             }
 
-            if let Some(device_id) = device_id {
-                device_id
+            if let Some(user_id) = user_id {
+                user_id
             } else {
-                return Err(Error::msg("Device doesn't found".to_owned()));
+                return Err(Error::msg("User doesn't found"));
             }
+        } else if *token_data.allow_anonymous() {
+            *token_data.admin_id()
+        } else {
+            return Err(Error::msg("User doesn't found"));
         };
 
         let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));

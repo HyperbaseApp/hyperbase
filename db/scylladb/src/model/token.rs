@@ -8,6 +8,7 @@ pub struct TokenModel {
     updated_at: CqlTimestamp,
     project_id: Uuid,
     admin_id: Uuid,
+    name: String,
     token: String,
     allow_anonymous: bool,
     expired_at: Option<CqlTimestamp>,
@@ -20,6 +21,7 @@ impl TokenModel {
         updated_at: &CqlTimestamp,
         project_id: &Uuid,
         admin_id: &Uuid,
+        name: &str,
         token: &str,
         allow_anonymous: &bool,
         expired_at: &Option<CqlTimestamp>,
@@ -30,6 +32,7 @@ impl TokenModel {
             updated_at: *updated_at,
             project_id: *project_id,
             admin_id: *admin_id,
+            name: name.to_owned(),
             token: token.to_owned(),
             allow_anonymous: *allow_anonymous,
             expired_at: *expired_at,
@@ -54,6 +57,10 @@ impl TokenModel {
 
     pub fn admin_id(&self) -> &Uuid {
         &self.admin_id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn token(&self) -> &str {

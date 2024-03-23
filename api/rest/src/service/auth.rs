@@ -322,7 +322,7 @@ async fn token_based(
         };
 
         if total == 0 {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, "Bad authentication data. Please ask admin to review auth columns in this collection.");
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "Authentication data not found");
         } else if total > 1 {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
@@ -335,7 +335,7 @@ async fn token_based(
         } else {
             return Response::error_raw(
                 &StatusCode::INTERNAL_SERVER_ERROR,
-                "Can't parse id of authentication data",
+                "Can't parse authentication data id",
             );
         };
 

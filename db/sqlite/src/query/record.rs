@@ -163,7 +163,7 @@ pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
         columns
             .iter()
             .map(|col| format!("\"{col}\" = ?"))
-            .join(", ")
+            .join(" AND ")
     )
 }
 

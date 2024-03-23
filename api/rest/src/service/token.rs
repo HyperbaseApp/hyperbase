@@ -84,6 +84,7 @@ async fn insert_one(
     let token_data: TokenDao = TokenDao::new(
         project_data.id(),
         token_claim.id(),
+        data.name(),
         ctx.access_token_length(),
         data.allow_anonymous(),
         data.expired_at(),
@@ -100,6 +101,7 @@ async fn insert_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.project_id(),
+            token_data.name(),
             token_data.token(),
             token_data.allow_anonymous(),
             token_data.expired_at(),
@@ -162,6 +164,7 @@ async fn find_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.project_id(),
+            token_data.name(),
             token_data.token(),
             token_data.allow_anonymous(),
             token_data.expired_at(),
@@ -222,6 +225,10 @@ async fn update_one(
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 
+    if let Some(name) = data.name() {
+        token_data.set_name(name);
+    }
+
     if let Some(allow_anonymous) = data.allow_anonymous() {
         token_data.set_allow_anonymous(allow_anonymous);
     }
@@ -253,6 +260,7 @@ async fn update_one(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.project_id(),
+            token_data.name(),
             token_data.token(),
             token_data.allow_anonymous(),
             token_data.expired_at(),
@@ -369,6 +377,7 @@ async fn find_many(
             token_data.created_at(),
             token_data.updated_at(),
             token_data.project_id(),
+            token_data.name(),
             token_data.token(),
             token_data.allow_anonymous(),
             token_data.expired_at(),

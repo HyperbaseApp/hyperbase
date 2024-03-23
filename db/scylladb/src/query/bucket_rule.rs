@@ -5,25 +5,16 @@ use uuid::Uuid;
 use crate::{db::ScyllaDb, model::bucket_rule::BucketRuleModel};
 
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"bucket_rules\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"id\" = ?";
-const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = ? AND \"bucket_id\" = ?";
-const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = ?";
-const UPDATE: &str = "UPDATE \"bucket_rules\" SET \"updated_at\" = ?, \"find_one\" = ?, \"find_many\" = ?, \"insert_one\" = ?, \"update_one\" = ?, \"delete_one\" = ? WHERE \"id\" = ?";
-const DELETE: &str = "DELETE FROM \"bucket_rules\" WHERE \"id\" = ?";
-const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"token_id\" = ?";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"id\" = ?";
+const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"token_id\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
+const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"token_id\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"bucket_rules\" SET \"updated_at\" = ?, \"find_one\" = ?, \"find_many\" = ?, \"insert_one\" = ?, \"update_one\" = ?, \"delete_one\" = ? WHERE \"id\" = ?";
+const DELETE: &str = "DELETE FROM \"hyperbase\".\"bucket_rules\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up bucket_rules table");
 
     cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"bucket_rules\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"token_id\" uuid, \"bucket_id\" uuid, \"find_one\" boolean, \"find_many\" boolean, \"insert_one\" boolean, \"update_one\" boolean, \"delete_one\" boolean, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
-    cached_session
-    .get_session()
-    .query(
-        "CREATE INDEX IF NOT EXISTS ON \"hyperbase\".\"bucket_rules\" (\"token_id\", \"bucket_id\")",
-        &[],
-    )
-    .await
-    .unwrap();
     cached_session
         .get_session()
         .query(
@@ -53,10 +44,6 @@ pub async fn init(cached_session: &CachingSession) {
         .add_prepared_statement(&DELETE.into())
         .await
         .unwrap();
-    cached_session
-        .add_prepared_statement(&DELETE_MANY_BY_TOKEN_ID.into())
-        .await
-        .unwrap();
 }
 
 impl ScyllaDb {
@@ -78,7 +65,10 @@ impl ScyllaDb {
         bucket_id: &Uuid,
     ) -> Result<BucketRuleModel> {
         Ok(self
-            .execute(SELECT, [token_id, bucket_id].as_ref())
+            .execute(
+                SELECT_BY_TOKEN_ID_AND_BUCKET_ID,
+                [token_id, bucket_id].as_ref(),
+            )
             .await?
             .first_row_typed()?)
     }
@@ -116,8 +106,12 @@ impl ScyllaDb {
     }
 
     pub async fn delete_many_bucket_rules_by_token_id(&self, token_id: &Uuid) -> Result<()> {
-        self.execute(DELETE_MANY_BY_TOKEN_ID, [token_id].as_ref())
-            .await?;
+        let bucket_rules_data = self.select_many_bucket_rules_by_token_id(token_id).await?;
+        let mut deletes = Vec::new();
+        for bucket_rule_data in bucket_rules_data {
+            deletes.push(self.execute(DELETE, (*bucket_rule_data?.id(),)));
+        }
+        futures::future::join_all(deletes).await;
         Ok(())
     }
 }

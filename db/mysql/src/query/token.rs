@@ -4,17 +4,17 @@ use uuid::Uuid;
 
 use crate::{db::MysqlDb, model::token::TokenModel};
 
-const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `id` = ?";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ?";
-const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `allow_anonymous` = ?, `expired_at` = ? WHERE `id` = ?";
+const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `id` = ?";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ?";
+const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `name` = ?, `allow_anonymous` = ?, `expired_at` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `tokens` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up tokens table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `tokens` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `admin_id` binary(16), `token` text, `allow_anonymous` boolean, `expired_at` timestamp, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `tokens` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `admin_id` binary(16), `name` text, `token` text, `allow_anonymous` boolean, `expired_at` timestamp, PRIMARY KEY (`id`))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();
@@ -33,6 +33,7 @@ impl MysqlDb {
                 .bind(value.updated_at())
                 .bind(value.project_id())
                 .bind(value.admin_id())
+                .bind(value.name())
                 .bind(value.token())
                 .bind(value.allow_anonymous())
                 .bind(value.expired_at()),
@@ -64,6 +65,7 @@ impl MysqlDb {
         self.execute(
             sqlx::query(UPDATE)
                 .bind(value.updated_at())
+                .bind(value.name())
                 .bind(value.allow_anonymous())
                 .bind(value.expired_at())
                 .bind(value.id()),

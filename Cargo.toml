@@ -61,7 +61,7 @@ lettre = { version = "0.11", default-features = false, features = [
 mime = "0.3"
 num-bigint = { version = "0.4", features = ["serde"] }
 rand = "0.8"
-rumqttc = "0.23"
+rumqttc = "0.24"
 scylla = { version = "0.12", features = ["num-bigint-04", "bigdecimal-04"] }
 serde = { version = "1" }
 serde_json = { version = "1" }

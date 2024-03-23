@@ -16,6 +16,7 @@ pub struct TokenDao {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     admin_id: Uuid,
+    name: String,
     token: String,
     allow_anonymous: bool,
     expired_at: Option<DateTime<Utc>>,
@@ -25,6 +26,7 @@ impl TokenDao {
     pub fn new(
         project_id: &Uuid,
         admin_id: &Uuid,
+        name: &str,
         token_length: &usize,
         allow_anonymous: &bool,
         expired_at: &Option<DateTime<Utc>>,
@@ -36,6 +38,7 @@ impl TokenDao {
             updated_at: now,
             project_id: *project_id,
             admin_id: *admin_id,
+            name: name.to_owned(),
             token: thread_rng()
                 .sample_iter(&Alphanumeric)
                 .take(*token_length)
@@ -66,6 +69,10 @@ impl TokenDao {
         &self.admin_id
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn token(&self) -> &str {
         &self.token
     }
@@ -76,6 +83,10 @@ impl TokenDao {
 
     pub fn expired_at(&self) -> &Option<DateTime<Utc>> {
         &self.expired_at
+    }
+
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name.to_owned();
     }
 
     pub fn set_allow_anonymous(&mut self, allow_anonymous: &bool) {
@@ -300,6 +311,7 @@ impl TokenDao {
             updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             project_id: *model.project_id(),
             admin_id: *model.admin_id(),
+            name: model.name().to_owned(),
             token: model.token().to_owned(),
             allow_anonymous: *model.allow_anonymous(),
             expired_at: match &model.expired_at() {
@@ -318,6 +330,7 @@ impl TokenDao {
             &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.project_id,
             &self.admin_id,
+            &self.name,
             &self.token,
             &self.allow_anonymous,
             &match &self.expired_at {
@@ -334,6 +347,7 @@ impl TokenDao {
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             admin_id: *model.admin_id(),
+            name: model.name().to_owned(),
             token: model.token().to_owned(),
             allow_anonymous: *model.allow_anonymous(),
             expired_at: *model.expired_at(),
@@ -347,6 +361,7 @@ impl TokenDao {
             &self.updated_at,
             &self.project_id,
             &self.admin_id,
+            &self.name,
             &self.token,
             &self.allow_anonymous,
             &self.expired_at,
@@ -360,6 +375,7 @@ impl TokenDao {
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             admin_id: *model.admin_id(),
+            name: model.name().to_owned(),
             token: model.token().to_owned(),
             allow_anonymous: *model.allow_anonymous(),
             expired_at: *model.expired_at(),
@@ -373,6 +389,7 @@ impl TokenDao {
             &self.updated_at,
             &self.project_id,
             &self.admin_id,
+            &self.name,
             &self.token,
             &self.allow_anonymous,
             &self.expired_at,
@@ -386,6 +403,7 @@ impl TokenDao {
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             admin_id: *model.admin_id(),
+            name: model.name().to_owned(),
             token: model.token().to_owned(),
             allow_anonymous: *model.allow_anonymous(),
             expired_at: *model.expired_at(),
@@ -399,6 +417,7 @@ impl TokenDao {
             &self.updated_at,
             &self.project_id,
             &self.admin_id,
+            &self.name,
             &self.token,
             &self.allow_anonymous,
             &self.expired_at,

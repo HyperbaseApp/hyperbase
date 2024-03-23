@@ -159,7 +159,10 @@ pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
     format!(
         "DELETE FROM `{}` WHERE {}",
         record_table,
-        columns.iter().map(|col| format!("`{col}` = ?")).join(", ")
+        columns
+            .iter()
+            .map(|col| format!("`{col}` = ?"))
+            .join(" AND ")
     )
 }
 

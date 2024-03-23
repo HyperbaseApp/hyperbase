@@ -9,7 +9,7 @@ pub struct Payload {
 
     token_id: Uuid,
     token: String,
-    device: DevicePayload,
+    user: Option<UserPayload>,
 
     collection_id: Uuid,
     data: Option<HashMap<String, Value>>,
@@ -28,8 +28,8 @@ impl Payload {
         &self.token
     }
 
-    pub fn device(&self) -> &DevicePayload {
-        &self.device
+    pub fn user(&self) -> &Option<UserPayload> {
+        &self.user
     }
 
     pub fn collection_id(&self) -> &Uuid {
@@ -42,12 +42,12 @@ impl Payload {
 }
 
 #[derive(Deserialize)]
-pub struct DevicePayload {
+pub struct UserPayload {
     collection_id: Uuid,
     id: Uuid,
 }
 
-impl DevicePayload {
+impl UserPayload {
     pub fn collection_id(&self) -> &Uuid {
         &self.collection_id
     }

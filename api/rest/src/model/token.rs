@@ -15,11 +15,16 @@ impl InsertOneTokenReqPath {
 
 #[derive(Deserialize)]
 pub struct InsertOneTokenReqJson {
+    name: String,
     allow_anonymous: bool,
     expired_at: Option<DateTime<Utc>>,
 }
 
 impl InsertOneTokenReqJson {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn allow_anonymous(&self) -> &bool {
         &self.allow_anonymous
     }
@@ -63,11 +68,16 @@ impl UpdateOneTokenReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneTokenReqJson {
+    name: Option<String>,
     allow_anonymous: Option<bool>,
     expired_at: Option<Option<DateTime<Utc>>>,
 }
 
 impl UpdateOneTokenReqJson {
+    pub fn name(&self) -> &Option<String> {
+        &self.name
+    }
+
     pub fn allow_anonymous(&self) -> &Option<bool> {
         &self.allow_anonymous
     }
@@ -77,7 +87,7 @@ impl UpdateOneTokenReqJson {
     }
 
     pub fn is_all_none(&self) -> bool {
-        self.allow_anonymous.is_none() && self.expired_at.is_none()
+        self.name.is_none() && self.allow_anonymous.is_none() && self.expired_at.is_none()
     }
 }
 
@@ -114,6 +124,7 @@ pub struct TokenResJson {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     project_id: Uuid,
+    name: String,
     token: String,
     allow_anonymous: bool,
     expired_at: Option<DateTime<Utc>>,
@@ -125,6 +136,7 @@ impl TokenResJson {
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
         project_id: &Uuid,
+        name: &str,
         token: &str,
         allow_anonymous: &bool,
         expired_at: &Option<DateTime<Utc>>,
@@ -134,6 +146,7 @@ impl TokenResJson {
             created_at: *created_at,
             updated_at: *updated_at,
             project_id: *project_id,
+            name: name.to_owned(),
             token: token.to_owned(),
             allow_anonymous: *allow_anonymous,
             expired_at: *expired_at,
