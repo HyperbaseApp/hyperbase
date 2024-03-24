@@ -1,4 +1,4 @@
-use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use hb_dao::{
@@ -16,8 +16,8 @@ use crate::{
         collection::{
             CollectionResJson, DeleteCollectionResJson, DeleteOneCollectionReqPath,
             FindManyCollectionReqPath, FindOneCollectionReqPath, InsertOneCollectionReqJson,
-            InsertOneCollectionReqPath, SchemaFieldPropsJson, UpdateOneCollectionReqJson,
-            UpdateOneCollectionReqPath,
+            InsertOneCollectionReqPath, SchemaFieldPropsJson, SubscribeCollectionReqPath,
+            SubscribeCollectionReqQuery, UpdateOneCollectionReqJson, UpdateOneCollectionReqPath,
         },
         PaginationRes, Response,
     },
@@ -31,6 +31,10 @@ pub fn collection_api(cfg: &mut web::ServiceConfig) {
     .route(
         "/project/{project_id}/collection/{collection_id}",
         web::get().to(find_one),
+    )
+    .route(
+        "/project/{project_id}/collection/{collection_id}/subscribe",
+        web::get().to(subscribe),
     )
     .route(
         "/project/{project_id}/collection/{collection_id}",
@@ -283,6 +287,90 @@ async fn find_one(
             collection_data.auth_columns(),
         ),
     )
+}
+
+async fn subscribe(
+    ctx: web::Data<ApiRestCtx>,
+    req: HttpRequest,
+    stream: web::Payload,
+    path: web::Path<SubscribeCollectionReqPath>,
+    query: web::Query<SubscribeCollectionReqQuery>,
+) -> HttpResponse {
+    let token = query.token();
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let admin_id = match token_claim.kind() {
+        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get user data: {err}"),
+                )
+            }
+        },
+        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+            Ok(data) => *data.admin_id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Failed to get token data: {err}"),
+                )
+            }
+        },
+        _ => todo!(),
+    };
+
+    let (project_data, collection_data) = match tokio::try_join!(
+        ProjectDao::db_select(ctx.dao().db(), path.project_id()),
+        CollectionDao::db_select(ctx.dao().db(), path.collection_id()),
+    ) {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if &admin_id != project_data.admin_id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
+    if project_data.id() != collection_data.project_id() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
+    }
+
+    let (res, session, msg_stream) = match actix_ws_ng::handle(&req, stream) {
+        Ok(res) => res,
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
+    };
+
+    tokio::task::spawn_local((|| async move {
+        let _ = ctx
+            .websocket()
+            .handler()
+            .clone()
+            .connection(
+                if let Some(user) = token_claim.user() {
+                    Some(*user.id())
+                } else {
+                    None
+                },
+                *token_claim.id(),
+                *collection_data.id(),
+                session,
+                msg_stream,
+            )
+            .await;
+    })());
+
+    res
 }
 
 async fn update_one(

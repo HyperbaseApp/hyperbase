@@ -57,6 +57,33 @@ impl FindOneCollectionReqPath {
 }
 
 #[derive(Deserialize)]
+pub struct SubscribeCollectionReqPath {
+    project_id: Uuid,
+    collection_id: Uuid,
+}
+
+impl SubscribeCollectionReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+
+    pub fn collection_id(&self) -> &Uuid {
+        &self.collection_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SubscribeCollectionReqQuery {
+    token: String,
+}
+
+impl SubscribeCollectionReqQuery {
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+}
+
+#[derive(Deserialize)]
 pub struct UpdateOneCollectionReqPath {
     project_id: Uuid,
     collection_id: Uuid,

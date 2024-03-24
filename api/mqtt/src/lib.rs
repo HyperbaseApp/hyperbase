@@ -1,5 +1,9 @@
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use anyhow::{Error, Result};
-use chrono::{Duration, Utc};
 use context::ApiMqttCtx;
 use model::payload::Payload;
 use rumqttc::v5::{
@@ -19,7 +23,7 @@ pub struct ApiMqttClient {
     eventloop: EventLoop,
     topic: String,
     timeout: Duration,
-    context: ApiMqttCtx,
+    context: Arc<ApiMqttCtx>,
 }
 
 impl ApiMqttClient {
@@ -42,7 +46,7 @@ impl ApiMqttClient {
             eventloop,
             topic: topic.to_owned(),
             timeout: *timeout,
-            context: ctx,
+            context: Arc::new(ctx),
         }
     }
 
@@ -52,23 +56,19 @@ impl ApiMqttClient {
         tokio::spawn((|| async move {
             self.client.subscribe(self.topic, QoS::AtMostOnce).await?;
 
-            let mut now = Utc::now();
+            let mut now = Instant::now();
 
             loop {
                 tokio::select! {
                     _ = stop_rx.recv() => {
-                        hb_log::info(None, "ApiMqttClient: Shutting down component");
-                        self.client.disconnect().await.ok();
-                        return Ok(());
+                        break;
                     }
                     _ = tokio::signal::ctrl_c() => {
-                        hb_log::info(None, "ApiMqttClient: Shutting down component");
-                        self.client.disconnect().await.ok();
-                        return Ok(());
+                        break;
                     }
                     poll_result = self.eventloop.poll() => {
                         if let Ok(event) = poll_result {
-                            now = Utc::now();
+                            now = Instant::now();
                             if let Event::Incoming(packet) = &event {
                                 if let Packet::Publish(publish) = packet {
                                     match serde_json::from_slice::<Payload>(&publish.payload) {
@@ -80,7 +80,7 @@ impl ApiMqttClient {
                         }
                     }
                 }
-                if Utc::now().signed_duration_since(now) > self.timeout {
+                if Instant::now().duration_since(now) > self.timeout {
                     let err = Error::msg(format!(
                         "Failed to connect to MQTT broker {:?}",
                         self.eventloop.options.broker_address()
@@ -89,6 +89,10 @@ impl ApiMqttClient {
                     return Err(err);
                 }
             }
+
+            hb_log::info(None, "ApiMqttClient: Shutting down component");
+            let _ = self.client.disconnect().await;
+            return Ok(());
         })())
     }
 }

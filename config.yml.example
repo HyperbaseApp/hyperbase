@@ -57,6 +57,9 @@ api:
     host: "0.0.0.0"
     port: 8080
     allowed_origin: "example.org"
+  websocket:
+    heartbeat_interval: "5s"
+    client_timeout: "10s"
   mqtt:
     host: "broker.hivemq.com"
     port: 1883

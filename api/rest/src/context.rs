@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use hb_api_websocket::handler::WebSocketHandler;
 use hb_dao::Db;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::MailPayload;
@@ -11,6 +12,7 @@ pub struct ApiRestCtx {
     token: ApiRestTokenCtx,
     mailer: ApiRestMailerCtx,
     dao: ApiRestDaoCtx,
+    websocket: ApiRestWsCtx,
     admin_registration: bool,
     access_token_length: usize,
     registration_ttl: u32,
@@ -24,6 +26,7 @@ impl ApiRestCtx {
         token: ApiRestTokenCtx,
         mailer: ApiRestMailerCtx,
         dao: ApiRestDaoCtx,
+        websocket: ApiRestWsCtx,
         admin_registration: bool,
         access_token_length: usize,
         registration_ttl: u32,
@@ -35,6 +38,7 @@ impl ApiRestCtx {
             token,
             mailer,
             dao,
+            websocket,
             admin_registration,
             access_token_length,
             registration_ttl,
@@ -57,6 +61,10 @@ impl ApiRestCtx {
 
     pub fn dao(&self) -> &ApiRestDaoCtx {
         &self.dao
+    }
+
+    pub fn websocket(&self) -> &ApiRestWsCtx {
+        &self.websocket
     }
 
     pub fn admin_registration(&self) -> &bool {
@@ -133,5 +141,19 @@ impl ApiRestDaoCtx {
 
     pub fn db(&self) -> &Db {
         &self.db
+    }
+}
+
+pub struct ApiRestWsCtx {
+    handler: WebSocketHandler,
+}
+
+impl ApiRestWsCtx {
+    pub fn new(handler: WebSocketHandler) -> Self {
+        Self { handler }
+    }
+
+    pub fn handler(&self) -> &WebSocketHandler {
+        &self.handler
     }
 }

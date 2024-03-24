@@ -15,12 +15,14 @@ members = [
     "token/jwt",
     "api/rest",
     "api/mqtt",
+    "api/websocket",
 ]
 
 
 [workspace.dependencies]
 hb_api_mqtt = { path = "./api/mqtt" }
 hb_api_rest = { path = "./api/rest" }
+hb_api_websocket = { path = "./api/websocket" }
 hb_config = { path = "./config" }
 hb_dao = { path = "./dao" }
 hb_db_mysql = { path = "./db/mysql" }
@@ -38,6 +40,7 @@ actix-files = "0.6"
 actix-multipart = "0.6"
 actix-web = "4"
 actix-web-httpauth = "0.8"
+actix-ws-ng = "0.3"
 ahash = "0.8"
 anyhow = "1"
 argon2 = "0.5"

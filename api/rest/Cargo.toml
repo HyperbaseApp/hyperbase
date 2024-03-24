@@ -6,6 +6,7 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 
 [dependencies]
+hb_api_websocket = { workspace = true }
 hb_config = { workspace = true }
 hb_dao = { workspace = true }
 hb_error = { workspace = true }
@@ -19,6 +20,7 @@ actix-files = { workspace = true }
 actix-multipart = { workspace = true }
 actix-web = { workspace = true }
 actix-web-httpauth = { workspace = true }
+actix-ws-ng = { workspace = true }
 ahash = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }

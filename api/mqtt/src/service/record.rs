@@ -1,5 +1,8 @@
-use ahash::HashSet;
+use std::{str::FromStr, sync::Arc};
+
+use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
+use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSocketMessageKind};
 use hb_dao::{
     collection::CollectionDao,
     project::ProjectDao,
@@ -7,11 +10,12 @@ use hb_dao::{
     token::TokenDao,
     value::{ColumnKind, ColumnValue},
 };
+use uuid::Uuid;
 
 use crate::{context::ApiMqttCtx, model::payload::Payload};
 
-pub async fn record_service(ctx: &ApiMqttCtx, payload: &Payload) {
-    match insert_one(ctx, payload).await {
+pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
+    match insert_one(ctx.clone(), payload).await {
         Ok(_) => hb_log::info(
             None,
             format!(
@@ -23,7 +27,7 @@ pub async fn record_service(ctx: &ApiMqttCtx, payload: &Payload) {
     };
 }
 
-async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
+async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
     let token_data = match TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
         Ok(data) => data,
         Err(err) => return Err(Error::msg(format!("Failed to get token data: {err}"))),
@@ -154,6 +158,60 @@ async fn insert_one(ctx: &ApiMqttCtx, payload: &Payload) -> Result<()> {
         }
 
         record_data.db_insert(ctx.dao().db()).await?;
+
+        tokio::spawn((|| async move {
+            let mut record = HashMap::with_capacity(record_data.len());
+            for (key, value) in record_data.data() {
+                let value = match value.to_serde_json() {
+                    Ok(value) => value,
+                    Err(err) => {
+                        hb_log::error(
+                            None,
+                            &format!("ApiMqttClient: Error when serializing record: {err}"),
+                        );
+                        return;
+                    }
+                };
+                record.insert(key.to_owned(), value);
+            }
+
+            let record_id = Uuid::from_str(record["_id"].as_str().unwrap()).unwrap();
+            let created_by = Uuid::from_str(record["_created_by"].as_str().unwrap()).unwrap();
+
+            let record = match serde_json::to_value(&record) {
+                Ok(value) => value,
+                Err(err) => {
+                    hb_log::error(
+                        None,
+                        &format!(
+                            "ApiMqttClient: Error when serializing record {}: {}",
+                            record_id, err
+                        ),
+                    );
+                    return;
+                }
+            };
+
+            if let Err(err) = ctx.websocket().broadcaster().broadcast(
+                *collection_data.id(),
+                WebSocketMessage::new(
+                    *collection_data.id(),
+                    record_id,
+                    created_by,
+                    WebSocketMessageKind::InsertOne,
+                    record,
+                ),
+            ) {
+                hb_log::error(
+                    None,
+                    &format!(
+                    "ApiMqttClient: Error when broadcasting insert_one record {} to websocket: {}",
+                    record_id, err
+                ),
+                );
+                return;
+            }
+        })());
     } else {
         return Err(Error::msg("'data' field in payload is required"));
     }

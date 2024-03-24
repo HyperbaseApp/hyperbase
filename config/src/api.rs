@@ -1,16 +1,22 @@
-use chrono::Duration;
-use duration_str::deserialize_duration_chrono;
+use std::time::Duration;
+
+use duration_str::deserialize_duration;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ApiConfig {
     rest: ApiRestConfig,
+    websocket: ApiWebSocketConfig,
     mqtt: ApiMqttConfig,
 }
 
 impl ApiConfig {
     pub fn rest(&self) -> &ApiRestConfig {
         &self.rest
+    }
+
+    pub fn websocket(&self) -> &ApiWebSocketConfig {
+        &self.websocket
     }
 
     pub fn mqtt(&self) -> &ApiMqttConfig {
@@ -40,12 +46,30 @@ impl ApiRestConfig {
 }
 
 #[derive(Deserialize)]
+pub struct ApiWebSocketConfig {
+    #[serde(deserialize_with = "deserialize_duration")]
+    heartbeat_interval: Duration,
+    #[serde(deserialize_with = "deserialize_duration")]
+    client_timeout: Duration,
+}
+
+impl ApiWebSocketConfig {
+    pub fn heartbeat_interval(&self) -> &Duration {
+        &self.heartbeat_interval
+    }
+
+    pub fn client_timeout(&self) -> &Duration {
+        &self.client_timeout
+    }
+}
+
+#[derive(Deserialize)]
 pub struct ApiMqttConfig {
     host: String,
     port: u16,
     topic: String,
     channel_capacity: usize,
-    #[serde(deserialize_with = "deserialize_duration_chrono")]
+    #[serde(deserialize_with = "deserialize_duration")]
     timeout: Duration,
 }
 

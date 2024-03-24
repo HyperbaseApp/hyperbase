@@ -6,7 +6,6 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 
 [dependencies]
-chrono = { workspace = true }
 duration-str = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }

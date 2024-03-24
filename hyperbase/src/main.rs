@@ -1,12 +1,18 @@
 use std::sync::Arc;
 
 use hb_api_mqtt::{
-    context::{ApiMqttCtx, ApiMqttDaoCtx},
+    context::{ApiMqttCtx, ApiMqttDaoCtx, ApiMqttWsCtx},
     ApiMqttClient,
 };
 use hb_api_rest::{
-    context::{ApiRestCtx, ApiRestDaoCtx, ApiRestHashCtx, ApiRestMailerCtx, ApiRestTokenCtx},
+    context::{
+        ApiRestCtx, ApiRestDaoCtx, ApiRestHashCtx, ApiRestMailerCtx, ApiRestTokenCtx, ApiRestWsCtx,
+    },
     ApiRestServer,
+};
+use hb_api_websocket::{
+    context::{ApiWebSocketCtx, ApiWebSocketDaoCtx},
+    server::ApiWebSocketServer,
 };
 use hb_dao::Db;
 use hb_db_mysql::db::MysqlDb;
@@ -104,6 +110,24 @@ async fn main() {
         return;
     };
 
+    let (api_websocket_server, websocket_handler, websocket_publisher) = ApiWebSocketServer::new(
+        ApiWebSocketCtx::new(ApiWebSocketDaoCtx::new(db.clone())),
+        config.api().websocket().heartbeat_interval(),
+        config.api().websocket().client_timeout(),
+    );
+
+    let api_mqtt_client = ApiMqttClient::new(
+        config.api().mqtt().host(),
+        config.api().mqtt().port(),
+        config.api().mqtt().topic(),
+        config.api().mqtt().channel_capacity(),
+        config.api().mqtt().timeout(),
+        ApiMqttCtx::new(
+            ApiMqttDaoCtx::new(db.clone()),
+            ApiMqttWsCtx::new(websocket_publisher),
+        ),
+    );
+
     let api_rest_server = ApiRestServer::new(
         config.app().mode(),
         config.api().rest().host(),
@@ -113,7 +137,8 @@ async fn main() {
             ApiRestHashCtx::new(argon2_hash),
             ApiRestTokenCtx::new(jwt_token),
             ApiRestMailerCtx::new(mailer_sender),
-            ApiRestDaoCtx::new(db.clone()),
+            ApiRestDaoCtx::new(db),
+            ApiRestWsCtx::new(websocket_handler),
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),
             *config.auth().registration_ttl(),
@@ -122,21 +147,13 @@ async fn main() {
         ),
     );
 
-    let api_mqtt_client = ApiMqttClient::new(
-        config.api().mqtt().host(),
-        config.api().mqtt().port(),
-        config.api().mqtt().topic(),
-        config.api().mqtt().channel_capacity(),
-        config.api().mqtt().timeout(),
-        ApiMqttCtx::new(ApiMqttDaoCtx::new(db)),
-    );
-
     let (stop_tx, stop_rx) = tokio::sync::broadcast::channel(1);
 
     match tokio::try_join!(
         mailer.run(stop_tx.subscribe()),
         api_mqtt_client.run(stop_tx.subscribe()),
-        api_rest_server.run(stop_rx)
+        api_rest_server.run(stop_tx.subscribe()),
+        api_websocket_server.run(stop_rx)
     ) {
         Ok(_) => hb_log::info(Some("👋"), "Hyperbase: Turned off"),
         Err(err) => {

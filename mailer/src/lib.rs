@@ -63,12 +63,10 @@ impl Mailer {
             loop {
                 tokio::select! {
                     _ = stop_rx.recv() => {
-                        hb_log::info(None, "Mailer: Shutting down component");
-                        return;
+                        break;
                     }
                     _ = tokio::signal::ctrl_c() => {
-                        hb_log::info(None, "Mailer: Shutting down component");
-                        return;
+                        break;
                     }
                     recv = self.channel_receiver.recv() => {
                         match recv {
@@ -97,17 +95,17 @@ impl Mailer {
 
                                 if let Err(err) = self.smtp_transport.send(&message) {
                                     hb_log::error(None, &err);
-                                    continue;
                                 }
                             },
                             None => {
-                                hb_log::info(None, "Mailer: Shutting down component");
-                                return;
+                                break;
                             }
                         }
                     }
                 }
             }
+
+            hb_log::info(None, "Mailer: Shutting down component");
         })())
     }
 }

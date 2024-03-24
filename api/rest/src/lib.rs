@@ -76,15 +76,13 @@ impl ApiRestServer {
             let server_handle = server.handle();
 
             tokio::select! {
-                _ = stop_rx.recv() => {
-                    hb_log::info(None, "ApiRestServer: Shutting down component");
-                    server_handle.stop(true).await;
-                }
-                _ = server => {
-                    hb_log::info(None, "ApiRestServer: Shutting down component");
-                }
+                _ = stop_rx.recv() => {}
+                _ = server => {}
             }
-            
+
+            hb_log::info(None, "ApiRestServer: Shutting down component");
+            server_handle.stop(true).await;
+
             Ok(())
         })())
     }

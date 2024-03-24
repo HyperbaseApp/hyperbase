@@ -10,3 +10,4 @@ pub mod project;
 pub mod record;
 pub mod root;
 pub mod token;
+pub mod user;

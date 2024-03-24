@@ -8,6 +8,7 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 [dependencies]
 hb_api_mqtt = { workspace = true }
 hb_api_rest = { workspace = true }
+hb_api_websocket = { workspace = true }
 hb_config = { workspace = true }
 hb_dao = { workspace = true }
 hb_db_mysql = { workspace = true }

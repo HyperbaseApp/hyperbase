@@ -1,6 +1,9 @@
+use std::str::FromStr;
+
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSocketMessageKind};
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
@@ -10,6 +13,7 @@ use hb_dao::{
     value::{ColumnKind, ColumnValue},
 };
 use hb_token_jwt::kind::JwtTokenKind;
+use uuid::Uuid;
 
 use crate::{
     context::ApiRestCtx,
@@ -216,6 +220,46 @@ async fn insert_one(
         };
         record.insert(key.to_owned(), value);
     }
+
+    let record_pub = record.clone();
+    tokio::task::spawn_local((|| async move {
+        let record_id = Uuid::from_str(record_pub["_id"].as_str().unwrap()).unwrap();
+        let created_by = Uuid::from_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
+
+        let record = match serde_json::to_value(&record_pub) {
+            Ok(value) => value,
+            Err(err) => {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "ApiRestServer: Error when serializing record {}: {}",
+                        record_id, err
+                    ),
+                );
+                return;
+            }
+        };
+
+        if let Err(err) = ctx.websocket().handler().clone().broadcast(
+            *collection_data.id(),
+            WebSocketMessage::new(
+                *collection_data.id(),
+                record_id,
+                created_by,
+                WebSocketMessageKind::InsertOne,
+                record,
+            ),
+        ) {
+            hb_log::error(
+                None,
+                &format!(
+                    "ApiRestServer: Error when broadcasting insert_one record {} to websocket: {}",
+                    record_pub["_id"], err
+                ),
+            );
+            return;
+        }
+    })());
 
     Response::data(&StatusCode::CREATED, &None, &RecordResJson::new(&record))
 }
@@ -549,6 +593,46 @@ async fn update_one(
         record.insert(key.to_owned(), value);
     }
 
+    let record_id = path.record_id().clone();
+    let record_pub = record.clone();
+    tokio::task::spawn_local((|| async move {
+        let created_by = Uuid::from_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
+
+        let record = match serde_json::to_value(&record_pub) {
+            Ok(value) => value,
+            Err(err) => {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "ApiRestServer: Error when serializing record {}: {}",
+                        record_id, err
+                    ),
+                );
+                return;
+            }
+        };
+
+        if let Err(err) = ctx.websocket().handler().clone().broadcast(
+            *collection_data.id(),
+            WebSocketMessage::new(
+                *collection_data.id(),
+                record_id,
+                created_by,
+                WebSocketMessageKind::UpdateOne,
+                record,
+            ),
+        ) {
+            hb_log::error(
+                None,
+                &format!(
+                    "ApiRestServer: Error when broadcasting update_one record {} to websocket: {}",
+                    record_pub["_id"], err
+                ),
+            );
+            return;
+        }
+    })());
+
     Response::data(&StatusCode::OK, &None, &RecordResJson::new(&record))
 }
 
@@ -656,6 +740,22 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
     };
 
+    let mut fields = HashSet::with_capacity(1);
+    fields.insert("_created_by");
+
+    let record_data = match RecordDao::db_select(
+        ctx.dao().db(),
+        path.record_id(),
+        &created_by,
+        &fields,
+        &collection_data,
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
     if let Err(err) = RecordDao::db_delete(
         ctx.dao().db(),
         collection_data.id(),
@@ -666,6 +766,52 @@ async fn delete_one(
     {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
+
+    let record_id = path.record_id().clone();
+    tokio::task::spawn_local((|| async move {
+        let created_by = Uuid::from_str(
+            record_data.data()["_created_by"]
+                .to_serde_json()
+                .unwrap()
+                .as_str()
+                .unwrap(),
+        )
+        .unwrap();
+
+        let record_id_val = match serde_json::to_value(&record_id) {
+            Ok(value) => value,
+            Err(err) => {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "ApiRestServer: Error when serializing record {}: {}",
+                        record_id, err
+                    ),
+                );
+                return;
+            }
+        };
+
+        if let Err(err) = ctx.websocket().handler().clone().broadcast(
+            *collection_data.id(),
+            WebSocketMessage::new(
+                *collection_data.id(),
+                record_id,
+                created_by,
+                WebSocketMessageKind::DeleteOne,
+                record_id_val,
+            ),
+        ) {
+            hb_log::error(
+                None,
+                &format!(
+                    "ApiRestServer: Error when broadcasting delete_one record {} to websocket: {}",
+                    record_id, err
+                ),
+            );
+            return;
+        }
+    })());
 
     Response::data(
         &StatusCode::OK,

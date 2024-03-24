@@ -1,18 +1,18 @@
 [package]
-name = "hb_api_mqtt"
+name = "hb_api_websocket"
 version = "0.1.0"
 edition = "2021"
 authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 
 [dependencies]
-hb_api_websocket = { workspace = true }
 hb_dao = { workspace = true }
 hb_log = { workspace = true }
 
+actix-ws-ng = { workspace = true }
 ahash = { workspace = true }
 anyhow = { workspace = true }
-rumqttc = { workspace = true }
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
