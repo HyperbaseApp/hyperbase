@@ -157,10 +157,10 @@ impl FindManyRecordFiltersReqJson {
     pub fn to_dao(&self, collection_data: &CollectionDao) -> Result<RecordFilters> {
         let mut filters = Vec::with_capacity(self.0.len());
         for f in &self.0 {
-            if (f.field.is_some() || f.value.is_some()) && f.child.is_some() {
-                return Err(Error::msg("Wrong filter format. If 'child' field exists, then 'name' and 'value' fields must not exist"));
-            } else if f.child.is_none() && f.field.is_none() {
-                return Err(Error::msg("Wrong filter format. If 'child' field does not exist, then 'name' field must exist"));
+            if (f.field.is_some() || f.value.is_some()) && f.children.is_some() {
+                return Err(Error::msg("Wrong filter format. If 'children' field exists, then 'name' and 'value' fields must not exist"));
+            } else if f.children.is_none() && f.field.is_none() {
+                return Err(Error::msg("Wrong filter format. If 'children' field does not exist, then 'name' field must exist"));
             }
             let schema_field_kind = match &f.field {
                 Some(field) => match collection_data.schema_fields().get(field) {
@@ -198,8 +198,8 @@ impl FindManyRecordFiltersReqJson {
                 &f.field,
                 &f.op,
                 &value,
-                &if let Some(child) = &f.child {
-                    Some(child.to_dao(collection_data)?)
+                &if let Some(children) = &f.children {
+                    Some(children.to_dao(collection_data)?)
                 } else {
                     None
                 },
@@ -214,7 +214,7 @@ pub struct FindManyRecordFilterReqJson {
     field: Option<String>,
     op: String,
     value: Option<Value>,
-    child: Option<FindManyRecordFiltersReqJson>,
+    children: Option<FindManyRecordFiltersReqJson>,
 }
 
 #[derive(Deserialize)]

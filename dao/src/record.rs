@@ -1914,9 +1914,9 @@ impl RecordFilters {
                 }
             }
             let op = f.op.to_uppercase();
-            if let Some(child) = &f.child {
+            if let Some(children) = &f.children {
                 if SCYLLA_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    filter += &child.scylladb_filter_query(&Some(&op), level + 1)?;
+                    filter += &children.scylladb_filter_query(&Some(&op), level + 1)?;
                 } else {
                     return Err(Error::msg(format!(
                         "Operator '{op}' is not supported as a logical operator in ScyllaDB"
@@ -1945,8 +1945,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 values.push(value.to_scylladb_model()?)
             }
-            if let Some(child) = &f.child {
-                values.append(&mut child.scylladb_values()?)
+            if let Some(children) = &f.children {
+                values.append(&mut children.scylladb_values()?)
             }
         }
         Ok(values)
@@ -1972,9 +1972,9 @@ impl RecordFilters {
                 }
             }
             let op = f.op.to_uppercase();
-            if let Some(child) = &f.child {
+            if let Some(children) = &f.children {
                 if POSTGRES_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    filter += &child.postgresdb_filter_query(
+                    filter += &children.postgresdb_filter_query(
                         &Some(&op),
                         level + 1,
                         first_argument_idx,
@@ -2013,8 +2013,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 query = value.to_postgresdb_model(query)?
             }
-            if let Some(child) = &f.child {
-                query = child.postgresdb_values(query)?
+            if let Some(children) = &f.children {
+                query = children.postgresdb_values(query)?
             }
         }
         Ok(query)
@@ -2029,8 +2029,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 query = value.to_postgresdb_model_as(query)?
             }
-            if let Some(child) = &f.child {
-                query = child.postgresdb_values_as(query)?
+            if let Some(children) = &f.children {
+                query = children.postgresdb_values_as(query)?
             }
         }
         Ok(query)
@@ -2055,9 +2055,9 @@ impl RecordFilters {
                 }
             }
             let op = f.op.to_uppercase();
-            if let Some(child) = &f.child {
+            if let Some(children) = &f.children {
                 if MYSQL_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    filter += &child.mysqldb_filter_query(&Some(&op), level + 1)?;
+                    filter += &children.mysqldb_filter_query(&Some(&op), level + 1)?;
                 } else {
                     return Err(Error::msg(format!(
                         "Operator '{op}' is not supported as a logical operator in MySQL"
@@ -2091,8 +2091,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 query = value.to_mysqldb_model(query)?
             }
-            if let Some(child) = &f.child {
-                query = child.mysqldb_values(query)?
+            if let Some(children) = &f.children {
+                query = children.mysqldb_values(query)?
             }
         }
         Ok(query)
@@ -2107,8 +2107,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 query = value.to_mysqldb_model_as(query)?
             }
-            if let Some(child) = &f.child {
-                query = child.mysqldb_values_as(query)?
+            if let Some(children) = &f.children {
+                query = children.mysqldb_values_as(query)?
             }
         }
         Ok(query)
@@ -2133,9 +2133,9 @@ impl RecordFilters {
                 }
             }
             let op = f.op.to_uppercase();
-            if let Some(child) = &f.child {
+            if let Some(children) = &f.children {
                 if SQLITE_LOGICAL_OPERATOR.contains(&op.as_str()) {
-                    filter += &child.sqlitedb_filter_query(&Some(&op), level + 1)?;
+                    filter += &children.sqlitedb_filter_query(&Some(&op), level + 1)?;
                 } else {
                     return Err(Error::msg(format!(
                         "Operator '{op}' is not supported as a logical operator in SQLite"
@@ -2169,8 +2169,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 query = value.to_sqlitedb_model(query)?
             }
-            if let Some(child) = &f.child {
-                query = child.sqlitedb_values(query)?
+            if let Some(children) = &f.children {
+                query = children.sqlitedb_values(query)?
             }
         }
         Ok(query)
@@ -2185,8 +2185,8 @@ impl RecordFilters {
             if let Some(value) = &f.value {
                 query = value.to_sqlitedb_model_as(query)?
             }
-            if let Some(child) = &f.child {
-                query = child.sqlitedb_values_as(query)?
+            if let Some(children) = &f.children {
+                query = children.sqlitedb_values_as(query)?
             }
         }
         Ok(query)
@@ -2195,8 +2195,8 @@ impl RecordFilters {
     fn values_capacity(&self) -> usize {
         let mut capacity = self.0.len();
         for f in &self.0 {
-            if let Some(child) = &f.child {
-                capacity += child.values_capacity()
+            if let Some(children) = &f.children {
+                capacity += children.values_capacity()
             }
         }
         capacity
@@ -2208,7 +2208,7 @@ pub struct RecordFilter {
     field: Option<String>,
     op: String,
     value: Option<ColumnValue>,
-    child: Option<RecordFilters>,
+    children: Option<RecordFilters>,
 }
 
 impl RecordFilter {
@@ -2216,13 +2216,13 @@ impl RecordFilter {
         field: &Option<String>,
         op: &str,
         value: &Option<ColumnValue>,
-        child: &Option<RecordFilters>,
+        children: &Option<RecordFilters>,
     ) -> Self {
         Self {
             field: field.to_owned(),
             op: op.to_owned(),
             value: value.clone(),
-            child: child.clone(),
+            children: children.clone(),
         }
     }
 
@@ -2238,8 +2238,8 @@ impl RecordFilter {
         &self.value
     }
 
-    pub fn child(&self) -> &Option<RecordFilters> {
-        &self.child
+    pub fn children(&self) -> &Option<RecordFilters> {
+        &self.children
     }
 }
 
