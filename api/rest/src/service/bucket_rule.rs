@@ -152,12 +152,19 @@ async fn find_one(
         );
     }
 
-    let bucket_rule_data = match BucketRuleDao::db_select(ctx.dao().db(), path.rule_id()).await {
+    let (token_data, bucket_rule_data) = match tokio::try_join!(
+        TokenDao::db_select(ctx.dao().db(), path.token_id()),
+        BucketRuleDao::db_select(ctx.dao().db(), path.rule_id())
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if bucket_rule_data.token_id() != token_claim.id() {
+    if token_data.admin_id() != token_claim.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
+    }
+
+    if bucket_rule_data.token_id() != token_data.id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This bucket rule does not belong to you",
@@ -210,13 +217,19 @@ async fn update_one(
         );
     }
 
-    let mut bucket_rule_data = match BucketRuleDao::db_select(ctx.dao().db(), path.rule_id()).await
-    {
+    let (token_data, mut bucket_rule_data) = match tokio::try_join!(
+        TokenDao::db_select(ctx.dao().db(), path.token_id()),
+        BucketRuleDao::db_select(ctx.dao().db(), path.rule_id())
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if bucket_rule_data.token_id() != token_claim.id() {
+    if token_data.admin_id() != token_claim.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
+    }
+
+    if bucket_rule_data.token_id() != token_data.id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This bucket rule does not belong to you",
@@ -294,12 +307,19 @@ async fn delete_one(
         );
     }
 
-    let bucket_rule_data = match BucketRuleDao::db_select(ctx.dao().db(), path.rule_id()).await {
+    let (token_data, bucket_rule_data) = match tokio::try_join!(
+        TokenDao::db_select(ctx.dao().db(), path.token_id()),
+        BucketRuleDao::db_select(ctx.dao().db(), path.rule_id())
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if bucket_rule_data.token_id() != token_claim.id() {
+    if token_data.admin_id() != token_claim.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
+    }
+
+    if bucket_rule_data.token_id() != token_data.id() {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This bucket rule does not belong to you",
@@ -343,19 +363,25 @@ async fn find_many(
         );
     }
 
-    let bucket_rule_data =
-        match BucketRuleDao::db_select_many_by_token_id(ctx.dao().db(), path.token_id()).await {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let (token_data, bucket_rules_data) = match tokio::try_join!(
+        TokenDao::db_select(ctx.dao().db(), path.token_id()),
+        BucketRuleDao::db_select_many_by_token_id(ctx.dao().db(), path.token_id())
+    ) {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if token_data.admin_id() != token_claim.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
+    }
 
     Response::data(
         &StatusCode::OK,
         &Some(PaginationRes::new(
-            &bucket_rule_data.len(),
-            &bucket_rule_data.len(),
+            &bucket_rules_data.len(),
+            &bucket_rules_data.len(),
         )),
-        &bucket_rule_data
+        &bucket_rules_data
             .iter()
             .map(|data| {
                 BucketRuleResJson::new(

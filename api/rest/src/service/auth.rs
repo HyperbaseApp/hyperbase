@@ -63,7 +63,7 @@ async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
                 );
             }
         }
-        JwtTokenKind::User => {
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
             if let Err(err) = TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
@@ -71,7 +71,6 @@ async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
                 );
             }
         }
-        _ => todo!(),
     }
 
     let token = match ctx.token().jwt().need_renew(&token_claim) {

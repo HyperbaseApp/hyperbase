@@ -56,10 +56,15 @@ impl InsertOneBucketRuleReqJson {
 
 #[derive(Deserialize)]
 pub struct FindOneBucketRuleReqPath {
+    token_id: Uuid,
     rule_id: Uuid,
 }
 
 impl FindOneBucketRuleReqPath {
+    pub fn token_id(&self) -> &Uuid {
+        &self.token_id
+    }
+
     pub fn rule_id(&self) -> &Uuid {
         &self.rule_id
     }
@@ -67,10 +72,15 @@ impl FindOneBucketRuleReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneBucketRuleReqPath {
+    token_id: Uuid,
     rule_id: Uuid,
 }
 
 impl UpdateOneBucketRuleReqPath {
+    pub fn token_id(&self) -> &Uuid {
+        &self.token_id
+    }
+
     pub fn rule_id(&self) -> &Uuid {
         &self.rule_id
     }
@@ -117,10 +127,15 @@ impl UpdateOneBucketRuleReqJson {
 
 #[derive(Deserialize)]
 pub struct DeleteOneBucketRuleReqPath {
+    token_id: Uuid,
     rule_id: Uuid,
 }
 
 impl DeleteOneBucketRuleReqPath {
+    pub fn token_id(&self) -> &Uuid {
+        &self.token_id
+    }
+
     pub fn rule_id(&self) -> &Uuid {
         &self.rule_id
     }

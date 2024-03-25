@@ -367,23 +367,25 @@ async fn find_many(
         );
     }
 
-    let collection_rule_data = match CollectionRuleDao::db_select_many_by_token_id(
-        ctx.dao().db(),
-        path.token_id(),
-    )
-    .await
-    {
+    let (token_data, collection_rules_data) = match tokio::try_join!(
+        TokenDao::db_select(ctx.dao().db(), path.token_id()),
+        CollectionRuleDao::db_select_many_by_token_id(ctx.dao().db(), path.token_id(),),
+    ) {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
+    if token_data.admin_id() != token_claim.id() {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
+    }
+
     Response::data(
         &StatusCode::OK,
         &Some(PaginationRes::new(
-            &collection_rule_data.len(),
-            &collection_rule_data.len(),
+            &collection_rules_data.len(),
+            &collection_rules_data.len(),
         )),
-        &collection_rule_data
+        &collection_rules_data
             .iter()
             .map(|data| {
                 CollectionRuleResJson::new(

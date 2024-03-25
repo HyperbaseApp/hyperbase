@@ -4,11 +4,8 @@ use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
 use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSocketMessageKind};
 use hb_dao::{
-    collection::CollectionDao,
-    project::ProjectDao,
-    record::RecordDao,
-    token::TokenDao,
-    value::{ColumnKind, ColumnValue},
+    collection::CollectionDao, project::ProjectDao, record::RecordDao, token::TokenDao,
+    value::ColumnValue,
 };
 use uuid::Uuid;
 
@@ -116,25 +113,16 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
         } else if *token_data.allow_anonymous() {
             *token_data.admin_id()
         } else {
-            return Err(Error::msg("User doesn't found"));
+            return Err(Error::msg(format!(
+                "User with token ({}) doesn't have permission to write data to this collection",
+                payload.token()
+            )));
         };
 
         let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
         for (field_name, field_props) in collection_data.schema_fields() {
             if let Some(value) = data.get(field_name) {
                 if !value.is_null() {
-                    if let Some(value) = value.as_str() {
-                        if value == "$request.auth.id" {
-                            if *field_props.kind() != ColumnKind::Uuid {
-                                return Err(Error::msg(
-                                    "Field for storing '$request.auth.id' must be of type 'uuid'",
-                                ));
-                            }
-                            record_data
-                                .upsert(field_name, &ColumnValue::Uuid(Some(*token_data.id())));
-                            continue;
-                        }
-                    }
                     record_data.upsert(
                         field_name,
                         &match ColumnValue::from_serde_json(field_props.kind(), value) {

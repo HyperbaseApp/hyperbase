@@ -71,16 +71,17 @@ async fn insert_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -178,16 +179,17 @@ async fn find_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -197,7 +199,7 @@ async fn find_one(
         {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to read this bucket",
+                "This token doesn't have permission to read this file",
             );
         }
     }
@@ -267,16 +269,17 @@ async fn download_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -286,7 +289,7 @@ async fn download_one(
         {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to read this bucket",
+                "This token doesn't have permission to read this file",
             );
         }
     }
@@ -351,16 +354,17 @@ async fn update_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -450,16 +454,17 @@ async fn delete_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -539,16 +544,17 @@ async fn find_many(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {

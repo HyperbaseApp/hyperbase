@@ -48,7 +48,6 @@ backtrace = "0.3"
 bigdecimal = { version = "0.4", features = ["serde"] }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 duration-str = { version = "0.7", default-features = false, features = [
-    "chrono",
     "serde",
 ] }
 futures = "0.3"

@@ -10,7 +10,7 @@ use hb_dao::{
     project::ProjectDao,
     record::{RecordDao, RecordFilters, RecordOrder, RecordPagination},
     token::TokenDao,
-    value::{ColumnKind, ColumnValue},
+    value::ColumnValue,
 };
 use hb_token_jwt::kind::JwtTokenKind;
 use uuid::Uuid;
@@ -74,16 +74,17 @@ async fn insert_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -162,25 +163,16 @@ async fn insert_one(
     } else if *token_claim.kind() == JwtTokenKind::Admin {
         admin_id
     } else {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to write data to this collection",
+        );
     };
 
     let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if !value.is_null() {
-                if let Some(value) = value.as_str() {
-                    if value == "$request.auth.id" {
-                        if *field_props.kind() != ColumnKind::Uuid {
-                            return Response::error_raw(
-                                &StatusCode::BAD_REQUEST,
-                                "Field for storing '$request.auth.id' must be of type 'uuid'",
-                            );
-                        }
-                        record_data.upsert(field_name, &ColumnValue::Uuid(Some(*token_claim.id())));
-                        continue;
-                    }
-                }
                 record_data.upsert(
                     field_name,
                     &match ColumnValue::from_serde_json(field_props.kind(), value) {
@@ -222,7 +214,7 @@ async fn insert_one(
     }
 
     let record_pub = record.clone();
-    tokio::task::spawn_local((|| async move {
+    tokio::spawn((|| async move {
         let record_id = Uuid::from_str(record_pub["_id"].as_str().unwrap()).unwrap();
         let created_by = Uuid::from_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
 
@@ -287,16 +279,17 @@ async fn find_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -366,7 +359,10 @@ async fn find_one(
     } else if *token_claim.kind() == JwtTokenKind::Admin {
         None
     } else {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to read this record",
+        );
     };
 
     let fields = match query.fields() {
@@ -437,16 +433,17 @@ async fn update_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -516,7 +513,10 @@ async fn update_one(
     } else if *token_claim.kind() == JwtTokenKind::Admin {
         None
     } else {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to update this record",
+        );
     };
 
     for field_name in data.keys() {
@@ -551,18 +551,6 @@ async fn update_one(
                     );
                 }
             }
-            if let Some(value) = value.as_str() {
-                if value == "$request.auth.id" {
-                    if *field_props.kind() != ColumnKind::Uuid {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            "Field for storing '$request.auth.id' must be of type 'uuid'",
-                        );
-                    }
-                    record_data.upsert(field_name, &ColumnValue::Uuid(Some(*token_claim.id())));
-                    continue;
-                }
-            }
             record_data.upsert(
                 field_name,
                 &match ColumnValue::from_serde_json(field_props.kind(), value) {
@@ -595,7 +583,7 @@ async fn update_one(
 
     let record_id = path.record_id().clone();
     let record_pub = record.clone();
-    tokio::task::spawn_local((|| async move {
+    tokio::spawn((|| async move {
         let created_by = Uuid::from_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
 
         let record = match serde_json::to_value(&record_pub) {
@@ -658,16 +646,17 @@ async fn delete_one(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -737,7 +726,10 @@ async fn delete_one(
     } else if *token_claim.kind() == JwtTokenKind::Admin {
         None
     } else {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to delete this record",
+        );
     };
 
     let mut fields = HashSet::with_capacity(1);
@@ -768,7 +760,7 @@ async fn delete_one(
     }
 
     let record_id = path.record_id().clone();
-    tokio::task::spawn_local((|| async move {
+    tokio::spawn((|| async move {
         let created_by = Uuid::from_str(
             record_data.data()["_created_by"]
                 .to_serde_json()
@@ -843,16 +835,17 @@ async fn find_many(
                 )
             }
         },
-        JwtTokenKind::User => match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.admin_id(), Some(data)),
-            Err(err) => {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get token data: {err}"),
-                )
+        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
+            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+                Ok(data) => (*data.admin_id(), Some(data)),
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Failed to get token data: {err}"),
+                    )
+                }
             }
-        },
-        _ => todo!(),
+        }
     };
 
     if let Some(token_data) = &token_data {
@@ -922,7 +915,10 @@ async fn find_many(
     } else if *token_claim.kind() == JwtTokenKind::Admin {
         None
     } else {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "User doesn't have permission to read these records",
+        );
     };
 
     let fields = match query_data.fields() {

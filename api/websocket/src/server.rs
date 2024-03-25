@@ -187,24 +187,25 @@ impl ApiWebSocketServer {
     async fn broadcast(&self, collection_id: CollectionId, message: Message) -> Result<()> {
         if let Some(connection_ids) = self.subscribers.get(&collection_id) {
             for connection_id in connection_ids {
-                let (user_id, token_id) = self.user_sessions.get(connection_id).unwrap();
+                if let Some((user_id, token_id)) = self.user_sessions.get(connection_id) {
+                    if let Some(user_id) = user_id {
+                        if message.created_by != *user_id {
+                            continue;
+                        }
 
-                if let Some(user_id) = user_id {
-                    if message.created_by != *user_id {
-                        continue;
+                        let token_data = TokenDao::db_select(self.ctx.dao().db(), token_id).await?;
+                        if !token_data
+                            .is_allow_find_many_records(self.ctx.dao().db(), &collection_id)
+                            .await
+                        {
+                            continue;
+                        }
                     }
 
-                    let token_data = TokenDao::db_select(self.ctx.dao().db(), token_id).await?;
-                    if !token_data
-                        .is_allow_find_many_records(self.ctx.dao().db(), &collection_id)
-                        .await
-                    {
-                        continue;
+                    if let Some(connection_tx) = self.sessions.get(connection_id) {
+                        let _ = connection_tx.send(message.clone());
                     }
                 }
-
-                let connection_tx = self.sessions.get(connection_id).unwrap();
-                let _ = connection_tx.send(message.clone());
             }
         }
 
