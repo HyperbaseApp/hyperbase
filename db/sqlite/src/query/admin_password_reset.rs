@@ -1,8 +1,6 @@
-use anyhow::Result;
-use sqlx::{
-    types::chrono::{DateTime, Utc},
-    Executor, Pool, Sqlite,
-};
+use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
+use sqlx::{types::chrono::DateTime, Executor, Pool, Sqlite};
 use uuid::Uuid;
 
 use crate::{db::SqliteDb, model::admin_password_reset::AdminPasswordResetModel};
@@ -48,7 +46,7 @@ impl SqliteDb {
                     now.timestamp() - self.table_reset_password_ttl(),
                     now.timestamp_subsec_nanos(),
                 )
-                .unwrap()
+                .ok_or_else(|| Error::msg("timestamp is out of range."))?
             }))
             .await?)
     }
@@ -66,7 +64,7 @@ impl SqliteDb {
                         now.timestamp() - self.table_reset_password_ttl(),
                         now.timestamp_subsec_nanos(),
                     )
-                    .unwrap()
+                    .ok_or_else(|| Error::msg("timestamp is out of range."))?
                 }),
         )
         .await?;
@@ -80,8 +78,18 @@ impl SqliteDb {
     }
 
     async fn delete_expired_admin_password_reset(&self) -> Result<()> {
-        self.execute(sqlx::query(DELETE_EXPIRE).bind(self.table_reset_password_ttl()))
-            .await?;
+        self.fetch_one(
+            sqlx::query_as(DELETE_EXPIRE).bind(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*self.table_reset_password_ttl()).ok_or_else(
+                            || Error::msg("table_reset_password_ttl is out of range."),
+                        )?,
+                    )
+                    .ok_or_else(|| Error::msg("table_reset_password_ttl is out of range."))?,
+            ),
+        )
+        .await?;
         Ok(())
     }
 }

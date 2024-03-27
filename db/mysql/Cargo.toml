@@ -10,6 +10,7 @@ hb_log = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 itertools = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }

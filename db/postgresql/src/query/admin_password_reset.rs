@@ -1,8 +1,6 @@
-use anyhow::Result;
-use sqlx::{
-    types::chrono::{DateTime, Utc},
-    Executor, Pool, Postgres,
-};
+use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
+use sqlx::{types::chrono::DateTime, Executor, Pool, Postgres};
 use uuid::Uuid;
 
 use crate::{db::PostgresDb, model::admin_password_reset::AdminPasswordResetModel};
@@ -51,7 +49,7 @@ impl PostgresDb {
                     now.timestamp() - self.table_reset_password_ttl(),
                     now.timestamp_subsec_nanos(),
                 )
-                .unwrap()
+                .ok_or_else(|| Error::msg("timestamp is out of range."))?
             }))
             .await?)
     }
@@ -69,7 +67,7 @@ impl PostgresDb {
                         now.timestamp() - self.table_reset_password_ttl(),
                         now.timestamp_subsec_nanos(),
                     )
-                    .unwrap()
+                    .ok_or_else(|| Error::msg("timestamp is out of range."))?
                 }),
         )
         .await?;
@@ -83,8 +81,18 @@ impl PostgresDb {
     }
 
     async fn delete_expired_admin_password_reset(&self) -> Result<()> {
-        self.execute(sqlx::query(DELETE_EXPIRE).bind(self.table_reset_password_ttl()))
-            .await?;
+        self.fetch_one(
+            sqlx::query_as(DELETE_EXPIRE).bind(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*self.table_reset_password_ttl()).ok_or_else(
+                            || Error::msg("table_reset_password_ttl is out of range."),
+                        )?,
+                    )
+                    .ok_or_else(|| Error::msg("table_reset_password_ttl is out of range."))?,
+            ),
+        )
+        .await?;
         Ok(())
     }
 }

@@ -1,8 +1,6 @@
-use anyhow::Result;
-use sqlx::{
-    types::chrono::{DateTime, Utc},
-    Executor, MySql, Pool,
-};
+use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
+use sqlx::{types::chrono::DateTime, Executor, MySql, Pool};
 use uuid::Uuid;
 
 use crate::{db::MysqlDb, model::registration::RegistrationModel};
@@ -50,7 +48,7 @@ impl MysqlDb {
                     now.timestamp() - self.table_registration_ttl(),
                     now.timestamp_subsec_nanos(),
                 )
-                .unwrap()
+                .ok_or_else(|| Error::msg("timestamp is out of range."))?
             }))
             .await?)
     }
@@ -64,7 +62,7 @@ impl MysqlDb {
                     now.timestamp() - self.table_registration_ttl(),
                     now.timestamp_subsec_nanos(),
                 )
-                .unwrap()
+                .ok_or_else(|| Error::msg("timestamp is out of range."))?
             }))
             .await?)
     }
@@ -88,8 +86,17 @@ impl MysqlDb {
     }
 
     async fn delete_expired_registration(&self) -> Result<()> {
-        self.fetch_one(sqlx::query_as(DELETE_EXPIRE).bind(self.table_registration_ttl()))
-            .await?;
+        self.fetch_one(
+            sqlx::query_as(DELETE_EXPIRE).bind(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*self.table_registration_ttl())
+                            .ok_or_else(|| Error::msg("table_registration_ttl is out of range."))?,
+                    )
+                    .ok_or_else(|| Error::msg("table_registration_ttl is out of range."))?,
+            ),
+        )
+        .await?;
         Ok(())
     }
 }
