@@ -9,7 +9,8 @@ use context::ApiRestCtx;
 use error_handler::default_error_handler;
 use hb_config::app::AppConfigMode;
 use logger::logger_format;
-use tokio::{sync::broadcast, task::JoinHandle};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 mod configure;
 pub mod context;
@@ -46,7 +47,7 @@ impl ApiRestServer {
         }
     }
 
-    pub fn run(self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<Result<()>> {
+    pub fn run(self, cancel_token: CancellationToken) -> JoinHandle<Result<()>> {
         hb_log::info(Some("💫"), "ApiRestServer: Running component");
 
         tokio::spawn((|| async move {
@@ -76,7 +77,7 @@ impl ApiRestServer {
             let server_handle = server.handle();
 
             tokio::select! {
-                _ = stop_rx.recv() => {}
+                _ = cancel_token.cancelled() => {}
                 _ = server => {}
             }
 

@@ -11,7 +11,8 @@ use rumqttc::v5::{
     AsyncClient, Event, EventLoop, MqttOptions,
 };
 use service::record::record_service;
-use tokio::{sync::broadcast, task::JoinHandle};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 pub mod context;
@@ -50,7 +51,7 @@ impl ApiMqttClient {
         }
     }
 
-    pub fn run(mut self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<Result<()>> {
+    pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<Result<()>> {
         hb_log::info(Some("💫"), "ApiMqttClient: Running component");
 
         tokio::spawn((|| async move {
@@ -60,7 +61,7 @@ impl ApiMqttClient {
 
             loop {
                 tokio::select! {
-                    _ = stop_rx.recv() => {
+                    _ = cancel_token.cancelled() => {
                         break;
                     }
                     _ = tokio::signal::ctrl_c() => {

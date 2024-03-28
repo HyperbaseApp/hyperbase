@@ -22,6 +22,7 @@ use hb_db_sqlite::db::SqliteDb;
 use hb_hash_argon2::argon2::Argon2Hash;
 use hb_mailer::Mailer;
 use hb_token_jwt::token::JwtToken;
+use tokio_util::sync::CancellationToken;
 
 mod config_path;
 
@@ -147,24 +148,18 @@ async fn main() {
         ),
     );
 
-    let (stop_tx, stop_rx) = tokio::sync::broadcast::channel(1);
+    let cancel_token = CancellationToken::new();
 
     match tokio::try_join!(
-        mailer.run(stop_tx.subscribe()),
-        api_mqtt_client.run(stop_tx.subscribe()),
-        api_rest_server.run(stop_tx.subscribe()),
-        api_websocket_server.run(stop_rx)
+        mailer.run(cancel_token.clone()),
+        api_mqtt_client.run(cancel_token.clone()),
+        api_rest_server.run(cancel_token.clone()),
+        api_websocket_server.run(cancel_token.clone())
     ) {
         Ok(_) => hb_log::info(Some("👋"), "Hyperbase: Turned off"),
         Err(err) => {
             hb_log::warn(None, "Hyperbase: Shutting down all running components");
-            if stop_tx.send(()).is_err() {
-                hb_log::warn(
-                    None,
-                    "Hyperbase: Failed to shut down all running components",
-                );
-                return;
-            }
+            cancel_token.cancel();
             hb_log::warn(
                 Some("👋"),
                 format!("Hyperbase: Turned off with error: {err}"),

@@ -21,6 +21,7 @@ hb_mailer = { workspace = true }
 hb_token_jwt = { workspace = true }
 
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 
 
 [lints]

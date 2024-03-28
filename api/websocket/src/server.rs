@@ -4,11 +4,8 @@ use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::Result;
 use hb_dao::token::TokenDao;
 use serde::Serialize;
-use tokio::{
-    select,
-    sync::{broadcast, mpsc},
-    task::JoinHandle,
-};
+use tokio::{select, sync::mpsc, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
@@ -110,13 +107,13 @@ impl ApiWebSocketServer {
         )
     }
 
-    pub fn run(mut self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+    pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
         hb_log::info(Some("💫"), "ApiWebSocketServer: Running component");
 
         tokio::spawn((|| async move {
             loop {
                 select! {
-                    _ = stop_rx.recv() => {
+                    _ = cancel_token.cancelled() => {
                         break;
                     }
                     _ = tokio::signal::ctrl_c() => {

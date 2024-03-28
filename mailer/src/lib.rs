@@ -4,10 +4,8 @@ use lettre::{
     transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
 };
-use tokio::{
-    sync::{broadcast, mpsc},
-    task::JoinHandle,
-};
+use tokio::{sync::mpsc, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 
 pub struct Mailer {
     message_builder: MessageBuilder,
@@ -56,13 +54,13 @@ impl Mailer {
         Ok(())
     }
 
-    pub fn run(mut self, mut stop_rx: broadcast::Receiver<()>) -> JoinHandle<()> {
+    pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
         hb_log::info(Some("💫"), "Mailer: Running component");
 
         tokio::spawn((|| async move {
             loop {
                 tokio::select! {
-                    _ = stop_rx.recv() => {
+                    _ = cancel_token.cancelled() => {
                         break;
                     }
                     _ = tokio::signal::ctrl_c() => {

@@ -1102,6 +1102,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -1132,6 +1133,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.2",
  "tokio",
+ "tokio-util",
  "uuid",
  "validator",
 ]
@@ -1149,6 +1151,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 
@@ -1271,6 +1274,7 @@ dependencies = [
  "hb_log",
  "lettre",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -1405,6 +1409,7 @@ dependencies = [
  "hb_mailer",
  "hb_token_jwt",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
