@@ -259,44 +259,48 @@ async fn token_based(
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
-        for auth_column in collection_data.auth_columns() {
-            if !data.data().as_ref().unwrap().contains_key(auth_column) {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    "Incorrect authentication data",
-                );
-            }
-        }
-
         let mut record_fields = HashSet::with_capacity(data.data().as_ref().unwrap().len() + 1);
         record_fields.insert("_id");
         let mut record_filter_childs = Vec::with_capacity(data.data().as_ref().unwrap().len());
-        for (field, value) in data.data().as_ref().unwrap() {
-            if collection_data.auth_columns().contains(field) {
-                record_fields.insert(field.as_str());
-                let schema_field = match collection_data.schema_fields().get(field) {
-                    Some(schema_field) => schema_field,
-                    None => {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            &format!("Field {field} doesn't exist in the collection"),
-                        )
-                    }
-                };
-                let column_value = match ColumnValue::from_serde_json(schema_field.kind(), &value) {
-                    Ok(column_value) => column_value,
-                    Err(err) => {
-                        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
-                    }
-                };
-                record_filter_childs.push(RecordFilter::new(
-                    &Some(field.to_owned()),
-                    "=",
-                    &Some(column_value),
-                    &None,
-                ));
+
+        for (field, props) in collection_data.schema_fields() {
+            if *props.auth_column() {
+                if let Some(value) = data.data().as_ref().unwrap().get(field) {
+                    record_fields.insert(field.as_str());
+                    let schema_field = match collection_data.schema_fields().get(field) {
+                        Some(schema_field) => schema_field,
+                        None => {
+                            return Response::error_raw(
+                                &StatusCode::BAD_REQUEST,
+                                &format!("Field {field} doesn't exist in the collection"),
+                            )
+                        }
+                    };
+                    let column_value =
+                        match ColumnValue::from_serde_json(schema_field.kind(), value) {
+                            Ok(column_value) => column_value,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    record_filter_childs.push(RecordFilter::new(
+                        &Some(field.to_owned()),
+                        "=",
+                        &Some(column_value),
+                        &None,
+                    ));
+                } else {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        "Incorrect authentication data",
+                    );
+                }
             }
         }
+
         let record_filter = RecordFilters::new(&Vec::from([RecordFilter::new(
             &None,
             "AND",

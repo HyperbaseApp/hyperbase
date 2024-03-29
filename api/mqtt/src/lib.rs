@@ -3,7 +3,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{Error, Result};
+use anyhow::Error;
 use context::ApiMqttCtx;
 use model::payload::Payload;
 use rumqttc::v5::{
@@ -51,11 +51,14 @@ impl ApiMqttClient {
         }
     }
 
-    pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<Result<()>> {
+    pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
         hb_log::info(Some("💫"), "ApiMqttClient: Running component");
 
         tokio::spawn((|| async move {
-            self.client.subscribe(self.topic, QoS::AtMostOnce).await?;
+            self.client
+                .subscribe(self.topic, QoS::AtMostOnce)
+                .await
+                .unwrap();
 
             let mut now = Instant::now();
 
@@ -87,13 +90,11 @@ impl ApiMqttClient {
                         self.eventloop.options.broker_address()
                     ));
                     hb_log::panic(None, &format!("ApiMqttClient: {err}"));
-                    return Err(err);
                 }
             }
 
             hb_log::info(None, "ApiMqttClient: Shutting down component");
             let _ = self.client.disconnect().await;
-            return Ok(());
         })())
     }
 }

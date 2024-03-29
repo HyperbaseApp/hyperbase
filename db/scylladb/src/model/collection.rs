@@ -1,4 +1,4 @@
-use ahash::{HashMap, HashSet};
+use ahash::HashMap;
 use scylla::{frame::value::CqlTimestamp, FromRow, FromUserType, SerializeCql, SerializeRow};
 use uuid::Uuid;
 
@@ -12,8 +12,6 @@ pub struct CollectionModel {
     project_id: Uuid,
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsModel>,
-    indexes: Option<HashSet<String>>,
-    auth_columns: Option<HashSet<String>>,
 }
 
 impl CollectionModel {
@@ -24,8 +22,6 @@ impl CollectionModel {
         project_id: &Uuid,
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsModel>,
-        indexes: &Option<HashSet<String>>,
-        auth_columns: &Option<HashSet<String>>,
     ) -> Self {
         Self {
             id: *id,
@@ -34,8 +30,6 @@ impl CollectionModel {
             project_id: *project_id,
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
-            indexes: indexes.clone(),
-            auth_columns: auth_columns.clone(),
         }
     }
 
@@ -62,14 +56,6 @@ impl CollectionModel {
     pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsModel> {
         &self.schema_fields
     }
-
-    pub fn indexes(&self) -> &Option<HashSet<String>> {
-        &self.indexes
-    }
-
-    pub fn auth_columns(&self) -> &Option<HashSet<String>> {
-        &self.auth_columns
-    }
 }
 
 #[derive(FromUserType, SerializeCql, Clone)]
@@ -77,14 +63,24 @@ pub struct SchemaFieldPropsModel {
     kind: String,
     internal_kind: ColumnKind,
     required: bool,
+    indexed: bool,
+    auth_column: bool,
 }
 
 impl SchemaFieldPropsModel {
-    pub fn new(kind: &str, internal_kind: &ColumnKind, required: &bool) -> Self {
+    pub fn new(
+        kind: &str,
+        internal_kind: &ColumnKind,
+        required: &bool,
+        indexed: &bool,
+        auth_column: &bool,
+    ) -> Self {
         Self {
             kind: kind.to_owned(),
             internal_kind: *internal_kind,
             required: *required,
+            indexed: *indexed,
+            auth_column: *auth_column,
         }
     }
 
@@ -98,5 +94,13 @@ impl SchemaFieldPropsModel {
 
     pub fn required(&self) -> &bool {
         &self.required
+    }
+
+    pub fn indexed(&self) -> &bool {
+        &self.indexed
+    }
+
+    pub fn auth_column(&self) -> &bool {
+        &self.auth_column
     }
 }

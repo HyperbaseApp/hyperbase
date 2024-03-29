@@ -1,4 +1,4 @@
-use ahash::{HashMap, HashSet};
+use ahash::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -18,8 +18,6 @@ impl InsertOneCollectionReqPath {
 pub struct InsertOneCollectionReqJson {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
-    indexes: Option<HashSet<String>>,
-    auth_columns: Option<HashSet<String>>,
 }
 
 impl InsertOneCollectionReqJson {
@@ -29,14 +27,6 @@ impl InsertOneCollectionReqJson {
 
     pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsJson> {
         &self.schema_fields
-    }
-
-    pub fn indexes(&self) -> &Option<HashSet<String>> {
-        &self.indexes
-    }
-
-    pub fn auth_columns(&self) -> &Option<HashSet<String>> {
-        &self.auth_columns
     }
 }
 
@@ -103,8 +93,6 @@ impl UpdateOneCollectionReqPath {
 pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
     schema_fields: Option<HashMap<String, SchemaFieldPropsJson>>,
-    indexes: Option<HashSet<String>>,
-    auth_columns: Option<HashSet<String>>,
 }
 
 impl UpdateOneCollectionReqJson {
@@ -116,19 +104,8 @@ impl UpdateOneCollectionReqJson {
         &self.schema_fields
     }
 
-    pub fn indexes(&self) -> &Option<HashSet<String>> {
-        &self.indexes
-    }
-
-    pub fn auth_columns(&self) -> &Option<HashSet<String>> {
-        &self.auth_columns
-    }
-
     pub fn is_all_none(&self) -> bool {
-        self.name.is_none()
-            && self.schema_fields.is_none()
-            && self.indexes.is_none()
-            && self.auth_columns.is_none()
+        self.name.is_none() && self.schema_fields.is_none()
     }
 }
 
@@ -167,8 +144,6 @@ pub struct CollectionResJson {
     project_id: Uuid,
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
-    indexes: HashSet<String>,
-    auth_columns: HashSet<String>,
 }
 
 impl CollectionResJson {
@@ -179,8 +154,6 @@ impl CollectionResJson {
         project_id: &Uuid,
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsJson>,
-        indexes: &HashSet<String>,
-        auth_columns: &HashSet<String>,
     ) -> Self {
         Self {
             id: *id,
@@ -189,8 +162,6 @@ impl CollectionResJson {
             project_id: *project_id,
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
-            indexes: indexes.clone(),
-            auth_columns: auth_columns.clone(),
         }
     }
 }
@@ -210,13 +181,22 @@ impl DeleteCollectionResJson {
 pub struct SchemaFieldPropsJson {
     kind: String,
     required: Option<bool>,
+    indexed: Option<bool>,
+    auth_column: Option<bool>,
 }
 
 impl SchemaFieldPropsJson {
-    pub fn new(kind: &str, required: &Option<bool>) -> Self {
+    pub fn new(
+        kind: &str,
+        required: &Option<bool>,
+        indexed: &Option<bool>,
+        auth_column: &Option<bool>,
+    ) -> Self {
         Self {
             kind: kind.to_owned(),
             required: *required,
+            indexed: *indexed,
+            auth_column: *auth_column,
         }
     }
 
@@ -226,5 +206,13 @@ impl SchemaFieldPropsJson {
 
     pub fn required(&self) -> &Option<bool> {
         &self.required
+    }
+
+    pub fn indexed(&self) -> &Option<bool> {
+        &self.indexed
+    }
+
+    pub fn auth_column(&self) -> &Option<bool> {
+        &self.auth_column
     }
 }

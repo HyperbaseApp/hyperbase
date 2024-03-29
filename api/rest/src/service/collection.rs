@@ -1,6 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use ahash::{HashMap, HashMapExt};
 use hb_dao::{
     admin::AdminDao,
     collection::{CollectionDao, SchemaFieldProps},
@@ -90,98 +90,44 @@ async fn insert_one(
     }
 
     let mut schema_fields = HashMap::with_capacity(data.schema_fields().len());
-    for (key, value) in data.schema_fields().iter() {
-        if key.is_empty() {
+    for (field, props) in data.schema_fields().iter() {
+        if field.is_empty() {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Field name in schema_fields can't be empty string"),
             );
         }
-        if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
+        if field.starts_with("_") || !field.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
-                &format!("Field '{key}' should only have lowercase English letters and an optional underscore (_) after the first character"),
+                &format!("Field '{field}' should only have lowercase English letters and an optional underscore (_) after the first character"),
             );
         }
-        if let Some(indexes) = data.indexes() {
-            if let Some(field_name) = indexes.get(key) {
-                if !value.required().unwrap_or(false) {
-                    return Response::error_raw(
-                        &StatusCode::BAD_REQUEST,
-                        &format!(
-                            "Field '{field_name}' must be required because it is in the indexes"
-                        ),
-                    );
-                }
-            }
+        if props.indexed().is_some_and(|indexed| indexed)
+            && !props.required().is_some_and(|required| required)
+        {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                &format!("Field '{field}' must be required because it is in the indexes"),
+            );
         }
         schema_fields.insert(
-            key.to_string(),
+            field.to_owned(),
             SchemaFieldProps::new(
-                &match ColumnKind::from_str(value.kind()) {
+                &match ColumnKind::from_str(props.kind()) {
                     Ok(kind) => kind,
                     Err(err) => {
                         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
                     }
                 },
-                &value.required().unwrap_or(false),
+                &props.required().unwrap_or(false),
+                &props.indexed().unwrap_or(false),
+                &props.auth_column().unwrap_or(false),
             ),
         );
     }
 
-    if let Some(indexes) = data.indexes() {
-        for index in indexes {
-            if index.is_empty() {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Field name in indexes can't be empty string"),
-                );
-            }
-            match schema_fields.get(index) {
-                Some(field) => {
-                    if !field.required() {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            &format!(
-                                "Field '{index}' must be required because it is in the indexes"
-                            ),
-                        );
-                    }
-                }
-                None => {
-                    return Response::error_raw(
-                        &StatusCode::BAD_REQUEST,
-                        &format!("Field '{index}' is not exist in the schema fields"),
-                    )
-                }
-            }
-        }
-    }
-
-    if let Some(auth_columns) = data.auth_columns() {
-        for auth_column in auth_columns {
-            if data.schema_fields().get(auth_column).is_none() {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Field '{auth_column}' is in auth_columns but not exist in the schema fields"),
-                );
-            }
-        }
-    }
-
-    let collection_data = CollectionDao::new(
-        path.project_id(),
-        data.name(),
-        &schema_fields,
-        &match data.indexes() {
-            Some(indexes) => indexes.clone(),
-            None => HashSet::new(),
-        },
-        &match data.auth_columns() {
-            Some(auth_columns) => auth_columns.clone(),
-            None => HashSet::new(),
-        },
-    );
+    let collection_data = CollectionDao::new(path.project_id(), data.name(), &schema_fields);
     if let Err(err) = collection_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
@@ -198,15 +144,18 @@ async fn insert_one(
             &collection_data
                 .schema_fields()
                 .iter()
-                .map(|(key, value)| {
+                .map(|(field, props)| {
                     (
-                        key.to_owned(),
-                        SchemaFieldPropsJson::new(value.kind().to_str(), &Some(*value.required())),
+                        field.clone(),
+                        SchemaFieldPropsJson::new(
+                            props.kind().to_str(),
+                            &Some(*props.required()),
+                            &Some(*props.indexed()),
+                            &Some(*props.auth_column()),
+                        ),
                     )
                 })
                 .collect(),
-            collection_data.indexes(),
-            collection_data.auth_columns(),
         ),
     )
 }
@@ -280,12 +229,15 @@ async fn find_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldPropsJson::new(value.kind().to_str(), &Some(*value.required())),
+                        SchemaFieldPropsJson::new(
+                            value.kind().to_str(),
+                            &Some(*value.required()),
+                            &Some(*value.indexed()),
+                            &Some(*value.auth_column()),
+                        ),
                     )
                 })
                 .collect(),
-            collection_data.indexes(),
-            collection_data.auth_columns(),
         ),
     )
 }
@@ -427,35 +379,25 @@ async fn update_one(
 
     if let Some(schema_field) = data.schema_fields() {
         let mut schema_fields = HashMap::with_capacity(schema_field.len());
-        for (key, value) in schema_field.iter() {
-            if key.is_empty() {
+        for (field, props) in schema_field.iter() {
+            if field.is_empty() {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Field name in schema_fields can't be empty string"),
                 );
             }
-            if key.starts_with("_") || !key.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
+            if field.starts_with("_")
+                || !field.chars().all(|c| c == '_' || ('a'..='z').contains(&c))
+            {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
-                    &format!("Field '{key}' should only have lowercase English letters and an optional underscore (_) after the first character"),
+                    &format!("Field '{field}' should only have lowercase English letters and an optional underscore (_) after the first character"),
                 );
             }
-            if let Some(indexes) = data.indexes() {
-                if let Some(field_name) = indexes.get(key) {
-                    if !value.required().unwrap_or(false) {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            &format!(
-                                "Field '{field_name}' must be required because it is in the indexes"
-                            ),
-                        );
-                    }
-                }
-            }
             schema_fields.insert(
-                key.to_owned(),
+                field.to_owned(),
                 SchemaFieldProps::new(
-                    &match ColumnKind::from_str(value.kind()) {
+                    &match ColumnKind::from_str(props.kind()) {
                         Ok(kind) => kind,
                         Err(err) => {
                             return Response::error_raw(
@@ -464,55 +406,13 @@ async fn update_one(
                             )
                         }
                     },
-                    &value.required().unwrap_or(false),
+                    &props.required().unwrap_or(false),
+                    &props.indexed().unwrap_or(false),
+                    &props.auth_column().unwrap_or(false),
                 ),
             );
         }
         collection_data.update_schema_fields(&schema_fields);
-    }
-
-    if let Some(indexes) = data.indexes() {
-        for index in indexes {
-            if index.is_empty() {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Field name in indexes can't be empty string"),
-                );
-            }
-            match collection_data.schema_fields().get(index) {
-                Some(field) => {
-                    if !field.required() {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            &format!(
-                                "Field '{index}' must be required because it is in the indexes"
-                            ),
-                        );
-                    }
-                }
-                None => {
-                    return Response::error_raw(
-                        &StatusCode::BAD_REQUEST,
-                        &format!(
-                            "Field '{index}' is in indexes but not exist in the schema fields"
-                        ),
-                    )
-                }
-            }
-        }
-        collection_data.update_indexes(indexes);
-    }
-
-    if let Some(auth_columns) = data.auth_columns() {
-        for auth_column in auth_columns {
-            if collection_data.schema_fields().get(auth_column).is_none() {
-                return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Field '{auth_column}' is in auth_columns but not exist in the schema fields"),
-                );
-            }
-        }
-        collection_data.set_auth_columns(auth_columns);
     }
 
     if !data.is_all_none() {
@@ -536,12 +436,15 @@ async fn update_one(
                 .map(|(key, value)| {
                     (
                         key.to_owned(),
-                        SchemaFieldPropsJson::new(value.kind().to_str(), &Some(*value.required())),
+                        SchemaFieldPropsJson::new(
+                            value.kind().to_str(),
+                            &Some(*value.required()),
+                            &Some(*value.indexed()),
+                            &Some(*value.auth_column()),
+                        ),
                     )
                 })
                 .collect(),
-            collection_data.indexes(),
-            collection_data.auth_columns(),
         ),
     )
 }
@@ -674,12 +577,12 @@ async fn find_many(
                                 SchemaFieldPropsJson::new(
                                     value.kind().to_str(),
                                     &Some(*value.required()),
+                                    &Some(*value.indexed()),
+                                    &Some(*value.auth_column()),
                                 ),
                             )
                         })
                         .collect(),
-                    data.indexes(),
-                    data.auth_columns(),
                 )
             })
             .collect::<Vec<_>>(),

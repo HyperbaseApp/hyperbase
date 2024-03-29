@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{db::MysqlDb, model::bucket::BucketModel};
 
 const INSERT: &str = "INSERT INTO `buckets` (`id`, `created_at`, `updated_at`, `project_id`, `name`, `path`) VALUES (?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path FROM `buckets` WHERE `id` = ?";
+const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path` FROM `buckets` WHERE `id` = ?";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path` FROM `buckets` WHERE `project_id` = ?";
 const UPDATE: &str = "UPDATE `buckets` SET `updated_at` = ?, `name` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `buckets` WHERE `id` = ?";

@@ -4,10 +4,10 @@ use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::collection::CollectionModel};
 
-const INSERT: &str = "INSERT INTO \"hyperbase\".\"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\", \"auth_columns\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\", \"auth_columns\" FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"indexes\", \"auth_columns\" FROM \"hyperbase\".\"collections\" WHERE \"project_id\" = ?";
-const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"indexes\" = ?, \"auth_columns\" = ? WHERE \"id\" = ?";
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\") VALUES (?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\" FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\" FROM \"hyperbase\".\"collections\" WHERE \"project_id\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
@@ -16,12 +16,12 @@ pub async fn init(cached_session: &CachingSession) {
     cached_session
         .get_session()
         .query(
-            "CREATE TYPE IF NOT EXISTS \"hyperbase\".\"schema_field_props\" (\"kind\" text, \"internal_kind\" text, \"required\" boolean)",
+            "CREATE TYPE IF NOT EXISTS \"hyperbase\".\"schema_field_props\" (\"kind\" text, \"internal_kind\" text, \"required\" boolean, \"indexed\" boolean, \"auth_column\" boolean)",
             &[],
         )
         .await
         .unwrap();
-    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"collections\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" map<text, frozen<schema_field_props>>, \"indexes\" set<text>, \"auth_columns\" set<text>, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
+    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"collections\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"name\" text, \"schema_fields\" map<text, frozen<schema_field_props>>, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
     cached_session
         .get_session()
         .query(
@@ -83,8 +83,6 @@ impl ScyllaDb {
                 value.updated_at(),
                 value.name(),
                 value.schema_fields(),
-                value.indexes(),
-                value.auth_columns(),
                 value.id(),
             ),
         )

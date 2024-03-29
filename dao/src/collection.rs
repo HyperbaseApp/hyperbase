@@ -28,8 +28,6 @@ pub struct CollectionDao {
     project_id: Uuid,
     name: String,
     schema_fields: HashMap<String, SchemaFieldProps>,
-    indexes: HashSet<String>,
-    auth_columns: HashSet<String>,
     _preserve: Option<Preserve>,
 }
 
@@ -38,8 +36,6 @@ impl CollectionDao {
         project_id: &Uuid,
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldProps>,
-        indexes: &HashSet<String>,
-        auth_columns: &HashSet<String>,
     ) -> Self {
         let now = Utc::now();
 
@@ -50,8 +46,6 @@ impl CollectionDao {
             project_id: *project_id,
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
-            indexes: indexes.clone(),
-            auth_columns: auth_columns.clone(),
             _preserve: None,
         }
     }
@@ -80,14 +74,6 @@ impl CollectionDao {
         &self.schema_fields
     }
 
-    pub fn indexes(&self) -> &HashSet<String> {
-        &self.indexes
-    }
-
-    pub fn auth_columns(&self) -> &HashSet<String> {
-        &self.auth_columns
-    }
-
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_owned();
     }
@@ -96,7 +82,6 @@ impl CollectionDao {
         if self._preserve.is_none() {
             self._preserve = Some(Preserve {
                 schema_fields: Some(self.schema_fields.clone()),
-                indexes: None,
             });
         } else {
             self._preserve.as_mut().unwrap().schema_fields = Some(self.schema_fields.clone());
@@ -104,27 +89,13 @@ impl CollectionDao {
         self.schema_fields = schema_fields.clone();
     }
 
-    pub fn update_indexes(&mut self, indexes: &HashSet<String>) {
-        if self._preserve.is_none() {
-            self._preserve = Some(Preserve {
-                schema_fields: None,
-                indexes: Some(self.indexes.clone()),
-            });
-        } else {
-            self._preserve.as_mut().unwrap().indexes = Some(self.indexes.clone());
-        }
-        self.indexes = indexes.to_owned();
-    }
-
-    pub fn set_auth_columns(&mut self, auth_columns: &HashSet<String>) {
-        self.auth_columns = auth_columns.clone();
-    }
-
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
+        let mut create_indexes_fut = Vec::with_capacity(self.schema_fields.len());
+
         if let Db::MysqlDb(_) = db {
-            for index in &self.indexes {
-                if let Some(field) = self.schema_fields.get(index) {
-                    match &field.kind {
+            for (field, props) in &self.schema_fields {
+                if props.indexed {
+                    match &props.kind {
                         ColumnKind::Binary
                         | ColumnKind::Varint
                         | ColumnKind::Decimal
@@ -132,22 +103,19 @@ impl CollectionDao {
                         | ColumnKind::Json => {
                             return Err(Error::msg(format!(
                                 "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
-                                index,
-                                field.kind.to_str()
+                                field,
+                                props.kind.to_str()
                             )))
                         }
                         _ => (),
                     };
+                    create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, field));
                 }
             }
         }
 
         RecordDao::db_create_table(db, self).await?;
 
-        let mut create_indexes_fut = Vec::with_capacity(self.indexes.len());
-        for index in &self.indexes {
-            create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, index));
-        }
         future::try_join_all(create_indexes_fut).await?;
 
         match db {
@@ -208,9 +176,9 @@ impl CollectionDao {
 
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         if let Db::MysqlDb(_) = db {
-            for index in &self.indexes {
-                if let Some(field) = self.schema_fields.get(index) {
-                    match &field.kind {
+            for (field, props) in &self.schema_fields {
+                if props.indexed {
+                    match &props.kind {
                         ColumnKind::Binary
                         | ColumnKind::Varint
                         | ColumnKind::Decimal
@@ -218,8 +186,8 @@ impl CollectionDao {
                         | ColumnKind::Json => {
                             return Err(Error::msg(format!(
                                 "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
-                                index,
-                                field.kind.to_str()
+                                field,
+                                props.kind.to_str()
                             )))
                         }
                         _ => (),
@@ -228,90 +196,81 @@ impl CollectionDao {
             }
         }
 
-        let is_preserve_schema_fields_exist = self
-            ._preserve
-            .as_ref()
-            .is_some_and(|preserve| preserve.schema_fields.as_ref().is_some());
-        let is_preserve_indexes_exist = self
-            ._preserve
-            .as_ref()
-            .is_some_and(|preserve| preserve.indexes.as_ref().is_some());
+        let mut already_indexed = HashSet::new();
 
-        if is_preserve_indexes_exist {
-            let mut drop_indexes_fut = Vec::new();
-            for index in self._preserve.as_ref().unwrap().indexes.as_ref().unwrap() {
-                if !self.indexes.contains(index) {
-                    drop_indexes_fut.push(RecordDao::db_drop_index(db, &self.id, index));
-                }
-            }
-            future::try_join_all(drop_indexes_fut).await?;
-        }
+        if let Some(preserve) = &self._preserve {
+            if let Some(preserved_schema_fields) = &preserve.schema_fields {
+                let mut drop_indexes_fut = Vec::with_capacity(preserved_schema_fields.len());
 
-        if is_preserve_schema_fields_exist {
-            let mut columns_change_type = HashMap::new();
-            let mut columns_drop = HashSet::new();
-            for (field_name, field_props) in self
-                ._preserve
-                .as_ref()
-                .unwrap()
-                .schema_fields
-                .as_ref()
-                .unwrap()
-            {
-                match self.schema_fields.get(field_name) {
-                    Some(field) => {
-                        if field.kind() != field_props.kind() {
-                            columns_change_type.insert(field_name.to_owned(), *field);
+                let mut columns_change_type = HashMap::with_capacity(self.schema_fields.len());
+                let mut columns_drop = HashSet::with_capacity(preserved_schema_fields.len());
+                for (field_name, field_props) in preserved_schema_fields {
+                    match self.schema_fields.get(field_name) {
+                        Some(props) => {
+                            if field_props.indexed {
+                                if props.indexed {
+                                    already_indexed.insert(field_name.as_str());
+                                } else {
+                                    drop_indexes_fut.push(RecordDao::db_drop_index(
+                                        db,
+                                        &self.id,
+                                        &field_name,
+                                    ));
+                                }
+                            }
+                            if field_props.kind() != props.kind() {
+                                columns_change_type.insert(field_name.to_owned(), *props);
+                            }
                         }
-                    }
-                    None => {
-                        columns_drop.insert(field_name.clone());
-                    }
-                };
-            }
-            if !columns_change_type.is_empty() {
-                RecordDao::db_change_columns_type(db, &self.id, &columns_change_type).await?;
-            }
-            if !columns_drop.is_empty() {
-                RecordDao::db_drop_columns(db, &self.id, &columns_drop).await?;
-            }
-
-            let mut columns_add = HashMap::new();
-            for (field_name, field_props) in &self.schema_fields {
-                if !self
-                    ._preserve
-                    .as_ref()
-                    .unwrap()
-                    .schema_fields
-                    .as_ref()
-                    .unwrap()
-                    .contains_key(field_name)
-                {
-                    columns_add.insert(field_name.to_owned(), *field_props);
+                        None => {
+                            if field_props.indexed {
+                                drop_indexes_fut.push(RecordDao::db_drop_index(
+                                    db,
+                                    &self.id,
+                                    &field_name,
+                                ));
+                            }
+                            columns_drop.insert(field_name.clone());
+                        }
+                    };
                 }
-            }
-            if !columns_add.is_empty() {
-                RecordDao::db_add_columns(db, &self.id, &columns_add).await?;
+                if !drop_indexes_fut.is_empty() {
+                    future::try_join_all(drop_indexes_fut).await?;
+                }
+                if !columns_change_type.is_empty() {
+                    RecordDao::db_change_columns_type(db, &self.id, &columns_change_type).await?;
+                }
+                if !columns_drop.is_empty() {
+                    RecordDao::db_drop_columns(db, &self.id, &columns_drop).await?;
+                }
+
+                let mut columns_add = HashMap::new();
+                for (field_name, field_props) in &self.schema_fields {
+                    if !self
+                        ._preserve
+                        .as_ref()
+                        .unwrap()
+                        .schema_fields
+                        .as_ref()
+                        .unwrap()
+                        .contains_key(field_name)
+                    {
+                        columns_add.insert(field_name.to_owned(), *field_props);
+                    }
+                }
+                if !columns_add.is_empty() {
+                    RecordDao::db_add_columns(db, &self.id, &columns_add).await?;
+                }
             }
         }
 
-        if is_preserve_indexes_exist {
-            let mut create_indexes_fut = Vec::new();
-            for index in &self.indexes {
-                if !self
-                    ._preserve
-                    .as_ref()
-                    .unwrap()
-                    .indexes
-                    .as_ref()
-                    .unwrap()
-                    .contains(index)
-                {
-                    create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, index));
-                }
+        let mut create_indexes_fut = Vec::with_capacity(self.schema_fields.len());
+        for (field, props) in &self.schema_fields {
+            if props.indexed && !already_indexed.contains(field.as_str()) {
+                create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, &field));
             }
-            future::try_join_all(create_indexes_fut).await?;
         }
+        future::try_join_all(create_indexes_fut).await?;
 
         self.updated_at = Utc::now();
 
@@ -350,14 +309,6 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: match model.indexes() {
-                Some(indexes) => indexes.to_owned(),
-                None => HashSet::new(),
-            },
-            auth_columns: match model.auth_columns() {
-                Some(auth_columns) => auth_columns.to_owned(),
-                None => HashSet::new(),
-            },
             _preserve: None,
         })
     }
@@ -374,16 +325,6 @@ impl CollectionDao {
                 .iter()
                 .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
                 .collect(),
-            &if self.indexes.len() > 0 {
-                Some(self.indexes.clone())
-            } else {
-                None
-            },
-            &if self.auth_columns.len() > 0 {
-                Some(self.auth_columns.clone())
-            } else {
-                None
-            },
         )
     }
 
@@ -403,8 +344,6 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: model.indexes().0.to_owned(),
-            auth_columns: model.auth_columns().0.to_owned(),
             _preserve: None,
         })
     }
@@ -422,8 +361,6 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_postgresdb_model()))
                     .collect(),
             ),
-            &sqlx::types::Json(self.indexes.to_owned()),
-            &sqlx::types::Json(self.auth_columns.to_owned()),
         )
     }
 
@@ -443,8 +380,6 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: model.indexes().0.to_owned(),
-            auth_columns: model.auth_columns().0.to_owned(),
             _preserve: None,
         })
     }
@@ -462,8 +397,6 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_mysqldb_model()))
                     .collect(),
             ),
-            &sqlx::types::Json(self.indexes.to_owned()),
-            &sqlx::types::Json(self.auth_columns.to_owned()),
         )
     }
 
@@ -483,8 +416,6 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
-            indexes: model.indexes().0.to_owned(),
-            auth_columns: model.auth_columns().0.to_owned(),
             _preserve: None,
         })
     }
@@ -502,8 +433,6 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_sqlitedb_model()))
                     .collect(),
             ),
-            &sqlx::types::Json(self.indexes.to_owned()),
-            &sqlx::types::Json(self.auth_columns.to_owned()),
         )
     }
 }
@@ -512,13 +441,17 @@ impl CollectionDao {
 pub struct SchemaFieldProps {
     kind: ColumnKind,
     required: bool,
+    indexed: bool,
+    auth_column: bool,
 }
 
 impl SchemaFieldProps {
-    pub fn new(kind: &ColumnKind, required: &bool) -> Self {
+    pub fn new(kind: &ColumnKind, required: &bool, indexed: &bool, auth_column: &bool) -> Self {
         Self {
             kind: *kind,
             required: *required,
+            indexed: *indexed,
+            auth_column: *auth_column,
         }
     }
 
@@ -530,6 +463,14 @@ impl SchemaFieldProps {
         &self.required
     }
 
+    pub fn indexed(&self) -> &bool {
+        &self.indexed
+    }
+
+    pub fn auth_column(&self) -> &bool {
+        &self.auth_column
+    }
+
     fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Result<Self> {
         let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
@@ -538,6 +479,8 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            indexed: *model.indexed(),
+            auth_column: *model.auth_column(),
         })
     }
 
@@ -546,6 +489,8 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_scylladb_model(),
             &self.required,
+            &self.indexed,
+            &self.auth_column,
         )
     }
 
@@ -557,6 +502,8 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            indexed: *model.indexed(),
+            auth_column: *model.auth_column(),
         })
     }
 
@@ -565,6 +512,8 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_postgresdb_model(),
             &self.required,
+            &self.indexed,
+            &self.auth_column,
         )
     }
 
@@ -576,6 +525,8 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            indexed: *model.indexed(),
+            auth_column: *model.auth_column(),
         })
     }
 
@@ -584,6 +535,8 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_mysqldb_model(),
             &self.required,
+            &self.indexed,
+            &self.auth_column,
         )
     }
 
@@ -595,6 +548,8 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            indexed: *model.indexed(),
+            auth_column: *model.auth_column(),
         })
     }
 
@@ -603,11 +558,12 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_sqlitedb_model(),
             &self.required,
+            &self.indexed,
+            &self.auth_column,
         )
     }
 }
 
 struct Preserve {
     schema_fields: Option<HashMap<String, SchemaFieldProps>>,
-    indexes: Option<HashSet<String>>,
 }
