@@ -7,7 +7,7 @@ use crate::{db::SqliteDb, model::collection_rule::CollectionRuleModel};
 const INSERT: &str = "INSERT INTO \"collection_rules\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"id\" = ?";
 const SELECT_BY_TOKEN_ID_AND_COLLECTION_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = ? AND \"collection_id\" = ?";
-const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = ?";
+const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = ? ORDER BY \"created_at\" DESC";
 const UPDATE: &str = "UPDATE \"collection_rules\" SET \"updated_at\" = ?, \"find_one\" = ?, \"find_many\" = ?, \"insert_one\" = ?, \"update_one\" = ?, \"delete_one\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"collection_rules\" WHERE \"id\" = ?";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"token_id\" = ?";
@@ -15,7 +15,7 @@ const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up collection_rules table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"collection_rules\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"token_id\" blob, \"collection_id\" blob, \"find_one\" boolean, \"find_many\" boolean, \"insert_one\" boolean, \"update_one\" boolean, \"delete_one\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"collection_rules\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"token_id\" blob, \"collection_id\" blob, \"find_one\" text, \"find_many\" text, \"insert_one\" boolean, \"update_one\" text, \"delete_one\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();

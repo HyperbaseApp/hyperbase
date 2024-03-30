@@ -6,7 +6,7 @@ use crate::{db::MysqlDb, model::collection::CollectionModel};
 
 const INSERT: &str = "INSERT INTO `collections` (`id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields`) VALUES (?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields` FROM `collections` WHERE `id` = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields` FROM `collections` WHERE `project_id` = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields` FROM `collections` WHERE `project_id` = ? ORDER BY `created_at` DESC";
 const UPDATE: &str = "UPDATE `collections` SET `updated_at` = ?, `name` = ?, `schema_fields` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `collections` WHERE `id` = ?";
 

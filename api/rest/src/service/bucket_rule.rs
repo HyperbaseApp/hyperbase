@@ -1,7 +1,10 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::{
-    admin::AdminDao, bucket::BucketDao, bucket_rule::BucketRuleDao, project::ProjectDao,
+    admin::AdminDao,
+    bucket::BucketDao,
+    bucket_rule::{BucketPermission, BucketRuleDao},
+    project::ProjectDao,
     token::TokenDao,
 };
 use hb_token_jwt::kind::JwtTokenKind;
@@ -92,15 +95,32 @@ async fn insert_one(
         return Response::error_raw(&StatusCode::FORBIDDEN, "This bucket does not belong to you");
     }
 
+    let rule_find_one = match BucketPermission::from_str(data.find_one()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+    let rule_find_many = match BucketPermission::from_str(data.find_many()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+    let rule_update_one = match BucketPermission::from_str(data.update_one()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+    let rule_delete_one = match BucketPermission::from_str(data.delete_one()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
     let bucket_rule_data = BucketRuleDao::new(
         project_data.id(),
         token_data.id(),
         bucket_data.id(),
-        data.find_one(),
-        data.find_many(),
+        &rule_find_one,
+        &rule_find_many,
         data.insert_one(),
-        data.update_one(),
-        data.delete_one(),
+        &rule_update_one,
+        &rule_delete_one,
     );
 
     if let Err(err) = bucket_rule_data.db_insert(ctx.dao().db()).await {
@@ -117,11 +137,11 @@ async fn insert_one(
             bucket_rule_data.project_id(),
             bucket_rule_data.token_id(),
             bucket_rule_data.bucket_id(),
-            bucket_rule_data.find_one(),
-            bucket_rule_data.find_many(),
+            bucket_rule_data.find_one().to_str(),
+            bucket_rule_data.find_many().to_str(),
             bucket_rule_data.insert_one(),
-            bucket_rule_data.update_one(),
-            bucket_rule_data.delete_one(),
+            bucket_rule_data.update_one().to_str(),
+            bucket_rule_data.delete_one().to_str(),
         ),
     )
 }
@@ -181,11 +201,11 @@ async fn find_one(
             bucket_rule_data.project_id(),
             bucket_rule_data.token_id(),
             bucket_rule_data.bucket_id(),
-            bucket_rule_data.find_one(),
-            bucket_rule_data.find_many(),
+            bucket_rule_data.find_one().to_str(),
+            bucket_rule_data.find_many().to_str(),
             bucket_rule_data.insert_one(),
-            bucket_rule_data.update_one(),
-            bucket_rule_data.delete_one(),
+            bucket_rule_data.update_one().to_str(),
+            bucket_rule_data.delete_one().to_str(),
         ),
     )
 }
@@ -237,11 +257,19 @@ async fn update_one(
     }
 
     if let Some(find_one) = data.find_one() {
-        bucket_rule_data.set_find_one(find_one);
+        let find_one = match BucketPermission::from_str(find_one) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        bucket_rule_data.set_find_one(&find_one);
     }
 
     if let Some(find_many) = data.find_many() {
-        bucket_rule_data.set_find_many(find_many);
+        let find_many = match BucketPermission::from_str(find_many) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        bucket_rule_data.set_find_many(&find_many);
     }
 
     if let Some(insert_one) = data.insert_one() {
@@ -249,11 +277,19 @@ async fn update_one(
     }
 
     if let Some(update_one) = data.update_one() {
-        bucket_rule_data.set_update_one(update_one);
+        let update_one = match BucketPermission::from_str(update_one) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        bucket_rule_data.set_update_one(&update_one);
     }
 
     if let Some(delete_one) = data.delete_one() {
-        bucket_rule_data.set_delete_one(delete_one);
+        let delete_one = match BucketPermission::from_str(delete_one) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        bucket_rule_data.set_delete_one(&delete_one);
     }
 
     if !data.is_all_none() {
@@ -272,11 +308,11 @@ async fn update_one(
             bucket_rule_data.project_id(),
             bucket_rule_data.token_id(),
             bucket_rule_data.bucket_id(),
-            bucket_rule_data.find_one(),
-            bucket_rule_data.find_many(),
+            bucket_rule_data.find_one().to_str(),
+            bucket_rule_data.find_many().to_str(),
             bucket_rule_data.insert_one(),
-            bucket_rule_data.update_one(),
-            bucket_rule_data.delete_one(),
+            bucket_rule_data.update_one().to_str(),
+            bucket_rule_data.delete_one().to_str(),
         ),
     )
 }
@@ -391,11 +427,11 @@ async fn find_many(
                     data.project_id(),
                     data.token_id(),
                     data.bucket_id(),
-                    data.find_one(),
-                    data.find_many(),
+                    data.find_one().to_str(),
+                    data.find_many().to_str(),
                     data.insert_one(),
-                    data.update_one(),
-                    data.delete_one(),
+                    data.update_one().to_str(),
+                    data.delete_one().to_str(),
                 )
             })
             .collect::<Vec<_>>(),

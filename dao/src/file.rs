@@ -15,6 +15,7 @@ use crate::{util::conversion, Db};
 
 pub struct FileDao {
     id: Uuid,
+    created_by: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     bucket_id: Uuid,
@@ -24,11 +25,18 @@ pub struct FileDao {
 }
 
 impl FileDao {
-    pub fn new(bucket_id: &Uuid, file_name: &str, content_type: &Mime, size: &i64) -> Self {
+    pub fn new(
+        created_by: &Uuid,
+        bucket_id: &Uuid,
+        file_name: &str,
+        content_type: &Mime,
+        size: &i64,
+    ) -> Self {
         let now = Utc::now();
 
         Self {
             id: Uuid::now_v7(),
+            created_by: *created_by,
             created_at: now,
             updated_at: now,
             bucket_id: *bucket_id,
@@ -40,6 +48,10 @@ impl FileDao {
 
     pub fn id(&self) -> &Uuid {
         &self.id
+    }
+
+    pub fn created_by(&self) -> &Uuid {
+        &self.created_by
     }
 
     pub fn created_at(&self) -> &DateTime<Utc> {
@@ -137,6 +149,55 @@ impl FileDao {
         }
     }
 
+    pub async fn db_select_many_by_created_by_and_bucket_id(
+        db: &Db,
+        created_by: &Uuid,
+        bucket_id: &Uuid,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut files_data = Vec::new();
+                let files = db
+                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    .await?;
+                for file in files {
+                    files_data.push(Self::from_scylladb_model(&file?)?);
+                }
+                Ok(files_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let files = db
+                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    .await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_postgresdb_model(file)?)
+                }
+                Ok(files_data)
+            }
+            Db::MysqlDb(db) => {
+                let files = db
+                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    .await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_mysqldb_model(file)?)
+                }
+                Ok(files_data)
+            }
+            Db::SqliteDb(db) => {
+                let files = db
+                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    .await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_sqlitedb_model(file)?)
+                }
+                Ok(files_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
@@ -159,6 +220,7 @@ impl FileDao {
     fn from_scylladb_model(model: &FileScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
+            created_by: *model.created_by(),
             created_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.created_at())?,
             updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             bucket_id: *model.bucket_id(),
@@ -171,6 +233,7 @@ impl FileDao {
     fn to_scylladb_model(&self) -> FileScyllaModel {
         FileScyllaModel::new(
             &self.id,
+            &self.created_by,
             &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
             &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.bucket_id,
@@ -183,6 +246,7 @@ impl FileDao {
     fn from_postgresdb_model(model: &FilePostgresModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
+            created_by: *model.created_by(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             bucket_id: *model.bucket_id(),
@@ -195,6 +259,7 @@ impl FileDao {
     fn to_postgresdb_model(&self) -> FilePostgresModel {
         FilePostgresModel::new(
             &self.id,
+            &self.created_by,
             &self.created_at,
             &self.updated_at,
             &self.bucket_id,
@@ -207,6 +272,7 @@ impl FileDao {
     fn from_mysqldb_model(model: &FileMysqlModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
+            created_by: *model.created_by(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             bucket_id: *model.bucket_id(),
@@ -219,6 +285,7 @@ impl FileDao {
     fn to_mysqldb_model(&self) -> FileMysqlModel {
         FileMysqlModel::new(
             &self.id,
+            &self.created_by,
             &self.created_at,
             &self.updated_at,
             &self.bucket_id,
@@ -231,6 +298,7 @@ impl FileDao {
     fn from_sqlitedb_model(model: &FileSqliteModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
+            created_by: *model.created_by(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             bucket_id: *model.bucket_id(),
@@ -243,6 +311,7 @@ impl FileDao {
     fn to_sqlitedb_model(&self) -> FileSqliteModel {
         FileSqliteModel::new(
             &self.id,
+            &self.created_by,
             &self.created_at,
             &self.updated_at,
             &self.bucket_id,

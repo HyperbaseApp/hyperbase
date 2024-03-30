@@ -97,7 +97,7 @@ async fn insert_one(
                 &format!("Field name in schema_fields can't be empty string"),
             );
         }
-        if field.starts_with("_") || !field.chars().all(|c| c == '_' || ('a'..='z').contains(&c)) {
+        if field.starts_with("_") || !field.chars().all(|c| c == '_' || (c >= 'a' && c <= 'z')) {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
                 &format!("Field '{field}' should only have lowercase English letters and an optional underscore (_) after the first character"),

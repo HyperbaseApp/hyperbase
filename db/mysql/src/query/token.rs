@@ -6,8 +6,8 @@ use crate::{db::MysqlDb, model::token::TokenModel};
 
 const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `id` = ?";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ?";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ? ORDER BY `created_at` DESC";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ? ORDER BY `created_at` DESC";
 const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `name` = ?, `allow_anonymous` = ?, `expired_at` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `tokens` WHERE `id` = ?";
 

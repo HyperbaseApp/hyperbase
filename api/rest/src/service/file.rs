@@ -2,8 +2,10 @@ use actix_files::NamedFile;
 use actix_multipart::form::MultipartForm;
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
+use ahash::HashSet;
 use hb_dao::{
-    admin::AdminDao, bucket::BucketDao, file::FileDao, project::ProjectDao, token::TokenDao,
+    admin::AdminDao, bucket::BucketDao, bucket_rule::BucketPermission, collection::CollectionDao,
+    file::FileDao, project::ProjectDao, record::RecordDao, token::TokenDao, value::ColumnValue,
 };
 use hb_token_jwt::kind::JwtTokenKind;
 use tokio::fs;
@@ -115,6 +117,44 @@ async fn insert_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        admin_id
+    } else if let Some(user_claim) = token_claim.user() {
+        let collection_data =
+            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            };
+        let user_data = match RecordDao::db_select(
+            ctx.dao().db(),
+            user_claim.id(),
+            &None,
+            &HashSet::from_iter(["_id"]),
+            &collection_data,
+        )
+        .await
+        {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+        let mut user_id = None;
+        if let Some(id) = user_data.get("_id") {
+            if let ColumnValue::Uuid(id) = id {
+                if let Some(id) = id {
+                    user_id = Some(*id);
+                }
+            }
+        }
+
+        if let Some(user_id) = user_id {
+            user_id
+        } else {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
+        }
+    } else {
+        *token_claim.id()
+    };
     let mut file_name = Uuid::now_v7().to_string();
     if let Some(name) = form.file_name() {
         file_name = name;
@@ -132,7 +172,13 @@ async fn insert_one(
             )
         }
     };
-    let file_data = FileDao::new(path.bucket_id(), &file_name, &content_type, &size);
+    let file_data = FileDao::new(
+        &created_by,
+        path.bucket_id(),
+        &file_name,
+        &content_type,
+        &size,
+    );
 
     if let Err(err) = file_data
         .save(ctx.dao().db(), bucket_data.path(), form.file_path())
@@ -192,17 +238,21 @@ async fn find_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_find_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_find_one_file(ctx.dao().db(), path.bucket_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read this file",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, bucket_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -223,10 +273,78 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else if let Some(rule) = rule_find_one {
+        match rule {
+            BucketPermission::All => None,
+            BucketPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
+    } else {
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to read this file",
+        );
+    };
+
     let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if let Some(created_by) = &created_by {
+        if created_by != file_data.created_by() {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "User doesn't have permission to read this file",
+            );
+        }
+    }
 
     if file_data.bucket_id() != bucket_data.id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
@@ -282,17 +400,21 @@ async fn download_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_find_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_find_one_file(ctx.dao().db(), path.bucket_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read this file",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, bucket_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -313,10 +435,78 @@ async fn download_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else if let Some(rule) = rule_find_one {
+        match rule {
+            BucketPermission::All => None,
+            BucketPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
+    } else {
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to read this file",
+        );
+    };
+
     let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if let Some(created_by) = &created_by {
+        if created_by != file_data.created_by() {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "User doesn't have permission to read this file",
+            );
+        }
+    }
 
     if file_data.bucket_id() != bucket_data.id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
@@ -367,17 +557,21 @@ async fn update_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_update_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_update_file(ctx.dao().db(), path.bucket_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to update this file",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, bucket_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -398,10 +592,78 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else if let Some(rule) = rule_update_one {
+        match rule {
+            BucketPermission::All => None,
+            BucketPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
+    } else {
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to update this file",
+        );
+    };
+
     let mut file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if let Some(created_by) = &created_by {
+        if created_by != file_data.created_by() {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "User doesn't have permission to update this file",
+            );
+        }
+    }
 
     if file_data.bucket_id() != bucket_data.id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
@@ -467,17 +729,21 @@ async fn delete_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_delete_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_delete_file(ctx.dao().db(), path.bucket_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to delete this file",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, bucket_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -498,10 +764,78 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else if let Some(rule) = rule_delete_one {
+        match rule {
+            BucketPermission::All => None,
+            BucketPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
+    } else {
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "User doesn't have permission to delete this file",
+        );
+    };
+
     let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
+
+    if let Some(created_by) = &created_by {
+        if created_by != file_data.created_by() {
+            return Response::error_raw(
+                &StatusCode::FORBIDDEN,
+                "User doesn't have permission to delete this file",
+            );
+        }
+    }
 
     if file_data.bucket_id() != bucket_data.id() {
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
@@ -557,17 +891,21 @@ async fn find_many(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_find_many = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_find_many_files(ctx.dao().db(), path.bucket_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read these files",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, bucket_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -588,11 +926,85 @@ async fn find_many(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let files_data =
-        match FileDao::db_select_many_by_bucket_id(ctx.dao().db(), path.bucket_id()).await {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        None
+    } else if let Some(rule) = rule_find_many {
+        match rule {
+            BucketPermission::All => None,
+            BucketPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
+    } else {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "User doesn't have permission to read these files",
+        );
+    };
+
+    let files_data = match created_by {
+        Some(created_by) => {
+            match FileDao::db_select_many_by_created_by_and_bucket_id(
+                ctx.dao().db(),
+                &created_by,
+                path.bucket_id(),
+            )
+            .await
+            {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            }
+        }
+        None => {
+            match FileDao::db_select_many_by_bucket_id(ctx.dao().db(), path.bucket_id()).await {
+                Ok(data) => data,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            }
+        }
+    };
 
     Response::data(
         &StatusCode::OK,

@@ -6,7 +6,7 @@ use crate::{db::PostgresDb, model::project::ProjectModel};
 
 const INSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES ($1, $2, $3, $4, $5)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"id\" = $1";
-const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = $1";
+const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = $1 ORDER BY \"created_at\" DESC";
 const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = $1, \"name\" = $2 WHERE \"id\" = $3";
 const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = $1";
 

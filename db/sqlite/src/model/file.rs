@@ -7,6 +7,7 @@ use uuid::Uuid;
 #[derive(FromRow)]
 pub struct FileModel {
     id: Uuid,
+    created_by: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     bucket_id: Uuid,
@@ -18,6 +19,7 @@ pub struct FileModel {
 impl FileModel {
     pub fn new(
         id: &Uuid,
+        created_by: &Uuid,
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
         bucket_id: &Uuid,
@@ -27,6 +29,7 @@ impl FileModel {
     ) -> Self {
         Self {
             id: *id,
+            created_by: *created_by,
             created_at: *created_at,
             updated_at: *updated_at,
             bucket_id: *bucket_id,
@@ -38,6 +41,10 @@ impl FileModel {
 
     pub fn id(&self) -> &Uuid {
         &self.id
+    }
+
+    pub fn created_by(&self) -> &Uuid {
+        &self.created_by
     }
 
     pub fn created_at(&self) -> &DateTime<Utc> {

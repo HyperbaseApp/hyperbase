@@ -1,5 +1,6 @@
 use std::any::type_name;
 
+use anyhow::{Error, Result};
 use scylla::{
     cql_to_rust::{FromCqlVal, FromCqlValError},
     frame::response::result::{ColumnType, CqlValue},
@@ -72,7 +73,7 @@ impl ColumnKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, String> {
+    pub fn from_str(str: &str) -> Result<Self> {
         match str {
             "ascii" => Ok(Self::Ascii),
             "boolean" => Ok(Self::Boolean),
@@ -100,7 +101,7 @@ impl ColumnKind {
             "tuple" => Ok(Self::Tuple),
             "uuid" => Ok(Self::Uuid),
             "varint" => Ok(Self::Varint),
-            _ => Err(format!("Unknown schema field kind '{str}'")),
+            _ => Err(Error::msg(format!("Unknown schema field kind '{str}'"))),
         }
     }
 }

@@ -4,16 +4,17 @@ use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::file::FileModel};
 
-const INSERT: &str = "INSERT INTO \"hyperbase\".\"files\" (\"id\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\") VALUES (?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
+const INSERT: &str = "INSERT INTO \"hyperbase\".\"files\" (\"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
+const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"updated_at\" = ?, \"file_name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up files table");
 
-    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"files\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
+    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
     cached_session
         .get_session()
         .query(
@@ -33,6 +34,10 @@ pub async fn init(cached_session: &CachingSession) {
         .unwrap();
     cached_session
         .add_prepared_statement(&SELECT_MANY_BY_BUCKET_ID.into())
+        .await
+        .unwrap();
+    cached_session
+        .add_prepared_statement(&SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID.into())
         .await
         .unwrap();
     cached_session
@@ -64,6 +69,20 @@ impl ScyllaDb {
     ) -> Result<TypedRowIter<FileModel>> {
         Ok(self
             .execute(SELECT_MANY_BY_BUCKET_ID, [bucket_id].as_ref())
+            .await?
+            .rows_typed()?)
+    }
+
+    pub async fn select_many_files_by_created_by_and_bucket_id(
+        &self,
+        created_by: &Uuid,
+        bucket_id: &Uuid,
+    ) -> Result<TypedRowIter<FileModel>> {
+        Ok(self
+            .execute(
+                SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID,
+                [created_by, bucket_id].as_ref(),
+            )
             .await?
             .rows_typed()?)
     }

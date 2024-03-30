@@ -7,7 +7,7 @@ use crate::{db::PostgresDb, model::bucket_rule::BucketRuleModel};
 const INSERT: &str = "INSERT INTO \"bucket_rules\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"id\" = $1";
 const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = $1 AND \"bucket_id\" = $2";
-const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = $1";
+const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = $1 ORDER BY \"created_at\" DESC";
 const UPDATE: &str = "UPDATE \"bucket_rules\" SET \"updated_at\" = $1, \"find_one\" = $2, \"find_many\" = $3, \"insert_one\" = $4, \"update_one\" = $5, \"delete_one\" = $6 WHERE \"id\" = $7";
 const DELETE: &str = "DELETE FROM \"bucket_rules\" WHERE \"id\" = $1";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"token_id\" = $1";
@@ -15,7 +15,7 @@ const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"toke
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up bucket_rules table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"bucket_rules\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"token_id\" uuid, \"bucket_id\" uuid, \"find_one\" boolean, \"find_many\" boolean, \"insert_one\" boolean, \"update_one\" boolean, \"delete_one\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"bucket_rules\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"token_id\" uuid, \"bucket_id\" uuid, \"find_one\" text, \"find_many\" text, \"insert_one\" boolean, \"update_one\" text, \"delete_one\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     pool.prepare(INSERT).await.unwrap();
     pool.prepare(SELECT).await.unwrap();

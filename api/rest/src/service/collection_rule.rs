@@ -1,8 +1,11 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::{
-    admin::AdminDao, collection::CollectionDao, collection_rule::CollectionRuleDao,
-    project::ProjectDao, token::TokenDao,
+    admin::AdminDao,
+    collection::CollectionDao,
+    collection_rule::{CollectionPermission, CollectionRuleDao},
+    project::ProjectDao,
+    token::TokenDao,
 };
 use hb_token_jwt::kind::JwtTokenKind;
 
@@ -96,15 +99,32 @@ async fn insert_one(
         );
     }
 
+    let rule_find_one = match CollectionPermission::from_str(data.find_one()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+    let rule_find_many = match CollectionPermission::from_str(data.find_many()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+    let rule_update_one = match CollectionPermission::from_str(data.update_one()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+    let rule_delete_one = match CollectionPermission::from_str(data.delete_one()) {
+        Ok(rule) => rule,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
     let collection_rule_data = CollectionRuleDao::new(
         project_data.id(),
         token_data.id(),
         collection_data.id(),
-        data.find_one(),
-        data.find_many(),
+        &rule_find_one,
+        &rule_find_many,
         data.insert_one(),
-        data.update_one(),
-        data.delete_one(),
+        &rule_update_one,
+        &rule_delete_one,
     );
 
     if let Err(err) = collection_rule_data.db_insert(ctx.dao().db()).await {
@@ -121,11 +141,11 @@ async fn insert_one(
             collection_rule_data.project_id(),
             collection_rule_data.token_id(),
             collection_rule_data.collection_id(),
-            collection_rule_data.find_one(),
-            collection_rule_data.find_many(),
+            collection_rule_data.find_one().to_str(),
+            collection_rule_data.find_many().to_str(),
             collection_rule_data.insert_one(),
-            collection_rule_data.update_one(),
-            collection_rule_data.delete_one(),
+            collection_rule_data.update_one().to_str(),
+            collection_rule_data.delete_one().to_str(),
         ),
     )
 }
@@ -185,11 +205,11 @@ async fn find_one(
             collection_rule_data.project_id(),
             collection_rule_data.token_id(),
             collection_rule_data.collection_id(),
-            collection_rule_data.find_one(),
-            collection_rule_data.find_many(),
+            collection_rule_data.find_one().to_str(),
+            collection_rule_data.find_many().to_str(),
             collection_rule_data.insert_one(),
-            collection_rule_data.update_one(),
-            collection_rule_data.delete_one(),
+            collection_rule_data.update_one().to_str(),
+            collection_rule_data.delete_one().to_str(),
         ),
     )
 }
@@ -241,11 +261,19 @@ async fn update_one(
     }
 
     if let Some(find_one) = data.find_one() {
-        collection_rule_data.set_find_one(find_one);
+        let find_one = match CollectionPermission::from_str(find_one) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        collection_rule_data.set_find_one(&find_one);
     }
 
     if let Some(find_many) = data.find_many() {
-        collection_rule_data.set_find_many(find_many);
+        let find_many = match CollectionPermission::from_str(find_many) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        collection_rule_data.set_find_many(&find_many);
     }
 
     if let Some(insert_one) = data.insert_one() {
@@ -253,11 +281,19 @@ async fn update_one(
     }
 
     if let Some(update_one) = data.update_one() {
-        collection_rule_data.set_update_one(update_one);
+        let update_one = match CollectionPermission::from_str(update_one) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        collection_rule_data.set_update_one(&update_one);
     }
 
     if let Some(delete_one) = data.delete_one() {
-        collection_rule_data.set_delete_one(delete_one);
+        let delete_one = match CollectionPermission::from_str(delete_one) {
+            Ok(rule) => rule,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+        collection_rule_data.set_delete_one(&delete_one);
     }
 
     if !data.is_all_none() {
@@ -276,11 +312,11 @@ async fn update_one(
             collection_rule_data.project_id(),
             collection_rule_data.token_id(),
             collection_rule_data.collection_id(),
-            collection_rule_data.find_one(),
-            collection_rule_data.find_many(),
+            collection_rule_data.find_one().to_str(),
+            collection_rule_data.find_many().to_str(),
             collection_rule_data.insert_one(),
-            collection_rule_data.update_one(),
-            collection_rule_data.delete_one(),
+            collection_rule_data.update_one().to_str(),
+            collection_rule_data.delete_one().to_str(),
         ),
     )
 }
@@ -395,11 +431,11 @@ async fn find_many(
                     data.project_id(),
                     data.token_id(),
                     data.collection_id(),
-                    data.find_one(),
-                    data.find_many(),
+                    data.find_one().to_str(),
+                    data.find_many().to_str(),
                     data.insert_one(),
-                    data.update_one(),
-                    data.delete_one(),
+                    data.update_one().to_str(),
+                    data.delete_one().to_str(),
                 )
             })
             .collect::<Vec<_>>(),

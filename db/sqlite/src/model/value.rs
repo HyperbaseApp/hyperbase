@@ -1,3 +1,4 @@
+use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
@@ -30,7 +31,7 @@ impl ColumnKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, String> {
+    pub fn from_str(str: &str) -> Result<Self> {
         match str {
             "boolean" => Ok(Self::Boolean),
             "integer" => Ok(Self::Integer),
@@ -42,7 +43,7 @@ impl ColumnKind {
             "timestamp" => Ok(Self::Timestamp),
             "date" => Ok(Self::Date),
             "time" => Ok(Self::Time),
-            _ => Err(format!("Unknown schema field kind '{str}'")),
+            _ => Err(Error::msg(format!("Unknown schema field kind '{str}'"))),
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::{db::PostgresDb, model::bucket::BucketModel};
 
 const INSERT: &str = "INSERT INTO \"buckets\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\") VALUES ($1, $2, $3, $4, $5, $6)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\" FROM \"buckets\" WHERE \"id\" = $1";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\" FROM \"buckets\" WHERE \"project_id\" = $1";
+const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\" FROM \"buckets\" WHERE \"project_id\" = $1 ORDER BY \"created_at\" DESC";
 const UPDATE: &str = "UPDATE \"buckets\" SET \"updated_at\" = $1, \"name\" = $2 WHERE \"id\" = $3";
 const DELETE: &str = "DELETE FROM \"buckets\" WHERE \"id\" = $1";
 

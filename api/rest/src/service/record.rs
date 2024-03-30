@@ -7,6 +7,7 @@ use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSo
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
+    collection_rule::CollectionPermission,
     project::ProjectDao,
     record::{RecordDao, RecordFilters, RecordOrder, RecordPagination},
     token::TokenDao,
@@ -127,7 +128,9 @@ async fn insert_one(
         }
     }
 
-    let created_by = if let Some(user_claim) = token_claim.user() {
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+        admin_id
+    } else if let Some(user_claim) = token_claim.user() {
         let collection_data =
             match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
                 Ok(data) => data,
@@ -160,13 +163,8 @@ async fn insert_one(
         } else {
             return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
         }
-    } else if *token_claim.kind() == JwtTokenKind::Admin {
-        admin_id
     } else {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "User doesn't have permission to write data to this collection",
-        );
+        *token_claim.id()
     };
 
     let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
@@ -292,17 +290,21 @@ async fn find_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_find_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_find_one_record(ctx.dao().db(), path.collection_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read this record",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -323,41 +325,58 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if let Some(user_claim) = token_claim.user() {
-        let collection_data =
-            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
-                Ok(data) => data,
-                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-            };
-        let user_data = match RecordDao::db_select(
-            ctx.dao().db(),
-            user_claim.id(),
-            &None,
-            &HashSet::from_iter(["_id"]),
-            &collection_data,
-        )
-        .await
-        {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
-
-        let mut user_id = None;
-        if let Some(id) = user_data.get("_id") {
-            if let ColumnValue::Uuid(id) = id {
-                if let Some(id) = id {
-                    user_id = Some(*id);
-                }
-            }
-        }
-
-        if user_id.is_none() {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
-        }
-
-        user_id
-    } else if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
         None
+    } else if let Some(rule) = rule_find_one {
+        match rule {
+            CollectionPermission::All => None,
+            CollectionPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
     } else {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
@@ -446,17 +465,21 @@ async fn update_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_update_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_update_record(ctx.dao().db(), path.collection_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to update this record",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -477,41 +500,58 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if let Some(user_claim) = token_claim.user() {
-        let collection_data =
-            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
-                Ok(data) => data,
-                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-            };
-        let user_data = match RecordDao::db_select(
-            ctx.dao().db(),
-            user_claim.id(),
-            &None,
-            &HashSet::from_iter(["_id"]),
-            &collection_data,
-        )
-        .await
-        {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
-
-        let mut user_id = None;
-        if let Some(id) = user_data.get("_id") {
-            if let ColumnValue::Uuid(id) = id {
-                if let Some(id) = id {
-                    user_id = Some(*id);
-                }
-            }
-        }
-
-        if user_id.is_none() {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
-        }
-
-        user_id
-    } else if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
         None
+    } else if let Some(rule) = rule_update_one {
+        match rule {
+            CollectionPermission::All => None,
+            CollectionPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
     } else {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
@@ -659,17 +699,21 @@ async fn delete_one(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_delete_one = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_delete_record(ctx.dao().db(), path.collection_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to delete this record",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -690,41 +734,58 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if let Some(user_claim) = token_claim.user() {
-        let collection_data =
-            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
-                Ok(data) => data,
-                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-            };
-        let user_data = match RecordDao::db_select(
-            ctx.dao().db(),
-            user_claim.id(),
-            &None,
-            &HashSet::from_iter(["_id"]),
-            &collection_data,
-        )
-        .await
-        {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
-
-        let mut user_id = None;
-        if let Some(id) = user_data.get("_id") {
-            if let ColumnValue::Uuid(id) = id {
-                if let Some(id) = id {
-                    user_id = Some(*id);
-                }
-            }
-        }
-
-        if user_id.is_none() {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
-        }
-
-        user_id
-    } else if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
         None
+    } else if let Some(rule) = rule_delete_one {
+        match rule {
+            CollectionPermission::All => None,
+            CollectionPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
     } else {
         return Response::error_raw(
             &StatusCode::BAD_REQUEST,
@@ -848,17 +909,21 @@ async fn find_many(
         }
     };
 
-    if let Some(token_data) = &token_data {
-        if !token_data
+    let rule_find_many = if let Some(token_data) = &token_data {
+        if let Some(rule) = token_data
             .is_allow_find_many_records(ctx.dao().db(), path.collection_id())
             .await
         {
+            Some(rule)
+        } else {
             return Response::error_raw(
                 &StatusCode::FORBIDDEN,
                 "This token doesn't have permission to read these records",
             );
         }
-    }
+    } else {
+        None
+    };
 
     let (project_data, collection_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -879,41 +944,58 @@ async fn find_many(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if let Some(user_claim) = token_claim.user() {
-        let collection_data =
-            match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
-                Ok(data) => data,
-                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-            };
-        let user_data = match RecordDao::db_select(
-            ctx.dao().db(),
-            user_claim.id(),
-            &None,
-            &HashSet::from_iter(["_id"]),
-            &collection_data,
-        )
-        .await
-        {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
-
-        let mut user_id = None;
-        if let Some(id) = user_data.get("_id") {
-            if let ColumnValue::Uuid(id) = id {
-                if let Some(id) = id {
-                    user_id = Some(*id);
-                }
-            }
-        }
-
-        if user_id.is_none() {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
-        }
-
-        user_id
-    } else if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
         None
+    } else if let Some(rule) = rule_find_many {
+        match rule {
+            CollectionPermission::All => None,
+            CollectionPermission::SelfMade => match token_claim.user() {
+                Some(user_claim) => {
+                    let collection_data =
+                        match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
+                            .await
+                        {
+                            Ok(data) => data,
+                            Err(err) => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &err.to_string(),
+                                )
+                            }
+                        };
+                    let user_data = match RecordDao::db_select(
+                        ctx.dao().db(),
+                        user_claim.id(),
+                        &None,
+                        &HashSet::from_iter(["_id"]),
+                        &collection_data,
+                    )
+                    .await
+                    {
+                        Ok(data) => data,
+                        Err(err) => {
+                            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
+                        }
+                    };
+
+                    let mut user_id = None;
+                    if let Some(id) = user_data.get("_id") {
+                        if let ColumnValue::Uuid(id) = id {
+                            if let Some(id) = id {
+                                user_id = Some(*id);
+                            }
+                        }
+                    }
+
+                    if user_id.is_none() {
+                        return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
+                    }
+
+                    user_id
+                }
+                None => Some(*token_claim.id()),
+            },
+        }
     } else {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,

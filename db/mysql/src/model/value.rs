@@ -1,3 +1,4 @@
+use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
@@ -66,7 +67,7 @@ impl ColumnKind {
         }
     }
 
-    pub fn from_str(str: &str) -> Result<Self, String> {
+    pub fn from_str(str: &str) -> Result<Self> {
         match str {
             "tinyint(1)" => Ok(Self::Tinyint1),
             "boolean" => Ok(Self::Boolean),
@@ -96,7 +97,7 @@ impl ColumnKind {
             "char(36)" => Ok(Self::Char36),
             "char(32)" => Ok(Self::Char32),
             "json" => Ok(Self::Json),
-            _ => Err(format!("Unknown schema field kind '{str}'")),
+            _ => Err(Error::msg(format!("Unknown schema field kind '{str}'"))),
         }
     }
 }

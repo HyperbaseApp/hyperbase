@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::bucket_rule::BucketRuleModel as BucketRuleMysqlModel;
 use hb_db_postgresql::model::bucket_rule::BucketRuleModel as BucketRulePostgresModel;
@@ -16,11 +16,11 @@ pub struct BucketRuleDao {
     project_id: Uuid,
     token_id: Uuid,
     bucket_id: Uuid,
-    find_one: bool,
-    find_many: bool,
+    find_one: BucketPermission,
+    find_many: BucketPermission,
     insert_one: bool,
-    update_one: bool,
-    delete_one: bool,
+    update_one: BucketPermission,
+    delete_one: BucketPermission,
 }
 
 impl BucketRuleDao {
@@ -28,11 +28,11 @@ impl BucketRuleDao {
         project_id: &Uuid,
         token_id: &Uuid,
         bucket_id: &Uuid,
-        find_one: &bool,
-        find_many: &bool,
+        find_one: &BucketPermission,
+        find_many: &BucketPermission,
         insert_one: &bool,
-        update_one: &bool,
-        delete_one: &bool,
+        update_one: &BucketPermission,
+        delete_one: &BucketPermission,
     ) -> Self {
         let now = Utc::now();
 
@@ -75,11 +75,11 @@ impl BucketRuleDao {
         &self.bucket_id
     }
 
-    pub fn find_one(&self) -> &bool {
+    pub fn find_one(&self) -> &BucketPermission {
         &self.find_one
     }
 
-    pub fn find_many(&self) -> &bool {
+    pub fn find_many(&self) -> &BucketPermission {
         &self.find_many
     }
 
@@ -87,19 +87,19 @@ impl BucketRuleDao {
         &self.insert_one
     }
 
-    pub fn update_one(&self) -> &bool {
+    pub fn update_one(&self) -> &BucketPermission {
         &self.update_one
     }
 
-    pub fn delete_one(&self) -> &bool {
+    pub fn delete_one(&self) -> &BucketPermission {
         &self.delete_one
     }
 
-    pub fn set_find_one(&mut self, rule: &bool) {
+    pub fn set_find_one(&mut self, rule: &BucketPermission) {
         self.find_one = *rule;
     }
 
-    pub fn set_find_many(&mut self, rule: &bool) {
+    pub fn set_find_many(&mut self, rule: &BucketPermission) {
         self.find_many = *rule;
     }
 
@@ -107,11 +107,11 @@ impl BucketRuleDao {
         self.insert_one = *rule;
     }
 
-    pub fn set_update_one(&mut self, rule: &bool) {
+    pub fn set_update_one(&mut self, rule: &BucketPermission) {
         self.update_one = *rule;
     }
 
-    pub fn set_delete_one(&mut self, rule: &bool) {
+    pub fn set_delete_one(&mut self, rule: &BucketPermission) {
         self.delete_one = *rule;
     }
 
@@ -127,11 +127,9 @@ impl BucketRuleDao {
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_bucket_rule(id).await?),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
-                &db.select_bucket_rule(id).await?,
-            )),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(&db.select_bucket_rule(id).await?)),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(&db.select_bucket_rule(id).await?)),
+            Db::PostgresqlDb(db) => Self::from_postgresdb_model(&db.select_bucket_rule(id).await?),
+            Db::MysqlDb(db) => Self::from_mysqldb_model(&db.select_bucket_rule(id).await?),
+            Db::SqliteDb(db) => Self::from_sqlitedb_model(&db.select_bucket_rule(id).await?),
         }
     }
 
@@ -145,18 +143,18 @@ impl BucketRuleDao {
                 &db.select_bucket_rule_by_token_id_and_bucket_id(token_id, bucket_id)
                     .await?,
             ),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
+            Db::PostgresqlDb(db) => Self::from_postgresdb_model(
                 &db.select_bucket_rule_by_token_id_and_bucket_id(token_id, bucket_id)
                     .await?,
-            )),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
+            ),
+            Db::MysqlDb(db) => Self::from_mysqldb_model(
                 &db.select_bucket_rule_by_token_id_and_bucket_id(token_id, bucket_id)
                     .await?,
-            )),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
+            ),
+            Db::SqliteDb(db) => Self::from_sqlitedb_model(
                 &db.select_bucket_rule_by_token_id_and_bucket_id(token_id, bucket_id)
                     .await?,
-            )),
+            ),
         }
     }
 
@@ -174,7 +172,7 @@ impl BucketRuleDao {
                 let bucket_rules = db.select_many_bucket_rules_by_token_id(token_id).await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {
-                    bucket_rules_data.push(Self::from_postgresdb_model(bucket_rule));
+                    bucket_rules_data.push(Self::from_postgresdb_model(bucket_rule)?);
                 }
                 Ok(bucket_rules_data)
             }
@@ -182,7 +180,7 @@ impl BucketRuleDao {
                 let bucket_rules = db.select_many_bucket_rules_by_token_id(token_id).await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {
-                    bucket_rules_data.push(Self::from_mysqldb_model(bucket_rule));
+                    bucket_rules_data.push(Self::from_mysqldb_model(bucket_rule)?);
                 }
                 Ok(bucket_rules_data)
             }
@@ -190,7 +188,7 @@ impl BucketRuleDao {
                 let bucket_rules = db.select_many_bucket_rules_by_token_id(token_id).await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {
-                    bucket_rules_data.push(Self::from_sqlitedb_model(bucket_rule));
+                    bucket_rules_data.push(Self::from_sqlitedb_model(bucket_rule)?);
                 }
                 Ok(bucket_rules_data)
             }
@@ -233,11 +231,11 @@ impl BucketRuleDao {
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             bucket_id: *model.bucket_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: BucketPermission::from_str(model.find_one())?,
+            find_many: BucketPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
+            update_one: BucketPermission::from_str(model.update_one())?,
+            delete_one: BucketPermission::from_str(model.delete_one())?,
         })
     }
 
@@ -249,28 +247,28 @@ impl BucketRuleDao {
             &self.project_id,
             &self.token_id,
             &self.bucket_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
     }
 
-    fn from_postgresdb_model(model: &BucketRulePostgresModel) -> Self {
-        Self {
+    fn from_postgresdb_model(model: &BucketRulePostgresModel) -> Result<Self> {
+        Ok(Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             bucket_id: *model.bucket_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: BucketPermission::from_str(model.find_one())?,
+            find_many: BucketPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
-        }
+            update_one: BucketPermission::from_str(model.update_one())?,
+            delete_one: BucketPermission::from_str(model.delete_one())?,
+        })
     }
 
     fn to_postgresdb_model(&self) -> BucketRulePostgresModel {
@@ -281,28 +279,28 @@ impl BucketRuleDao {
             &self.project_id,
             &self.token_id,
             &self.bucket_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
     }
 
-    fn from_mysqldb_model(model: &BucketRuleMysqlModel) -> Self {
-        Self {
+    fn from_mysqldb_model(model: &BucketRuleMysqlModel) -> Result<Self> {
+        Ok(Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             bucket_id: *model.bucket_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: BucketPermission::from_str(model.find_one())?,
+            find_many: BucketPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
-        }
+            update_one: BucketPermission::from_str(model.update_one())?,
+            delete_one: BucketPermission::from_str(model.delete_one())?,
+        })
     }
 
     fn to_mysqldb_model(&self) -> BucketRuleMysqlModel {
@@ -313,28 +311,28 @@ impl BucketRuleDao {
             &self.project_id,
             &self.token_id,
             &self.bucket_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
     }
 
-    fn from_sqlitedb_model(model: &BucketRuleSqliteModel) -> Self {
-        Self {
+    fn from_sqlitedb_model(model: &BucketRuleSqliteModel) -> Result<Self> {
+        Ok(Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             bucket_id: *model.bucket_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: BucketPermission::from_str(model.find_one())?,
+            find_many: BucketPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
-        }
+            update_one: BucketPermission::from_str(model.update_one())?,
+            delete_one: BucketPermission::from_str(model.delete_one())?,
+        })
     }
 
     fn to_sqlitedb_model(&self) -> BucketRuleSqliteModel {
@@ -345,11 +343,34 @@ impl BucketRuleDao {
             &self.project_id,
             &self.token_id,
             &self.bucket_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum BucketPermission {
+    All,
+    SelfMade,
+}
+
+impl BucketPermission {
+    pub fn to_str(&self) -> &str {
+        match self {
+            Self::All => "all",
+            Self::SelfMade => "self_made",
+        }
+    }
+
+    pub fn from_str(str: &str) -> Result<Self> {
+        match str {
+            "all" => Ok(Self::All),
+            "self_made" => Ok(Self::SelfMade),
+            _ => Err(Error::msg(format!("Unknown bucket permission '{str}'"))),
+        }
     }
 }

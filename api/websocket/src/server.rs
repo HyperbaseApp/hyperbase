@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::Result;
-use hb_dao::token::TokenDao;
+use hb_dao::{collection_rule::CollectionPermission, token::TokenDao};
 use serde::Serialize;
 use tokio::{select, sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -186,15 +186,17 @@ impl ApiWebSocketServer {
             for connection_id in connection_ids {
                 if let Some((user_id, token_id)) = self.user_sessions.get(connection_id) {
                     if let Some(user_id) = user_id {
-                        if message.created_by != *user_id {
-                            continue;
-                        }
-
                         let token_data = TokenDao::db_select(self.ctx.dao().db(), token_id).await?;
-                        if !token_data
+                        if let Some(permission) = token_data
                             .is_allow_find_many_records(self.ctx.dao().db(), &collection_id)
                             .await
                         {
+                            if permission == CollectionPermission::SelfMade
+                                && message.created_by != *user_id
+                            {
+                                continue;
+                            }
+                        } else {
                             continue;
                         }
                     }

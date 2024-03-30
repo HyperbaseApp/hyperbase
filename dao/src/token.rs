@@ -8,7 +8,12 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
-use crate::{bucket_rule::BucketRuleDao, collection_rule::CollectionRuleDao, util::conversion, Db};
+use crate::{
+    bucket_rule::{BucketPermission, BucketRuleDao},
+    collection_rule::{CollectionPermission, CollectionRuleDao},
+    util::conversion,
+    Db,
+};
 
 pub struct TokenDao {
     id: Uuid,
@@ -97,23 +102,31 @@ impl TokenDao {
         self.expired_at = *expired_at;
     }
 
-    pub async fn is_allow_find_one_file(&self, db: &Db, bucket_id: &Uuid) -> bool {
+    pub async fn is_allow_find_one_file(
+        &self,
+        db: &Db,
+        bucket_id: &Uuid,
+    ) -> Option<BucketPermission> {
         if let Ok(bucket_rule_data) =
             BucketRuleDao::db_select_by_token_id_and_bucket_id(db, &self.id, bucket_id).await
         {
-            *bucket_rule_data.find_one()
+            Some(*bucket_rule_data.find_one())
         } else {
-            false
+            None
         }
     }
 
-    pub async fn is_allow_find_many_files(&self, db: &Db, bucket_id: &Uuid) -> bool {
+    pub async fn is_allow_find_many_files(
+        &self,
+        db: &Db,
+        bucket_id: &Uuid,
+    ) -> Option<BucketPermission> {
         if let Ok(bucket_rule_data) =
             BucketRuleDao::db_select_by_token_id_and_bucket_id(db, &self.id, bucket_id).await
         {
-            *bucket_rule_data.find_many()
+            Some(*bucket_rule_data.find_many())
         } else {
-            false
+            None
         }
     }
 
@@ -127,45 +140,61 @@ impl TokenDao {
         }
     }
 
-    pub async fn is_allow_update_file(&self, db: &Db, bucket_id: &Uuid) -> bool {
+    pub async fn is_allow_update_file(
+        &self,
+        db: &Db,
+        bucket_id: &Uuid,
+    ) -> Option<BucketPermission> {
         if let Ok(bucket_rule_data) =
             BucketRuleDao::db_select_by_token_id_and_bucket_id(db, &self.id, bucket_id).await
         {
-            *bucket_rule_data.update_one()
+            Some(*bucket_rule_data.update_one())
         } else {
-            false
+            None
         }
     }
 
-    pub async fn is_allow_delete_file(&self, db: &Db, bucket_id: &Uuid) -> bool {
+    pub async fn is_allow_delete_file(
+        &self,
+        db: &Db,
+        bucket_id: &Uuid,
+    ) -> Option<BucketPermission> {
         if let Ok(bucket_rule_data) =
             BucketRuleDao::db_select_by_token_id_and_bucket_id(db, &self.id, bucket_id).await
         {
-            *bucket_rule_data.update_one()
+            Some(*bucket_rule_data.update_one())
         } else {
-            false
+            None
         }
     }
 
-    pub async fn is_allow_find_one_record(&self, db: &Db, collection_id: &Uuid) -> bool {
+    pub async fn is_allow_find_one_record(
+        &self,
+        db: &Db,
+        collection_id: &Uuid,
+    ) -> Option<CollectionPermission> {
         if let Ok(bucket_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            *bucket_rule_data.find_one()
+            Some(*bucket_rule_data.find_one())
         } else {
-            false
+            None
         }
     }
 
-    pub async fn is_allow_find_many_records(&self, db: &Db, collection_id: &Uuid) -> bool {
+    pub async fn is_allow_find_many_records(
+        &self,
+        db: &Db,
+        collection_id: &Uuid,
+    ) -> Option<CollectionPermission> {
         if let Ok(bucket_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            *bucket_rule_data.find_many()
+            Some(*bucket_rule_data.find_many())
         } else {
-            false
+            None
         }
     }
 
@@ -180,25 +209,33 @@ impl TokenDao {
         }
     }
 
-    pub async fn is_allow_update_record(&self, db: &Db, collection_id: &Uuid) -> bool {
+    pub async fn is_allow_update_record(
+        &self,
+        db: &Db,
+        collection_id: &Uuid,
+    ) -> Option<CollectionPermission> {
         if let Ok(bucket_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            *bucket_rule_data.update_one()
+            Some(*bucket_rule_data.update_one())
         } else {
-            false
+            None
         }
     }
 
-    pub async fn is_allow_delete_record(&self, db: &Db, collection_id: &Uuid) -> bool {
+    pub async fn is_allow_delete_record(
+        &self,
+        db: &Db,
+        collection_id: &Uuid,
+    ) -> Option<CollectionPermission> {
         if let Ok(bucket_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            *bucket_rule_data.delete_one()
+            Some(*bucket_rule_data.delete_one())
         } else {
-            false
+            None
         }
     }
 

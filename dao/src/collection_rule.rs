@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::collection_rule::CollectionRuleModel as CollectionRuleMysqlModel;
 use hb_db_postgresql::model::collection_rule::CollectionRuleModel as CollectionRulePostgresModel;
@@ -16,11 +16,11 @@ pub struct CollectionRuleDao {
     project_id: Uuid,
     token_id: Uuid,
     collection_id: Uuid,
-    find_one: bool,
-    find_many: bool,
+    find_one: CollectionPermission,
+    find_many: CollectionPermission,
     insert_one: bool,
-    update_one: bool,
-    delete_one: bool,
+    update_one: CollectionPermission,
+    delete_one: CollectionPermission,
 }
 
 impl CollectionRuleDao {
@@ -28,11 +28,11 @@ impl CollectionRuleDao {
         project_id: &Uuid,
         token_id: &Uuid,
         collection_id: &Uuid,
-        find_one: &bool,
-        find_many: &bool,
+        find_one: &CollectionPermission,
+        find_many: &CollectionPermission,
         insert_one: &bool,
-        update_one: &bool,
-        delete_one: &bool,
+        update_one: &CollectionPermission,
+        delete_one: &CollectionPermission,
     ) -> Self {
         let now = Utc::now();
 
@@ -75,11 +75,11 @@ impl CollectionRuleDao {
         &self.collection_id
     }
 
-    pub fn find_one(&self) -> &bool {
+    pub fn find_one(&self) -> &CollectionPermission {
         &self.find_one
     }
 
-    pub fn find_many(&self) -> &bool {
+    pub fn find_many(&self) -> &CollectionPermission {
         &self.find_many
     }
 
@@ -87,19 +87,19 @@ impl CollectionRuleDao {
         &self.insert_one
     }
 
-    pub fn update_one(&self) -> &bool {
+    pub fn update_one(&self) -> &CollectionPermission {
         &self.update_one
     }
 
-    pub fn delete_one(&self) -> &bool {
+    pub fn delete_one(&self) -> &CollectionPermission {
         &self.delete_one
     }
 
-    pub fn set_find_one(&mut self, rule: &bool) {
+    pub fn set_find_one(&mut self, rule: &CollectionPermission) {
         self.find_one = *rule;
     }
 
-    pub fn set_find_many(&mut self, rule: &bool) {
+    pub fn set_find_many(&mut self, rule: &CollectionPermission) {
         self.find_many = *rule;
     }
 
@@ -107,11 +107,11 @@ impl CollectionRuleDao {
         self.insert_one = *rule;
     }
 
-    pub fn set_update_one(&mut self, rule: &bool) {
+    pub fn set_update_one(&mut self, rule: &CollectionPermission) {
         self.update_one = *rule;
     }
 
-    pub fn set_delete_one(&mut self, rule: &bool) {
+    pub fn set_delete_one(&mut self, rule: &CollectionPermission) {
         self.delete_one = *rule;
     }
 
@@ -127,15 +127,11 @@ impl CollectionRuleDao {
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_collection_rule(id).await?),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
-                &db.select_collection_rule(id).await?,
-            )),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
-                &db.select_collection_rule(id).await?,
-            )),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
-                &db.select_collection_rule(id).await?,
-            )),
+            Db::PostgresqlDb(db) => {
+                Self::from_postgresdb_model(&db.select_collection_rule(id).await?)
+            }
+            Db::MysqlDb(db) => Self::from_mysqldb_model(&db.select_collection_rule(id).await?),
+            Db::SqliteDb(db) => Self::from_sqlitedb_model(&db.select_collection_rule(id).await?),
         }
     }
 
@@ -149,18 +145,18 @@ impl CollectionRuleDao {
                 &db.select_collection_rule_by_token_id_and_collection_id(token_id, collection_id)
                     .await?,
             ),
-            Db::PostgresqlDb(db) => Ok(Self::from_postgresdb_model(
+            Db::PostgresqlDb(db) => Self::from_postgresdb_model(
                 &db.select_collection_rule_by_token_id_and_collection_id(token_id, collection_id)
                     .await?,
-            )),
-            Db::MysqlDb(db) => Ok(Self::from_mysqldb_model(
+            ),
+            Db::MysqlDb(db) => Self::from_mysqldb_model(
                 &db.select_collection_rule_by_token_id_and_collection_id(token_id, collection_id)
                     .await?,
-            )),
-            Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
+            ),
+            Db::SqliteDb(db) => Self::from_sqlitedb_model(
                 &db.select_collection_rule_by_token_id_and_collection_id(token_id, collection_id)
                     .await?,
-            )),
+            ),
         }
     }
 
@@ -182,7 +178,7 @@ impl CollectionRuleDao {
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {
-                    collection_rules_data.push(Self::from_postgresdb_model(collection_rule));
+                    collection_rules_data.push(Self::from_postgresdb_model(collection_rule)?);
                 }
                 Ok(collection_rules_data)
             }
@@ -192,7 +188,7 @@ impl CollectionRuleDao {
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {
-                    collection_rules_data.push(Self::from_mysqldb_model(collection_rule));
+                    collection_rules_data.push(Self::from_mysqldb_model(collection_rule)?);
                 }
                 Ok(collection_rules_data)
             }
@@ -202,7 +198,7 @@ impl CollectionRuleDao {
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {
-                    collection_rules_data.push(Self::from_sqlitedb_model(collection_rule));
+                    collection_rules_data.push(Self::from_sqlitedb_model(collection_rule)?);
                 }
                 Ok(collection_rules_data)
             }
@@ -245,11 +241,11 @@ impl CollectionRuleDao {
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             collection_id: *model.collection_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: CollectionPermission::from_str(model.find_one())?,
+            find_many: CollectionPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
+            update_one: CollectionPermission::from_str(model.update_one())?,
+            delete_one: CollectionPermission::from_str(model.delete_one())?,
         })
     }
 
@@ -261,28 +257,28 @@ impl CollectionRuleDao {
             &self.project_id,
             &self.token_id,
             &self.collection_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
     }
 
-    fn from_postgresdb_model(model: &CollectionRulePostgresModel) -> Self {
-        Self {
+    fn from_postgresdb_model(model: &CollectionRulePostgresModel) -> Result<Self> {
+        Ok(Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             collection_id: *model.collection_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: CollectionPermission::from_str(model.find_one())?,
+            find_many: CollectionPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
-        }
+            update_one: CollectionPermission::from_str(model.update_one())?,
+            delete_one: CollectionPermission::from_str(model.delete_one())?,
+        })
     }
 
     fn to_postgresdb_model(&self) -> CollectionRulePostgresModel {
@@ -293,28 +289,28 @@ impl CollectionRuleDao {
             &self.project_id,
             &self.token_id,
             &self.collection_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
     }
 
-    fn from_mysqldb_model(model: &CollectionRuleMysqlModel) -> Self {
-        Self {
+    fn from_mysqldb_model(model: &CollectionRuleMysqlModel) -> Result<Self> {
+        Ok(Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             collection_id: *model.collection_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: CollectionPermission::from_str(model.find_one())?,
+            find_many: CollectionPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
-        }
+            update_one: CollectionPermission::from_str(model.update_one())?,
+            delete_one: CollectionPermission::from_str(model.delete_one())?,
+        })
     }
 
     fn to_mysqldb_model(&self) -> CollectionRuleMysqlModel {
@@ -325,28 +321,28 @@ impl CollectionRuleDao {
             &self.project_id,
             &self.token_id,
             &self.collection_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
     }
 
-    fn from_sqlitedb_model(model: &CollectionRuleSqliteModel) -> Self {
-        Self {
+    fn from_sqlitedb_model(model: &CollectionRuleSqliteModel) -> Result<Self> {
+        Ok(Self {
             id: *model.id(),
             created_at: *model.created_at(),
             updated_at: *model.updated_at(),
             project_id: *model.project_id(),
             token_id: *model.token_id(),
             collection_id: *model.collection_id(),
-            find_one: *model.find_one(),
-            find_many: *model.find_many(),
+            find_one: CollectionPermission::from_str(model.find_one())?,
+            find_many: CollectionPermission::from_str(model.find_many())?,
             insert_one: *model.insert_one(),
-            update_one: *model.update_one(),
-            delete_one: *model.delete_one(),
-        }
+            update_one: CollectionPermission::from_str(model.update_one())?,
+            delete_one: CollectionPermission::from_str(model.delete_one())?,
+        })
     }
 
     fn to_sqlitedb_model(&self) -> CollectionRuleSqliteModel {
@@ -357,11 +353,34 @@ impl CollectionRuleDao {
             &self.project_id,
             &self.token_id,
             &self.collection_id,
-            &self.find_one,
-            &self.find_many,
+            self.find_one.to_str(),
+            self.find_many.to_str(),
             &self.insert_one,
-            &self.update_one,
-            &self.delete_one,
+            self.update_one.to_str(),
+            self.delete_one.to_str(),
         )
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum CollectionPermission {
+    All,
+    SelfMade,
+}
+
+impl CollectionPermission {
+    pub fn to_str(&self) -> &str {
+        match self {
+            Self::All => "all",
+            Self::SelfMade => "self_made",
+        }
+    }
+
+    pub fn from_str(str: &str) -> Result<Self> {
+        match str {
+            "all" => Ok(Self::All),
+            "self_made" => Ok(Self::SelfMade),
+            _ => Err(Error::msg(format!("Unknown collection permission '{str}'"))),
+        }
     }
 }

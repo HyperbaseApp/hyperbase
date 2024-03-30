@@ -8,12 +8,12 @@ pub fn create_table(
     columns: &HashMap<String, SchemaFieldPropsModel>,
 ) -> String {
     format!(
-        "CREATE TABLE IF NOT EXISTS \"{}\" (\"_id\" uuid, \"_created_by\" uuid, {}, PRIMARY KEY (\"_id\")) ",
+        "CREATE TABLE IF NOT EXISTS \"{}\" (\"_id\" uuid, \"_created_by\" uuid, {}PRIMARY KEY (\"_id\")) ",
         record_table,
         columns
             .iter()
-            .map(|(col, col_props)| format!("\"{}\" {}", col, col_props.internal_kind().to_str()))
-            .join(", ")
+            .map(|(col, col_props)| format!("\"{}\" {}, ", col, col_props.internal_kind().to_str()))
+            .join("")
     )
 }
 

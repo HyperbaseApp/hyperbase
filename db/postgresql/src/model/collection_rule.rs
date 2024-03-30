@@ -12,11 +12,11 @@ pub struct CollectionRuleModel {
     project_id: Uuid,
     token_id: Uuid,
     collection_id: Uuid,
-    find_one: bool,
-    find_many: bool,
+    find_one: String,
+    find_many: String,
     insert_one: bool,
-    update_one: bool,
-    delete_one: bool,
+    update_one: String,
+    delete_one: String,
 }
 
 impl CollectionRuleModel {
@@ -27,11 +27,11 @@ impl CollectionRuleModel {
         project_id: &Uuid,
         token_id: &Uuid,
         collection_id: &Uuid,
-        find_one: &bool,
-        find_many: &bool,
+        find_one: &str,
+        find_many: &str,
         insert_one: &bool,
-        update_one: &bool,
-        delete_one: &bool,
+        update_one: &str,
+        delete_one: &str,
     ) -> Self {
         Self {
             id: *id,
@@ -40,11 +40,11 @@ impl CollectionRuleModel {
             project_id: *project_id,
             token_id: *token_id,
             collection_id: *collection_id,
-            find_one: *find_one,
-            find_many: *find_many,
+            find_one: find_one.to_owned(),
+            find_many: find_many.to_owned(),
             insert_one: *insert_one,
-            update_one: *update_one,
-            delete_one: *delete_one,
+            update_one: update_one.to_owned(),
+            delete_one: delete_one.to_owned(),
         }
     }
 
@@ -72,11 +72,11 @@ impl CollectionRuleModel {
         &self.collection_id
     }
 
-    pub fn find_one(&self) -> &bool {
+    pub fn find_one(&self) -> &str {
         &self.find_one
     }
 
-    pub fn find_many(&self) -> &bool {
+    pub fn find_many(&self) -> &str {
         &self.find_many
     }
 
@@ -84,11 +84,11 @@ impl CollectionRuleModel {
         &self.insert_one
     }
 
-    pub fn update_one(&self) -> &bool {
+    pub fn update_one(&self) -> &str {
         &self.update_one
     }
 
-    pub fn delete_one(&self) -> &bool {
+    pub fn delete_one(&self) -> &str {
         &self.delete_one
     }
 }
