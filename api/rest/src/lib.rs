@@ -36,7 +36,7 @@ impl ApiRestServer {
     ) -> Self {
         hb_log::info(Some("⚡"), "ApiRestServer: Initializing component");
 
-        let address = format!("{}:{}", host, port);
+        let address = format!("{host}:{port}");
         let context = web::Data::new(ctx);
 
         Self {

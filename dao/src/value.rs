@@ -390,7 +390,7 @@ impl ColumnValue {
                 )?))),
                 ColumnKind::String => Ok(Self::String(Some(value.to_owned()))),
                 ColumnKind::Binary => Ok(Self::Binary(Some(value.as_bytes().to_vec()))),
-                ColumnKind::Uuid => match Uuid::from_str(value) {
+                ColumnKind::Uuid => match Uuid::parse_str(value) {
                     Ok(uuid) => Ok(Self::Uuid(Some(uuid))),
                     Err(err) => Err(err.into()),
                 },
@@ -413,9 +413,20 @@ impl ColumnValue {
                 ColumnKind::Binary => {
                     let mut bytes = Vec::with_capacity(value.len());
                     for value in value.iter() {
-                        match value.as_str() {
-                            Some(value) => bytes.append(&mut value.as_bytes().to_vec()),
-                            None => return Err(Error::msg("Wrong value type")),
+                        match value {
+                            serde_json::Value::Number(number) => {
+                                if let Some(number) = number.as_u64() {
+                                    if let Ok(number) = u8::try_from(number) {
+                                        bytes.append(&mut vec![number]);
+                                        continue;
+                                    }
+                                }
+                                return Err(Error::msg("Wrong value type"));
+                            }
+                            serde_json::Value::String(string) => {
+                                bytes.append(&mut string.as_bytes().to_vec())
+                            }
+                            _ => return Err(Error::msg("Wrong value type")),
                         }
                     }
                     Ok(Self::Binary(Some(bytes)))

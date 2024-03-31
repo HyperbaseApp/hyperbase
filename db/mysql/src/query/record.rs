@@ -66,15 +66,27 @@ pub fn change_columns_type(
 }
 
 pub fn count_index(record_table: &str, index: &str) -> String {
-    format!("SELECT COUNT(1) FROM `information_schema`.`STATISTICS` WHERE `TABLE_NAME` = '{record_table}' and `INDEX_NAME` = '{index}'")
+    format!("SELECT COUNT(1) FROM `information_schema`.`STATISTICS` WHERE `TABLE_NAME` = '{record_table}' and `INDEX_NAME` = '{record_table}_{index}'")
+}
+
+pub fn count_unique_index(record_table: &str, index: &str) -> String {
+    format!("SELECT COUNT(1) FROM `information_schema`.`STATISTICS` WHERE `TABLE_NAME` = '{record_table}' and `INDEX_NAME` = '{record_table}_{index}_unique'")
 }
 
 pub fn create_index(record_table: &str, index: &str) -> String {
     format!("CREATE INDEX `{record_table}_{index}` ON `{record_table}` (`{index}`)")
 }
 
+pub fn create_unique_index(record_table: &str, index: &str) -> String {
+    format!("CREATE UNIQUE INDEX `{record_table}_{index}_unique` ON `{record_table}` (`{index}`)")
+}
+
 pub fn drop_index(record_table: &str, index: &str) -> String {
     format!("DROP INDEX `{record_table}_{index}`")
+}
+
+pub fn drop_unique_index(record_table: &str, index: &str) -> String {
+    format!("DROP INDEX `{record_table}_{index}_unique`")
 }
 
 pub fn insert(record_table: &str, columns: &Vec<&str>) -> String {

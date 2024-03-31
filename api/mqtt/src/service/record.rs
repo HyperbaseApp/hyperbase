@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
@@ -42,8 +42,9 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
         .await
     {
         return Err(Error::msg(format!(
-            "Token ({}) doesn't have permission to write data to this collection",
-            payload.token()
+            "Token ({}) doesn't have permission to write data to collection id {}",
+            payload.token(),
+            payload.collection_id()
         )));
     }
 
@@ -83,6 +84,12 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
                     Ok(data) => data,
                     Err(err) => return Err(err),
                 };
+            if !collection_data.opt_auth_column_id() {
+                return Err(Error::msg(format!(
+                    "Authentication using field '_id' on collection id '{}' is disabled",
+                    collection_data.id()
+                )));
+            }
             let user_data = match RecordDao::db_select(
                 ctx.dao().db(),
                 user_claim.id(),
@@ -129,8 +136,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
                             Ok(value) => value,
                             Err(err) => {
                                 return Err(Error::msg(format!(
-                                    "Error in field '{}': {}",
-                                    field_name, err
+                                    "Error in field '{field_name}': {err}",
                                 )))
                             }
                         },
@@ -163,18 +169,15 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
                 record.insert(key.to_owned(), value);
             }
 
-            let record_id = Uuid::from_str(record["_id"].as_str().unwrap()).unwrap();
-            let created_by = Uuid::from_str(record["_created_by"].as_str().unwrap()).unwrap();
+            let record_id = Uuid::parse_str(record["_id"].as_str().unwrap()).unwrap();
+            let created_by = Uuid::parse_str(record["_created_by"].as_str().unwrap()).unwrap();
 
             let record = match serde_json::to_value(&record) {
                 Ok(value) => value,
                 Err(err) => {
                     hb_log::error(
                         None,
-                        &format!(
-                            "ApiMqttClient: Error when serializing record {}: {}",
-                            record_id, err
-                        ),
+                        &format!("ApiMqttClient: Error when serializing record {record_id}: {err}"),
                     );
                     return;
                 }
@@ -193,9 +196,8 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
                 hb_log::error(
                     None,
                     &format!(
-                    "ApiMqttClient: Error when broadcasting insert_one record {} to websocket: {}",
-                    record_id, err
-                ),
+                        "ApiMqttClient: Error when broadcasting insert_one record {record_id} to websocket: {err}"
+                    ),
                 );
                 return;
             }

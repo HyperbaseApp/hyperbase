@@ -173,11 +173,11 @@ impl TokenDao {
         db: &Db,
         collection_id: &Uuid,
     ) -> Option<CollectionPermission> {
-        if let Ok(bucket_rule_data) =
+        if let Ok(collection_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            Some(*bucket_rule_data.find_one())
+            Some(*collection_rule_data.find_one())
         } else {
             None
         }
@@ -188,22 +188,22 @@ impl TokenDao {
         db: &Db,
         collection_id: &Uuid,
     ) -> Option<CollectionPermission> {
-        if let Ok(bucket_rule_data) =
+        if let Ok(collection_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            Some(*bucket_rule_data.find_many())
+            Some(*collection_rule_data.find_many())
         } else {
             None
         }
     }
 
     pub async fn is_allow_insert_record(&self, db: &Db, collection_id: &Uuid) -> bool {
-        if let Ok(bucket_rule_data) =
+        if let Ok(collection_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            *bucket_rule_data.insert_one()
+            *collection_rule_data.insert_one()
         } else {
             false
         }
@@ -214,11 +214,11 @@ impl TokenDao {
         db: &Db,
         collection_id: &Uuid,
     ) -> Option<CollectionPermission> {
-        if let Ok(bucket_rule_data) =
+        if let Ok(collection_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            Some(*bucket_rule_data.update_one())
+            Some(*collection_rule_data.update_one())
         } else {
             None
         }
@@ -229,11 +229,11 @@ impl TokenDao {
         db: &Db,
         collection_id: &Uuid,
     ) -> Option<CollectionPermission> {
-        if let Ok(bucket_rule_data) =
+        if let Ok(collection_rule_data) =
             CollectionRuleDao::db_select_by_token_id_and_collection_id(db, &self.id, collection_id)
                 .await
         {
-            Some(*bucket_rule_data.delete_one())
+            Some(*collection_rule_data.delete_one())
         } else {
             None
         }

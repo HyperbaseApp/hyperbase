@@ -352,12 +352,34 @@ impl RecordDao {
         }
     }
 
+    pub async fn db_create_unique_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_create_index(db, collection_id, index).await,
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_create_unique_index(db, collection_id, index).await
+            }
+            Db::MysqlDb(db) => Self::mysqldb_create_unique_index(db, collection_id, index).await,
+            Db::SqliteDb(db) => Self::sqlitedb_create_unique_index(db, collection_id, index).await,
+        }
+    }
+
     pub async fn db_drop_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => Self::scylladb_drop_index(db, collection_id, index).await,
             Db::PostgresqlDb(db) => Self::postgresdb_drop_index(db, collection_id, index).await,
             Db::MysqlDb(db) => Self::mysqldb_drop_index(db, collection_id, index).await,
             Db::SqliteDb(db) => Self::sqlitedb_drop_index(db, collection_id, index).await,
+        }
+    }
+
+    pub async fn db_drop_unique_index(db: &Db, collection_id: &Uuid, index: &str) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_drop_index(db, collection_id, index).await,
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_drop_unique_index(db, collection_id, index).await
+            }
+            Db::MysqlDb(db) => Self::mysqldb_drop_unique_index(db, collection_id, index).await,
+            Db::SqliteDb(db) => Self::sqlitedb_drop_unique_index(db, collection_id, index).await,
         }
     }
 
@@ -1207,12 +1229,38 @@ impl RecordDao {
         Ok(())
     }
 
+    async fn postgresdb_create_unique_index(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::create_unique_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
     async fn postgresdb_drop_index(
         db: &PostgresDb,
         collection_id: &Uuid,
         index: &str,
     ) -> Result<()> {
         db.execute_unprepared(sqlx::query(&postgres_record::drop_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn postgresdb_drop_unique_index(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&postgres_record::drop_unique_index(
             &Self::new_table_name(collection_id),
             index,
         )))
@@ -1468,6 +1516,32 @@ impl RecordDao {
         Ok(())
     }
 
+    async fn mysqldb_create_unique_index(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        let record_table = Self::new_table_name(collection_id);
+
+        let does_index_exist =
+            db.fetch_one::<(i64,)>(sqlx::query_as(&mysql_record::count_unique_index(
+                &record_table,
+                index,
+            )))
+            .await?
+            .0 > 0;
+
+        if !does_index_exist {
+            db.execute_unprepared(sqlx::query(&mysql_record::create_unique_index(
+                &record_table,
+                index,
+            )))
+            .await?;
+        }
+
+        Ok(())
+    }
+
     async fn mysqldb_drop_index(db: &MysqlDb, collection_id: &Uuid, index: &str) -> Result<()> {
         let record_table = Self::new_table_name(collection_id);
 
@@ -1481,6 +1555,32 @@ impl RecordDao {
 
         if does_index_exist {
             db.execute_unprepared(sqlx::query(&mysql_record::drop_index(
+                &Self::new_table_name(collection_id),
+                index,
+            )))
+            .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn mysqldb_drop_unique_index(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        let record_table = Self::new_table_name(collection_id);
+
+        let does_index_exist =
+            db.fetch_one::<(i64,)>(sqlx::query_as(&mysql_record::count_unique_index(
+                &record_table,
+                index,
+            )))
+            .await?
+            .0 > 0;
+
+        if does_index_exist {
+            db.execute_unprepared(sqlx::query(&mysql_record::drop_unique_index(
                 &Self::new_table_name(collection_id),
                 index,
             )))
@@ -1722,8 +1822,34 @@ impl RecordDao {
         Ok(())
     }
 
+    async fn sqlitedb_create_unique_index(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::create_unique_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
     async fn sqlitedb_drop_index(db: &SqliteDb, collection_id: &Uuid, index: &str) -> Result<()> {
         db.execute_unprepared(sqlx::query(&sqlite_record::drop_index(
+            &Self::new_table_name(collection_id),
+            index,
+        )))
+        .await?;
+        Ok(())
+    }
+
+    async fn sqlitedb_drop_unique_index(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        index: &str,
+    ) -> Result<()> {
+        db.execute_unprepared(sqlx::query(&sqlite_record::drop_unique_index(
             &Self::new_table_name(collection_id),
             index,
         )))

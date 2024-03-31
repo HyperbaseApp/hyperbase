@@ -216,7 +216,7 @@ async fn update_one(
         Err(err) => {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
-                &format!("Failed to get token data: {}", err.to_string()),
+                &format!("Failed to get token data: {err}"),
             )
         }
     };

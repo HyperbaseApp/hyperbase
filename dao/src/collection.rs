@@ -28,6 +28,7 @@ pub struct CollectionDao {
     project_id: Uuid,
     name: String,
     schema_fields: HashMap<String, SchemaFieldProps>,
+    opt_auth_column_id: bool,
     _preserve: Option<Preserve>,
 }
 
@@ -36,6 +37,7 @@ impl CollectionDao {
         project_id: &Uuid,
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldProps>,
+        opt_auth_column_id: &bool,
     ) -> Self {
         let now = Utc::now();
 
@@ -46,6 +48,7 @@ impl CollectionDao {
             project_id: *project_id,
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
+            opt_auth_column_id: *opt_auth_column_id,
             _preserve: None,
         }
     }
@@ -74,6 +77,10 @@ impl CollectionDao {
         &self.schema_fields
     }
 
+    pub fn opt_auth_column_id(&self) -> &bool {
+        &self.opt_auth_column_id
+    }
+
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_owned();
     }
@@ -89,13 +96,28 @@ impl CollectionDao {
         self.schema_fields = schema_fields.clone();
     }
 
+    pub fn set_opt_auth_column_id(&mut self, opt_auth_column_id: &bool) {
+        self.opt_auth_column_id = *opt_auth_column_id;
+    }
+
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         let mut create_indexes_fut = Vec::with_capacity(self.schema_fields.len());
+        let mut create_unique_indexes_fut = Vec::with_capacity(self.schema_fields.len());
 
-        if let Db::MysqlDb(_) = db {
-            for (field, props) in &self.schema_fields {
-                if props.indexed {
-                    match &props.kind {
+        match db {
+            Db::ScyllaDb(_) => {
+                for (field, props) in &self.schema_fields {
+                    if props.unique {
+                        return Err(Error::msg(format!(
+                            "Field '{field}' requires unique index but ScyllaDB doesn't support unique indexes"
+                        )));
+                    }
+                }
+            }
+            Db::MysqlDb(_) => {
+                for (field, props) in &self.schema_fields {
+                    if props.unique || props.indexed {
+                        match &props.kind {
                         ColumnKind::Binary
                         | ColumnKind::Varint
                         | ColumnKind::Decimal
@@ -109,14 +131,26 @@ impl CollectionDao {
                         }
                         _ => (),
                     };
-                    create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, field));
+                        if props.indexed {
+                            create_indexes_fut
+                                .push(RecordDao::db_create_index(db, &self.id, field));
+                        }
+                        if props.unique {
+                            create_unique_indexes_fut
+                                .push(RecordDao::db_create_unique_index(db, &self.id, field));
+                        }
+                    }
                 }
             }
+            _ => (),
         }
 
         RecordDao::db_create_table(db, self).await?;
 
-        future::try_join_all(create_indexes_fut).await?;
+        tokio::try_join!(
+            future::try_join_all(create_indexes_fut),
+            future::try_join_all(create_unique_indexes_fut)
+        )?;
 
         match db {
             Db::ScyllaDb(db) => db.insert_collection(&self.to_scylladb_model()).await,
@@ -175,10 +209,20 @@ impl CollectionDao {
     }
 
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
-        if let Db::MysqlDb(_) = db {
-            for (field, props) in &self.schema_fields {
-                if props.indexed {
-                    match &props.kind {
+        match db {
+            Db::ScyllaDb(_) => {
+                for (field, props) in &self.schema_fields {
+                    if props.unique {
+                        return Err(Error::msg(format!(
+                            "Field '{field}' requires unique index but ScyllaDB doesn't support unique indexes"
+                        )));
+                    }
+                }
+            }
+            Db::MysqlDb(_) => {
+                for (field, props) in &self.schema_fields {
+                    if props.indexed {
+                        match &props.kind {
                         ColumnKind::Binary
                         | ColumnKind::Varint
                         | ColumnKind::Decimal
@@ -192,18 +236,23 @@ impl CollectionDao {
                         }
                         _ => (),
                     };
+                    }
                 }
             }
+            _ => (),
         }
 
         let mut already_indexed = HashSet::new();
+        let mut already_unique_indexed = HashSet::new();
 
         if let Some(preserve) = &self._preserve {
             if let Some(preserved_schema_fields) = &preserve.schema_fields {
                 let mut drop_indexes_fut = Vec::with_capacity(preserved_schema_fields.len());
+                let mut drop_unique_indexes_fut = Vec::with_capacity(preserved_schema_fields.len());
 
                 let mut columns_change_type = HashMap::with_capacity(self.schema_fields.len());
                 let mut columns_drop = HashSet::with_capacity(preserved_schema_fields.len());
+
                 for (field_name, field_props) in preserved_schema_fields {
                     match self.schema_fields.get(field_name) {
                         Some(props) => {
@@ -211,10 +260,16 @@ impl CollectionDao {
                                 if props.indexed {
                                     already_indexed.insert(field_name.as_str());
                                 } else {
-                                    drop_indexes_fut.push(RecordDao::db_drop_index(
-                                        db,
-                                        &self.id,
-                                        &field_name,
+                                    drop_indexes_fut
+                                        .push(RecordDao::db_drop_index(db, &self.id, field_name));
+                                }
+                            }
+                            if field_props.unique {
+                                if props.unique {
+                                    already_unique_indexed.insert(field_name.as_str());
+                                } else {
+                                    drop_unique_indexes_fut.push(RecordDao::db_drop_unique_index(
+                                        db, &self.id, field_name,
                                     ));
                                 }
                             }
@@ -224,11 +279,12 @@ impl CollectionDao {
                         }
                         None => {
                             if field_props.indexed {
-                                drop_indexes_fut.push(RecordDao::db_drop_index(
-                                    db,
-                                    &self.id,
-                                    &field_name,
-                                ));
+                                drop_indexes_fut
+                                    .push(RecordDao::db_drop_index(db, &self.id, field_name));
+                            }
+                            if field_props.unique {
+                                drop_unique_indexes_fut
+                                    .push(RecordDao::db_drop_unique_index(db, &self.id, field_name))
                             }
                             columns_drop.insert(field_name.clone());
                         }
@@ -236,6 +292,9 @@ impl CollectionDao {
                 }
                 if !drop_indexes_fut.is_empty() {
                     future::try_join_all(drop_indexes_fut).await?;
+                }
+                if !drop_unique_indexes_fut.is_empty() {
+                    future::try_join_all(drop_unique_indexes_fut).await?;
                 }
                 if !columns_change_type.is_empty() {
                     RecordDao::db_change_columns_type(db, &self.id, &columns_change_type).await?;
@@ -265,12 +324,20 @@ impl CollectionDao {
         }
 
         let mut create_indexes_fut = Vec::with_capacity(self.schema_fields.len());
+        let mut create_unique_indexes_fut = Vec::with_capacity(self.schema_fields.len());
         for (field, props) in &self.schema_fields {
             if props.indexed && !already_indexed.contains(field.as_str()) {
-                create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, &field));
+                create_indexes_fut.push(RecordDao::db_create_index(db, &self.id, field));
+            }
+            if props.unique && !already_unique_indexed.contains(field.as_str()) {
+                create_unique_indexes_fut
+                    .push(RecordDao::db_create_unique_index(db, &self.id, field))
             }
         }
-        future::try_join_all(create_indexes_fut).await?;
+        tokio::try_join!(
+            future::try_join_all(create_indexes_fut),
+            future::try_join_all(create_unique_indexes_fut)
+        )?;
 
         self.updated_at = Utc::now();
 
@@ -309,6 +376,7 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
+            opt_auth_column_id: *model.opt_auth_column_id(),
             _preserve: None,
         })
     }
@@ -325,6 +393,7 @@ impl CollectionDao {
                 .iter()
                 .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
                 .collect(),
+            &self.opt_auth_column_id,
         )
     }
 
@@ -344,6 +413,7 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
+            opt_auth_column_id: *model.opt_auth_column_id(),
             _preserve: None,
         })
     }
@@ -361,6 +431,7 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_postgresdb_model()))
                     .collect(),
             ),
+            &self.opt_auth_column_id,
         )
     }
 
@@ -380,6 +451,7 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
+            opt_auth_column_id: *model.opt_auth_column_id(),
             _preserve: None,
         })
     }
@@ -397,6 +469,7 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_mysqldb_model()))
                     .collect(),
             ),
+            &self.opt_auth_column_id,
         )
     }
 
@@ -416,6 +489,7 @@ impl CollectionDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             schema_fields,
+            opt_auth_column_id: *model.opt_auth_column_id(),
             _preserve: None,
         })
     }
@@ -433,6 +507,7 @@ impl CollectionDao {
                     .map(|(key, value)| (key.to_owned(), value.to_sqlitedb_model()))
                     .collect(),
             ),
+            &self.opt_auth_column_id,
         )
     }
 }
@@ -441,15 +516,23 @@ impl CollectionDao {
 pub struct SchemaFieldProps {
     kind: ColumnKind,
     required: bool,
+    unique: bool,
     indexed: bool,
     auth_column: bool,
 }
 
 impl SchemaFieldProps {
-    pub fn new(kind: &ColumnKind, required: &bool, indexed: &bool, auth_column: &bool) -> Self {
+    pub fn new(
+        kind: &ColumnKind,
+        required: &bool,
+        unique: &bool,
+        indexed: &bool,
+        auth_column: &bool,
+    ) -> Self {
         Self {
             kind: *kind,
             required: *required,
+            unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
         }
@@ -461,6 +544,10 @@ impl SchemaFieldProps {
 
     pub fn required(&self) -> &bool {
         &self.required
+    }
+
+    pub fn unique(&self) -> &bool {
+        &self.unique
     }
 
     pub fn indexed(&self) -> &bool {
@@ -479,6 +566,7 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
         })
@@ -489,6 +577,7 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_scylladb_model(),
             &self.required,
+            &self.unique,
             &self.indexed,
             &self.auth_column,
         )
@@ -502,6 +591,7 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
         })
@@ -512,6 +602,7 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_postgresdb_model(),
             &self.required,
+            &self.unique,
             &self.indexed,
             &self.auth_column,
         )
@@ -525,6 +616,7 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
         })
@@ -535,6 +627,7 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_mysqldb_model(),
             &self.required,
+            &self.unique,
             &self.indexed,
             &self.auth_column,
         )
@@ -548,6 +641,7 @@ impl SchemaFieldProps {
         Ok(Self {
             kind,
             required: *model.required(),
+            unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
         })
@@ -558,6 +652,7 @@ impl SchemaFieldProps {
             self.kind.to_str(),
             &self.kind.to_sqlitedb_model(),
             &self.required,
+            &self.unique,
             &self.indexed,
             &self.auth_column,
         )

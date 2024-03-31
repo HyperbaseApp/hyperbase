@@ -121,13 +121,19 @@ async fn insert_one(
                     }
                 },
                 &props.required().unwrap_or(false),
+                &props.unique().unwrap_or(false),
                 &props.indexed().unwrap_or(false),
                 &props.auth_column().unwrap_or(false),
             ),
         );
     }
 
-    let collection_data = CollectionDao::new(path.project_id(), data.name(), &schema_fields);
+    let collection_data = CollectionDao::new(
+        path.project_id(),
+        data.name(),
+        &schema_fields,
+        data.opt_auth_column_id(),
+    );
     if let Err(err) = collection_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
@@ -150,12 +156,14 @@ async fn insert_one(
                         SchemaFieldPropsJson::new(
                             props.kind().to_str(),
                             &Some(*props.required()),
+                            &Some(*props.unique()),
                             &Some(*props.indexed()),
                             &Some(*props.auth_column()),
                         ),
                     )
                 })
                 .collect(),
+            collection_data.opt_auth_column_id(),
         ),
     )
 }
@@ -232,12 +240,14 @@ async fn find_one(
                         SchemaFieldPropsJson::new(
                             value.kind().to_str(),
                             &Some(*value.required()),
+                            &Some(*value.unique()),
                             &Some(*value.indexed()),
                             &Some(*value.auth_column()),
                         ),
                     )
                 })
                 .collect(),
+            collection_data.opt_auth_column_id(),
         ),
     )
 }
@@ -407,12 +417,17 @@ async fn update_one(
                         }
                     },
                     &props.required().unwrap_or(false),
+                    &props.unique().unwrap_or(false),
                     &props.indexed().unwrap_or(false),
                     &props.auth_column().unwrap_or(false),
                 ),
             );
         }
         collection_data.update_schema_fields(&schema_fields);
+    }
+
+    if let Some(opt_auth_column_id) = data.opt_auth_column_id() {
+        collection_data.set_opt_auth_column_id(opt_auth_column_id);
     }
 
     if !data.is_all_none() {
@@ -439,12 +454,14 @@ async fn update_one(
                         SchemaFieldPropsJson::new(
                             value.kind().to_str(),
                             &Some(*value.required()),
+                            &Some(*value.unique()),
                             &Some(*value.indexed()),
                             &Some(*value.auth_column()),
                         ),
                     )
                 })
                 .collect(),
+            collection_data.opt_auth_column_id(),
         ),
     )
 }
@@ -577,12 +594,14 @@ async fn find_many(
                                 SchemaFieldPropsJson::new(
                                     value.kind().to_str(),
                                     &Some(*value.required()),
+                                    &Some(*value.unique()),
                                     &Some(*value.indexed()),
                                     &Some(*value.auth_column()),
                                 ),
                             )
                         })
                         .collect(),
+                    data.opt_auth_column_id(),
                 )
             })
             .collect::<Vec<_>>(),

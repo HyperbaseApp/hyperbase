@@ -366,6 +366,7 @@ impl CollectionRuleDao {
 pub enum CollectionPermission {
     All,
     SelfMade,
+    None,
 }
 
 impl CollectionPermission {
@@ -373,6 +374,7 @@ impl CollectionPermission {
         match self {
             Self::All => "all",
             Self::SelfMade => "self_made",
+            Self::None => "none",
         }
     }
 
@@ -380,6 +382,7 @@ impl CollectionPermission {
         match str {
             "all" => Ok(Self::All),
             "self_made" => Ok(Self::SelfMade),
+            "none" => Ok(Self::None),
             _ => Err(Error::msg(format!("Unknown collection permission '{str}'"))),
         }
     }

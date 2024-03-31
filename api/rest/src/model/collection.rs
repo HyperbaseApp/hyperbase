@@ -18,6 +18,7 @@ impl InsertOneCollectionReqPath {
 pub struct InsertOneCollectionReqJson {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
+    opt_auth_column_id: bool,
 }
 
 impl InsertOneCollectionReqJson {
@@ -27,6 +28,10 @@ impl InsertOneCollectionReqJson {
 
     pub fn schema_fields(&self) -> &HashMap<String, SchemaFieldPropsJson> {
         &self.schema_fields
+    }
+
+    pub fn opt_auth_column_id(&self) -> &bool {
+        &self.opt_auth_column_id
     }
 }
 
@@ -93,6 +98,7 @@ impl UpdateOneCollectionReqPath {
 pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
     schema_fields: Option<HashMap<String, SchemaFieldPropsJson>>,
+    opt_auth_column_id: Option<bool>,
 }
 
 impl UpdateOneCollectionReqJson {
@@ -104,8 +110,12 @@ impl UpdateOneCollectionReqJson {
         &self.schema_fields
     }
 
+    pub fn opt_auth_column_id(&self) -> &Option<bool> {
+        &self.opt_auth_column_id
+    }
+
     pub fn is_all_none(&self) -> bool {
-        self.name.is_none() && self.schema_fields.is_none()
+        self.name.is_none() && self.schema_fields.is_none() && self.opt_auth_column_id.is_none()
     }
 }
 
@@ -144,6 +154,7 @@ pub struct CollectionResJson {
     project_id: Uuid,
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
+    opt_auth_column_id: bool,
 }
 
 impl CollectionResJson {
@@ -154,6 +165,7 @@ impl CollectionResJson {
         project_id: &Uuid,
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsJson>,
+        opt_auth_column_id: &bool,
     ) -> Self {
         Self {
             id: *id,
@@ -162,6 +174,7 @@ impl CollectionResJson {
             project_id: *project_id,
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
+            opt_auth_column_id: *opt_auth_column_id,
         }
     }
 }
@@ -181,6 +194,7 @@ impl DeleteCollectionResJson {
 pub struct SchemaFieldPropsJson {
     kind: String,
     required: Option<bool>,
+    unique: Option<bool>,
     indexed: Option<bool>,
     auth_column: Option<bool>,
 }
@@ -189,12 +203,14 @@ impl SchemaFieldPropsJson {
     pub fn new(
         kind: &str,
         required: &Option<bool>,
+        unique: &Option<bool>,
         indexed: &Option<bool>,
         auth_column: &Option<bool>,
     ) -> Self {
         Self {
             kind: kind.to_owned(),
             required: *required,
+            unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
         }
@@ -206,6 +222,10 @@ impl SchemaFieldPropsJson {
 
     pub fn required(&self) -> &Option<bool> {
         &self.required
+    }
+
+    pub fn unique(&self) -> &Option<bool> {
+        &self.unique
     }
 
     pub fn indexed(&self) -> &Option<bool> {

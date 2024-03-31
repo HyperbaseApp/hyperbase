@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
@@ -11,7 +9,7 @@ use hb_dao::{
     project::ProjectDao,
     record::{RecordDao, RecordFilters, RecordOrder, RecordPagination},
     token::TokenDao,
-    value::ColumnValue,
+    value::{ColumnKind, ColumnValue},
 };
 use hb_token_jwt::kind::JwtTokenKind;
 use uuid::Uuid;
@@ -120,6 +118,16 @@ async fn insert_one(
     }
 
     for field_name in data.keys() {
+        if field_name == "_created_by" {
+            if *token_claim.kind() == JwtTokenKind::Admin {
+                continue;
+            } else {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "Must be logged in using password-based login to insert '_created_by' field",
+                );
+            }
+        }
         if !collection_data.schema_fields().contains_key(field_name) {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
@@ -128,7 +136,20 @@ async fn insert_one(
         }
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if let Some(created_by) = data.get("_created_by") {
+        match created_by.as_str() {
+            Some(created_by) => match Uuid::parse_str(created_by) {
+                Ok(created_by) => created_by,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            },
+            None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Invalid '_created_by' field"),
+                )
+            }
+        }
+    } else if *token_claim.kind() == JwtTokenKind::Admin {
         admin_id
     } else if let Some(user_claim) = token_claim.user() {
         let collection_data =
@@ -178,7 +199,7 @@ async fn insert_one(
                         Err(err) => {
                             return Response::error_raw(
                                 &StatusCode::BAD_REQUEST,
-                                &format!("Error in field '{}': {}", field_name, err),
+                                &format!("Error in field '{field_name}': {err}"),
                             )
                         }
                     },
@@ -205,7 +226,10 @@ async fn insert_one(
         let value = match value.to_serde_json() {
             Ok(value) => value,
             Err(err) => {
-                return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+                return Response::error_raw(
+                    &StatusCode::INTERNAL_SERVER_ERROR,
+                    &format!("Error in field '{key}': {err}"),
+                )
             }
         };
         record.insert(key.to_owned(), value);
@@ -213,18 +237,15 @@ async fn insert_one(
 
     let record_pub = record.clone();
     tokio::spawn((|| async move {
-        let record_id = Uuid::from_str(record_pub["_id"].as_str().unwrap()).unwrap();
-        let created_by = Uuid::from_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
+        let record_id = Uuid::parse_str(record_pub["_id"].as_str().unwrap()).unwrap();
+        let created_by = Uuid::parse_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
 
         let record = match serde_json::to_value(&record_pub) {
             Ok(value) => value,
             Err(err) => {
                 hb_log::error(
                     None,
-                    &format!(
-                        "ApiRestServer: Error when serializing record {}: {}",
-                        record_id, err
-                    ),
+                    &format!("ApiRestServer: Error when serializing record {record_id}: {err}"),
                 );
                 return;
             }
@@ -376,6 +397,12 @@ async fn find_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            CollectionPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to read this record",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -551,6 +578,12 @@ async fn update_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            CollectionPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to read this record",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -560,6 +593,16 @@ async fn update_one(
     };
 
     for field_name in data.keys() {
+        if field_name == "_created_by" {
+            if *token_claim.kind() == JwtTokenKind::Admin {
+                continue;
+            } else {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "Must be logged in using password-based login to update '_created_by' field",
+                );
+            }
+        }
         if !collection_data.schema_fields().contains_key(field_name) {
             return Response::error_raw(
                 &StatusCode::BAD_REQUEST,
@@ -581,6 +624,23 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
+    if let Some(created_by) = data.get("_created_by") {
+        if !created_by.is_null() {
+            record_data.upsert(
+                "_created_by",
+                &match ColumnValue::from_serde_json(&ColumnKind::Uuid, created_by) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        return Response::error_raw(
+                            &StatusCode::BAD_REQUEST,
+                            &format!("Error in field '_created_by': {err}"),
+                        )
+                    }
+                },
+            )
+        }
+    }
+
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if value.is_null() {
@@ -598,7 +658,7 @@ async fn update_one(
                     Err(err) => {
                         return Response::error_raw(
                             &StatusCode::BAD_REQUEST,
-                            &format!("Error in field '{}': {}", field_name, err),
+                            &format!("Error in field '{field_name}': {err}"),
                         )
                     }
                 },
@@ -624,17 +684,14 @@ async fn update_one(
     let record_id = path.record_id().clone();
     let record_pub = record.clone();
     tokio::spawn((|| async move {
-        let created_by = Uuid::from_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
+        let created_by = Uuid::parse_str(record_pub["_created_by"].as_str().unwrap()).unwrap();
 
         let record = match serde_json::to_value(&record_pub) {
             Ok(value) => value,
             Err(err) => {
                 hb_log::error(
                     None,
-                    &format!(
-                        "ApiRestServer: Error when serializing record {}: {}",
-                        record_id, err
-                    ),
+                    &format!("ApiRestServer: Error when serializing record {record_id}: {err}"),
                 );
                 return;
             }
@@ -785,6 +842,12 @@ async fn delete_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            CollectionPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to read this record",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -822,7 +885,7 @@ async fn delete_one(
 
     let record_id = path.record_id().clone();
     tokio::spawn((|| async move {
-        let created_by = Uuid::from_str(
+        let created_by = Uuid::parse_str(
             record_data.data()["_created_by"]
                 .to_serde_json()
                 .unwrap()
@@ -836,10 +899,7 @@ async fn delete_one(
             Err(err) => {
                 hb_log::error(
                     None,
-                    &format!(
-                        "ApiRestServer: Error when serializing record {}: {}",
-                        record_id, err
-                    ),
+                    &format!("ApiRestServer: Error when serializing record {record_id}: {err}"),
                 );
                 return;
             }
@@ -858,8 +918,7 @@ async fn delete_one(
             hb_log::error(
                 None,
                 &format!(
-                    "ApiRestServer: Error when broadcasting delete_one record {} to websocket: {}",
-                    record_id, err
+                    "ApiRestServer: Error when broadcasting delete_one record {record_id} to websocket: {err}"
                 ),
             );
             return;
@@ -995,6 +1054,12 @@ async fn find_many(
                 }
                 None => Some(*token_claim.id()),
             },
+            CollectionPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to read this record",
+                )
+            }
         }
     } else {
         return Response::error_raw(

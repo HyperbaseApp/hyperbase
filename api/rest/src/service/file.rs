@@ -168,7 +168,7 @@ async fn insert_one(
         Err(err) => {
             return Response::error_raw(
                 &StatusCode::INTERNAL_SERVER_ERROR,
-                &format!("Failed to save file to the bucket: {}", err),
+                &format!("Failed to save file to the bucket: {err}"),
             )
         }
     };

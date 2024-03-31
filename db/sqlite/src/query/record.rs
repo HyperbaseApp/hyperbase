@@ -71,8 +71,18 @@ pub fn create_index(record_table: &str, index: &str) -> String {
     )
 }
 
+pub fn create_unique_index(record_table: &str, index: &str) -> String {
+    format!(
+        "CREATE UNIQUE INDEX IF NOT EXISTS \"{record_table}_{index}_unique\" ON \"{record_table}\" (\"{index}\")"
+    )
+}
+
 pub fn drop_index(record_table: &str, index: &str) -> String {
     format!("DROP INDEX IF EXISTS \"{record_table}_{index}\"")
+}
+
+pub fn drop_unique_index(record_table: &str, index: &str) -> String {
+    format!("DROP INDEX IF EXISTS \"{record_table}_{index}_unique\"")
 }
 
 pub fn insert(record_table: &str, columns: &Vec<&str>) -> String {
