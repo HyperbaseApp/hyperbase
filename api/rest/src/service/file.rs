@@ -1,6 +1,12 @@
 use actix_files::NamedFile;
 use actix_multipart::form::MultipartForm;
-use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
+use actix_web::{
+    http::{
+        header::{self, HeaderValue},
+        StatusCode,
+    },
+    web, HttpRequest, HttpResponse,
+};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::HashSet;
 use hb_dao::{
@@ -8,7 +14,6 @@ use hb_dao::{
     file::FileDao, project::ProjectDao, record::RecordDao, token::TokenDao, value::ColumnValue,
 };
 use hb_token_jwt::kind::JwtTokenKind;
-use tokio::fs;
 use uuid::Uuid;
 
 use crate::{
@@ -16,8 +21,8 @@ use crate::{
     model::{
         file::{
             DeleteFileResJson, DeleteOneFileReqPath, FileResJson, FindManyFileReqPath,
-            FindOneFileReqPath, InsertOneFileReqForm, InsertOneFileReqPath, UpdateOneFileReqJson,
-            UpdateOneFileReqPath,
+            FindManyFileReqQuery, FindOneFileReqPath, FindOneFileReqQuery, InsertOneFileReqForm,
+            InsertOneFileReqPath, UpdateOneFileReqJson, UpdateOneFileReqPath,
         },
         PaginationRes, Response,
     },
@@ -46,7 +51,7 @@ pub fn file_api(cfg: &mut web::ServiceConfig) {
     )
     .route(
         "/project/{project_id}/bucket/{bucket_id}/files",
-        web::post().to(find_many),
+        web::get().to(find_many),
     );
 }
 
@@ -192,6 +197,7 @@ async fn insert_one(
         &None,
         &FileResJson::new(
             file_data.id(),
+            file_data.created_by(),
             file_data.created_at(),
             file_data.updated_at(),
             file_data.bucket_id(),
@@ -324,6 +330,12 @@ async fn find_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            BucketPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to read this file",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -367,10 +379,10 @@ async fn find_one(
 async fn download_one(
     ctx: web::Data<ApiRestCtx>,
     req: HttpRequest,
-    auth: BearerAuth,
     path: web::Path<FindOneFileReqPath>,
+    query: web::Query<FindOneFileReqQuery>,
 ) -> HttpResponse {
-    let token = auth.token();
+    let token = query.token();
 
     let token_claim = match ctx.token().jwt().decode(token) {
         Ok(token) => token,
@@ -486,6 +498,12 @@ async fn download_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            BucketPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to read this file",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -518,7 +536,16 @@ async fn download_one(
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
-    file.into_response(&req)
+    let mut res = file.into_response(&req);
+    res.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_str(&format!(
+            "attachment; filename=\"{}\"",
+            file_data.file_name()
+        ))
+        .unwrap(),
+    );
+    res
 }
 
 async fn update_one(
@@ -643,6 +670,12 @@ async fn update_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            BucketPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to update this file",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -669,6 +702,10 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
     }
 
+    if let Some(created_by) = data.created_by() {
+        file_data.set_created_by(created_by);
+    }
+
     if let Some(file_name) = data.file_name() {
         file_data.set_file_name(file_name);
     }
@@ -684,6 +721,7 @@ async fn update_one(
         &None,
         &FileResJson::new(
             file_data.id(),
+            file_data.created_by(),
             file_data.created_at(),
             file_data.updated_at(),
             file_data.bucket_id(),
@@ -815,6 +853,12 @@ async fn delete_one(
                 }
                 None => Some(*token_claim.id()),
             },
+            BucketPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    "User doesn't have permission to delete this file",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -841,10 +885,6 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
     }
 
-    if let Err(err) = fs::remove_file(&format!("{}/{}", bucket_data.path(), file_data.id())).await {
-        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
     if let Err(err) = FileDao::delete(ctx.dao().db(), bucket_data.path(), path.file_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
@@ -860,6 +900,7 @@ async fn find_many(
     ctx: web::Data<ApiRestCtx>,
     auth: BearerAuth,
     path: web::Path<FindManyFileReqPath>,
+    query: web::Query<FindManyFileReqQuery>,
 ) -> HttpResponse {
     let token = auth.token();
 
@@ -977,6 +1018,12 @@ async fn find_many(
                 }
                 None => Some(*token_claim.id()),
             },
+            BucketPermission::None => {
+                return Response::error_raw(
+                    &StatusCode::FORBIDDEN,
+                    "User doesn't have permission to read these files",
+                )
+            }
         }
     } else {
         return Response::error_raw(
@@ -985,12 +1032,14 @@ async fn find_many(
         );
     };
 
-    let files_data = match created_by {
+    let (files_data, total) = match created_by {
         Some(created_by) => {
             match FileDao::db_select_many_by_created_by_and_bucket_id(
                 ctx.dao().db(),
                 &created_by,
                 path.bucket_id(),
+                query.after_id(),
+                query.limit(),
             )
             .await
             {
@@ -999,21 +1048,36 @@ async fn find_many(
             }
         }
         None => {
-            match FileDao::db_select_many_by_bucket_id(ctx.dao().db(), path.bucket_id()).await {
+            match FileDao::db_select_many_by_bucket_id(
+                ctx.dao().db(),
+                path.bucket_id(),
+                query.after_id(),
+                query.limit(),
+            )
+            .await
+            {
                 Ok(data) => data,
                 Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
             }
         }
     };
 
+    let total = match usize::try_from(total) {
+        Ok(data) => data,
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
+    };
+
     Response::data(
         &StatusCode::OK,
-        &Some(PaginationRes::new(&files_data.len(), &files_data.len())),
+        &Some(PaginationRes::new(&files_data.len(), &total)),
         &files_data
             .iter()
             .map(|data| {
                 FileResJson::new(
                     data.id(),
+                    data.created_by(),
                     data.created_at(),
                     data.updated_at(),
                     data.bucket_id(),

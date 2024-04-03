@@ -11,6 +11,7 @@ const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_
 const UPDATE: &str = "UPDATE \"collection_rules\" SET \"updated_at\" = ?, \"find_one\" = ?, \"find_many\" = ?, \"insert_one\" = ?, \"update_one\" = ?, \"delete_one\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"collection_rules\" WHERE \"id\" = ?";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"token_id\" = ?";
+const DELETE_MANY_BY_COLLECTION_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"collection_id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up collection_rules table");
@@ -26,6 +27,7 @@ pub async fn init(pool: &Pool<Sqlite>) {
     pool.prepare(UPDATE).await.unwrap();
     pool.prepare(DELETE).await.unwrap();
     pool.prepare(DELETE_MANY_BY_TOKEN_ID).await.unwrap();
+    pool.prepare(DELETE_MANY_BY_COLLECTION_ID).await.unwrap();
 }
 
 impl SqliteDb {
@@ -97,6 +99,15 @@ impl SqliteDb {
 
     pub async fn delete_many_collection_rules_by_token_id(&self, token_id: &Uuid) -> Result<()> {
         self.execute(sqlx::query(DELETE_MANY_BY_TOKEN_ID).bind(token_id))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_many_collection_rules_by_collection_id(
+        &self,
+        collection_id: &Uuid,
+    ) -> Result<()> {
+        self.execute(sqlx::query(DELETE_MANY_BY_COLLECTION_ID).bind(collection_id))
             .await?;
         Ok(())
     }

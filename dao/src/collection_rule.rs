@@ -233,6 +233,27 @@ impl CollectionRuleDao {
         }
     }
 
+    pub async fn db_delete_many_by_collection_id(db: &Db, collection_id: &Uuid) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => {
+                db.delete_many_collection_rules_by_collection_id(collection_id)
+                    .await
+            }
+            Db::PostgresqlDb(db) => {
+                db.delete_many_collection_rules_by_collection_id(collection_id)
+                    .await
+            }
+            Db::MysqlDb(db) => {
+                db.delete_many_collection_rules_by_collection_id(collection_id)
+                    .await
+            }
+            Db::SqliteDb(db) => {
+                db.delete_many_collection_rules_by_collection_id(collection_id)
+                    .await
+            }
+        }
+    }
+
     fn from_scylladb_model(model: &CollectionRuleScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),

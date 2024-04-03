@@ -11,6 +11,7 @@ const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_
 const UPDATE: &str = "UPDATE \"bucket_rules\" SET \"updated_at\" = $1, \"find_one\" = $2, \"find_many\" = $3, \"insert_one\" = $4, \"update_one\" = $5, \"delete_one\" = $6 WHERE \"id\" = $7";
 const DELETE: &str = "DELETE FROM \"bucket_rules\" WHERE \"id\" = $1";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"token_id\" = $1";
+const DELETE_MANY_BY_BUCKET_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"bucket_id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up bucket_rules table");
@@ -26,6 +27,7 @@ pub async fn init(pool: &Pool<Postgres>) {
     pool.prepare(UPDATE).await.unwrap();
     pool.prepare(DELETE).await.unwrap();
     pool.prepare(DELETE_MANY_BY_TOKEN_ID).await.unwrap();
+    pool.prepare(DELETE_MANY_BY_BUCKET_ID).await.unwrap();
 }
 
 impl PostgresDb {
@@ -97,6 +99,12 @@ impl PostgresDb {
 
     pub async fn delete_many_bucket_rules_by_token_id(&self, token_id: &Uuid) -> Result<()> {
         self.execute(sqlx::query(DELETE_MANY_BY_TOKEN_ID).bind(token_id))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_many_bucket_rules_by_bucket_id(&self, bucket_id: &Uuid) -> Result<()> {
+        self.execute(sqlx::query(DELETE_MANY_BY_BUCKET_ID).bind(bucket_id))
             .await?;
         Ok(())
     }

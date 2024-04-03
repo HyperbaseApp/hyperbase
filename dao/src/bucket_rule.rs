@@ -223,6 +223,15 @@ impl BucketRuleDao {
         }
     }
 
+    pub async fn db_delete_many_by_bucket_id(db: &Db, bucket_id: &Uuid) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => db.delete_many_bucket_rules_by_bucket_id(bucket_id).await,
+            Db::PostgresqlDb(db) => db.delete_many_bucket_rules_by_bucket_id(bucket_id).await,
+            Db::MysqlDb(db) => db.delete_many_bucket_rules_by_bucket_id(bucket_id).await,
+            Db::SqliteDb(db) => db.delete_many_bucket_rules_by_bucket_id(bucket_id).await,
+        }
+    }
+
     fn from_scylladb_model(model: &BucketRuleScyllaModel) -> Result<Self> {
         Ok(Self {
             id: *model.id(),
@@ -356,6 +365,7 @@ impl BucketRuleDao {
 pub enum BucketPermission {
     All,
     SelfMade,
+    None,
 }
 
 impl BucketPermission {
@@ -363,6 +373,7 @@ impl BucketPermission {
         match self {
             Self::All => "all",
             Self::SelfMade => "self_made",
+            Self::None => "none",
         }
     }
 
@@ -370,6 +381,7 @@ impl BucketPermission {
         match str {
             "all" => Ok(Self::All),
             "self_made" => Ok(Self::SelfMade),
+            "none" => Ok(Self::None),
             _ => Err(Error::msg(format!("Unknown bucket permission '{str}'"))),
         }
     }

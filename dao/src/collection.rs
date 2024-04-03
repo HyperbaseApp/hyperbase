@@ -19,7 +19,9 @@ use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{record::RecordDao, util::conversion, value::ColumnKind, Db};
+use crate::{
+    collection_rule::CollectionRuleDao, record::RecordDao, util::conversion, value::ColumnKind, Db,
+};
 
 pub struct CollectionDao {
     id: Uuid,
@@ -352,6 +354,8 @@ impl CollectionDao {
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         RecordDao::db_drop_table(db, id).await?;
 
+        CollectionRuleDao::db_delete_many_by_collection_id(db, id).await?;
+
         match db {
             Db::ScyllaDb(db) => db.delete_collection(id).await,
             Db::PostgresqlDb(db) => db.delete_collection(id).await,
@@ -365,7 +369,7 @@ impl CollectionDao {
         for (key, value) in model.schema_fields() {
             let value = match SchemaFieldProps::from_scylladb_model(value) {
                 Ok(value) => value,
-                Err(err) => return Err(err.into()),
+                Err(err) => return Err(err),
             };
             schema_fields.insert(key.to_owned(), value);
         }
@@ -402,7 +406,7 @@ impl CollectionDao {
         for (key, value) in &model.schema_fields().0 {
             let value = match SchemaFieldProps::from_postgresdb_model(value) {
                 Ok(value) => value,
-                Err(err) => return Err(err.into()),
+                Err(err) => return Err(err),
             };
             schema_fields.insert(key.to_owned(), value);
         }
@@ -440,7 +444,7 @@ impl CollectionDao {
         for (key, value) in &model.schema_fields().0 {
             let value = match SchemaFieldProps::from_mysqldb_model(value) {
                 Ok(value) => value,
-                Err(err) => return Err(err.into()),
+                Err(err) => return Err(err),
             };
             schema_fields.insert(key.to_owned(), value);
         }
@@ -478,7 +482,7 @@ impl CollectionDao {
         for (key, value) in &model.schema_fields().0 {
             let value = match SchemaFieldProps::from_sqlitedb_model(value) {
                 Ok(value) => value,
-                Err(err) => return Err(err.into()),
+                Err(err) => return Err(err),
             };
             schema_fields.insert(key.to_owned(), value);
         }
@@ -561,7 +565,7 @@ impl SchemaFieldProps {
     fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Result<Self> {
         let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(err),
         };
         Ok(Self {
             kind,
@@ -586,7 +590,7 @@ impl SchemaFieldProps {
     fn from_postgresdb_model(model: &SchemaFieldPropsPostgresModel) -> Result<Self> {
         let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(err),
         };
         Ok(Self {
             kind,
@@ -611,7 +615,7 @@ impl SchemaFieldProps {
     fn from_mysqldb_model(model: &SchemaFieldPropsMysqlModel) -> Result<Self> {
         let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(err),
         };
         Ok(Self {
             kind,
@@ -636,7 +640,7 @@ impl SchemaFieldProps {
     fn from_sqlitedb_model(model: &SchemaFieldPropsSqliteModel) -> Result<Self> {
         let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(err),
         };
         Ok(Self {
             kind,

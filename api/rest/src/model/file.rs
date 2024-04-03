@@ -74,6 +74,17 @@ impl FindOneFileReqPath {
 }
 
 #[derive(Deserialize)]
+pub struct FindOneFileReqQuery {
+    token: String,
+}
+
+impl FindOneFileReqQuery {
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+}
+
+#[derive(Deserialize)]
 pub struct UpdateOneFileReqPath {
     project_id: Uuid,
     bucket_id: Uuid,
@@ -96,16 +107,21 @@ impl UpdateOneFileReqPath {
 
 #[derive(Deserialize)]
 pub struct UpdateOneFileReqJson {
+    created_by: Option<Uuid>,
     file_name: Option<String>,
 }
 
 impl UpdateOneFileReqJson {
+    pub fn created_by(&self) -> &Option<Uuid> {
+        &self.created_by
+    }
+
     pub fn file_name(&self) -> &Option<String> {
         &self.file_name
     }
 
     pub fn is_all_none(&self) -> bool {
-        self.file_name.is_none()
+        self.created_by.is_none() && self.file_name.is_none()
     }
 }
 
@@ -146,9 +162,26 @@ impl FindManyFileReqPath {
     }
 }
 
+#[derive(Deserialize)]
+pub struct FindManyFileReqQuery {
+    after_id: Option<Uuid>,
+    limit: Option<i32>,
+}
+
+impl FindManyFileReqQuery {
+    pub fn after_id(&self) -> &Option<Uuid> {
+        &self.after_id
+    }
+
+    pub fn limit(&self) -> &Option<i32> {
+        &self.limit
+    }
+}
+
 #[derive(Serialize)]
 pub struct FileResJson {
     id: Uuid,
+    created_by: Uuid,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     bucket_id: Uuid,
@@ -160,6 +193,7 @@ pub struct FileResJson {
 impl FileResJson {
     pub fn new(
         id: &Uuid,
+        created_by: &Uuid,
         created_at: &DateTime<Utc>,
         updated_at: &DateTime<Utc>,
         bucket_id: &Uuid,
@@ -169,6 +203,7 @@ impl FileResJson {
     ) -> Self {
         Self {
             id: *id,
+            created_by: *created_by,
             created_at: *created_at,
             updated_at: *updated_at,
             bucket_id: *bucket_id,

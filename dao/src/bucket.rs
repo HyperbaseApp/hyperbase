@@ -5,9 +5,10 @@ use hb_db_postgresql::model::bucket::BucketModel as BucketPostgresModel;
 use hb_db_scylladb::model::bucket::BucketModel as BucketScyllaModel;
 use hb_db_sqlite::model::bucket::BucketModel as BucketSqliteModel;
 use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
+use tokio::fs;
 use uuid::Uuid;
 
-use crate::{file::FileDao, util::conversion, Db};
+use crate::{bucket_rule::BucketRuleDao, file::FileDao, util::conversion, Db};
 
 pub struct BucketDao {
     id: Uuid,
@@ -19,17 +20,19 @@ pub struct BucketDao {
 }
 
 impl BucketDao {
-    pub fn new(project_id: &Uuid, name: &str, path: &str) -> Self {
+    pub async fn new(project_id: &Uuid, name: &str, path: &str) -> Result<Self> {
+        fs::create_dir_all(path).await?;
+
         let now = Utc::now();
 
-        Self {
+        Ok(Self {
             id: Uuid::now_v7(),
             created_at: now,
             updated_at: now,
             project_id: *project_id,
             name: name.to_owned(),
             path: path.to_owned(),
-        }
+        })
     }
 
     pub fn id(&self) -> &Uuid {
@@ -128,16 +131,18 @@ impl BucketDao {
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         let bucket_data = Self::db_select(db, id).await?;
 
-        let files_data = FileDao::db_select_many_by_bucket_id(db, id).await?;
+        let (files_data, _) = FileDao::db_select_many_by_bucket_id(db, id, &None, &None).await?;
         for file_data in &files_data {
             FileDao::delete(db, &bucket_data.path, file_data.id()).await?;
         }
 
+        BucketRuleDao::db_delete_many_by_bucket_id(db, id).await?;
+
         match db {
-            Db::ScyllaDb(db) => db.delete_project(id).await,
-            Db::PostgresqlDb(db) => db.delete_project(id).await,
-            Db::MysqlDb(db) => db.delete_project(id).await,
-            Db::SqliteDb(db) => db.delete_project(id).await,
+            Db::ScyllaDb(db) => db.delete_bucket(id).await,
+            Db::PostgresqlDb(db) => db.delete_bucket(id).await,
+            Db::MysqlDb(db) => db.delete_bucket(id).await,
+            Db::SqliteDb(db) => db.delete_bucket(id).await,
         }
     }
 

@@ -11,6 +11,7 @@ const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, 
 const UPDATE: &str = "UPDATE `bucket_rules` SET `updated_at` = ?, `find_one` = ?, `find_many` = ?, `insert_one` = ?, `update_one` = ?, `delete_one` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `bucket_rules` WHERE `id` = ?";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM `bucket_rules` WHERE `token_id` = ?";
+const DELETE_MANY_BY_BUCKET_ID: &str = "DELETE FROM `bucket_rules` WHERE `bucket_id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up bucket_rules table");
@@ -26,6 +27,7 @@ pub async fn init(pool: &Pool<MySql>) {
     pool.prepare(UPDATE).await.unwrap();
     pool.prepare(DELETE).await.unwrap();
     pool.prepare(DELETE_MANY_BY_TOKEN_ID).await.unwrap();
+    pool.prepare(DELETE_MANY_BY_BUCKET_ID).await.unwrap();
 }
 
 impl MysqlDb {
@@ -97,6 +99,12 @@ impl MysqlDb {
 
     pub async fn delete_many_bucket_rules_by_token_id(&self, token_id: &Uuid) -> Result<()> {
         self.execute(sqlx::query(DELETE_MANY_BY_TOKEN_ID).bind(token_id))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_many_bucket_rules_by_bucket_id(&self, bucket_id: &Uuid) -> Result<()> {
+        self.execute(sqlx::query(DELETE_MANY_BY_BUCKET_ID).bind(bucket_id))
             .await?;
         Ok(())
     }

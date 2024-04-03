@@ -78,6 +78,10 @@ impl FileDao {
         &self.size
     }
 
+    pub fn set_created_by(&mut self, created_by: &Uuid) {
+        self.created_by = *created_by;
+    }
+
     pub fn set_file_name(&mut self, file_name: &str) {
         self.file_name = file_name.to_owned();
     }
@@ -112,39 +116,56 @@ impl FileDao {
         }
     }
 
-    pub async fn db_select_many_by_bucket_id(db: &Db, bucket_id: &Uuid) -> Result<Vec<Self>> {
+    pub async fn db_select_many_by_bucket_id(
+        db: &Db,
+        bucket_id: &Uuid,
+        after_id: &Option<Uuid>,
+        limit: &Option<i32>,
+    ) -> Result<(Vec<Self>, i64)> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut files_data = Vec::new();
-                let files = db.select_many_files_by_bucket_id(bucket_id).await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                )?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
             Db::PostgresqlDb(db) => {
-                let files = db.select_many_files_by_bucket_id(bucket_id).await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_postgresdb_model(file)?)
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
             Db::MysqlDb(db) => {
-                let files = db.select_many_files_by_bucket_id(bucket_id).await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_mysqldb_model(file)?)
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
             Db::SqliteDb(db) => {
-                let files = db.select_many_files_by_bucket_id(bucket_id).await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_sqlitedb_model(file)?)
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
         }
     }
@@ -153,47 +174,69 @@ impl FileDao {
         db: &Db,
         created_by: &Uuid,
         bucket_id: &Uuid,
-    ) -> Result<Vec<Self>> {
+        after_id: &Option<Uuid>,
+        limit: &Option<i32>,
+    ) -> Result<(Vec<Self>, i64)> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut files_data = Vec::new();
-                let files = db
-                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
-                    .await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id, limit,
+                    ),
+                    db.count_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id,
+                    )
+                )?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
             Db::PostgresqlDb(db) => {
-                let files = db
-                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
-                    .await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id, limit,
+                    ),
+                    db.count_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id,
+                    )
+                )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_postgresdb_model(file)?)
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
             Db::MysqlDb(db) => {
-                let files = db
-                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
-                    .await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id, limit,
+                    ),
+                    db.count_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id,
+                    )
+                )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_mysqldb_model(file)?)
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
             Db::SqliteDb(db) => {
-                let files = db
-                    .select_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
-                    .await?;
+                let (files, total) = tokio::try_join!(
+                    db.select_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id, limit,
+                    ),
+                    db.count_many_files_by_created_by_and_bucket_id(
+                        created_by, bucket_id, after_id,
+                    )
+                )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_sqlitedb_model(file)?)
                 }
-                Ok(files_data)
+                Ok((files_data, total))
             }
         }
     }

@@ -70,6 +70,11 @@ impl UpdateOneTokenReqPath {
 pub struct UpdateOneTokenReqJson {
     name: Option<String>,
     allow_anonymous: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
     expired_at: Option<Option<DateTime<Utc>>>,
 }
 

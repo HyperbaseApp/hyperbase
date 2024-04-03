@@ -8,6 +8,7 @@ const INSERT: &str = "INSERT INTO \"hyperbase\".\"bucket_rules\" (\"id\", \"crea
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"id\" = ?";
 const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"token_id\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
 const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"token_id\" = ?";
+const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"hyperbase\".\"bucket_rules\" WHERE \"bucket_id\" = ?";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"bucket_rules\" SET \"updated_at\" = ?, \"find_one\" = ?, \"find_many\" = ?, \"insert_one\" = ?, \"update_one\" = ?, \"delete_one\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"bucket_rules\" WHERE \"id\" = ?";
 
@@ -23,6 +24,14 @@ pub async fn init(cached_session: &CachingSession) {
         )
         .await
         .unwrap();
+    cached_session
+        .get_session()
+        .query(
+            "CREATE INDEX IF NOT EXISTS ON \"hyperbase\".\"bucket_rules\" (\"bucket_id\")",
+            &[],
+        )
+        .await
+        .unwrap();
 
     cached_session
         .add_prepared_statement(&INSERT.into())
@@ -34,6 +43,14 @@ pub async fn init(cached_session: &CachingSession) {
         .unwrap();
     cached_session
         .add_prepared_statement(&SELECT_BY_TOKEN_ID_AND_BUCKET_ID.into())
+        .await
+        .unwrap();
+    cached_session
+        .add_prepared_statement(&SELECT_MANY_BY_TOKEN_ID.into())
+        .await
+        .unwrap();
+    cached_session
+        .add_prepared_statement(&SELECT_MANY_BY_BUCKET_ID.into())
         .await
         .unwrap();
     cached_session
@@ -83,6 +100,16 @@ impl ScyllaDb {
             .rows_typed()?)
     }
 
+    pub async fn select_many_bucket_rules_by_bucket_id(
+        &self,
+        bucket_id: &Uuid,
+    ) -> Result<TypedRowIter<BucketRuleModel>> {
+        Ok(self
+            .execute(SELECT_MANY_BY_BUCKET_ID, [bucket_id].as_ref())
+            .await?
+            .rows_typed()?)
+    }
+
     pub async fn update_bucket_rule(&self, value: &BucketRuleModel) -> Result<()> {
         self.execute(
             UPDATE,
@@ -107,6 +134,18 @@ impl ScyllaDb {
 
     pub async fn delete_many_bucket_rules_by_token_id(&self, token_id: &Uuid) -> Result<()> {
         let bucket_rules_data = self.select_many_bucket_rules_by_token_id(token_id).await?;
+        let mut deletes = Vec::new();
+        for bucket_rule_data in bucket_rules_data {
+            deletes.push(self.execute(DELETE, (*bucket_rule_data?.id(),)));
+        }
+        futures::future::join_all(deletes).await;
+        Ok(())
+    }
+
+    pub async fn delete_many_bucket_rules_by_bucket_id(&self, bucket_id: &Uuid) -> Result<()> {
+        let bucket_rules_data = self
+            .select_many_bucket_rules_by_bucket_id(bucket_id)
+            .await?;
         let mut deletes = Vec::new();
         for bucket_rule_data in bucket_rules_data {
             deletes.push(self.execute(DELETE, (*bucket_rule_data?.id(),)));

@@ -24,7 +24,7 @@ pub fn token_api(cfg: &mut web::ServiceConfig) {
         )
         .route(
             "/project/{project_id}/token/{token_id}",
-            web::put().to(update_one),
+            web::patch().to(update_one),
         )
         .route(
             "/project/{project_id}/token/{token_id}",

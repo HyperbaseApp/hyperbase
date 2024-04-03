@@ -449,7 +449,7 @@ impl RecordDao {
                     match value {
                         Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
                             Ok(value) => data.insert(columns[idx].to_owned(), value),
-                            Err(err) => return Err(err.into()),
+                            Err(err) => return Err(err),
                         },
                         None => data.insert(columns[idx].to_owned(), ColumnValue::none(kind)),
                     };
@@ -673,7 +673,7 @@ impl RecordDao {
                         match value {
                             Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
                                 Ok(value) => data.insert(columns[idx].to_owned(), value),
-                                Err(err) => return Err(err.into()),
+                                Err(err) => return Err(err),
                             },
                             None => data.insert(columns[idx].to_owned(), ColumnValue::none(kind)),
                         };

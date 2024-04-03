@@ -194,6 +194,19 @@ async fn verify_registration(
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
+    if let Err(err) = ctx
+        .mailer()
+        .sender()
+        .send(MailPayload::new(
+            admin_data.email(),
+            "Your Account Has Been Activated",
+            "Your account has been successfully activated",
+        ))
+        .await
+    {
+        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
     Response::data(
         &StatusCode::CREATED,
         &None,
