@@ -68,6 +68,8 @@ pub struct ApiMqttConfig {
     host: String,
     port: u16,
     topic: String,
+    username: String,
+    password: String,
     channel_capacity: usize,
     #[serde(deserialize_with = "deserialize_duration")]
     timeout: Duration,
@@ -84,6 +86,14 @@ impl ApiMqttConfig {
 
     pub fn topic(&self) -> &str {
         &self.topic
+    }
+
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn password(&self) -> &str {
+        &self.password
     }
 
     pub fn channel_capacity(&self) -> &usize {

@@ -8,11 +8,10 @@ pub struct Payload {
     project_id: Uuid,
 
     token_id: Uuid,
-    token: String,
     user: Option<UserPayload>,
 
     collection_id: Uuid,
-    data: Option<HashMap<String, Value>>,
+    data: HashMap<String, Value>,
 }
 
 impl Payload {
@@ -24,10 +23,6 @@ impl Payload {
         &self.token_id
     }
 
-    pub fn token(&self) -> &str {
-        &self.token
-    }
-
     pub fn user(&self) -> &Option<UserPayload> {
         &self.user
     }
@@ -36,7 +31,7 @@ impl Payload {
         &self.collection_id
     }
 
-    pub fn data(&self) -> &Option<HashMap<String, Value>> {
+    pub fn data(&self) -> &HashMap<String, Value> {
         &self.data
     }
 }

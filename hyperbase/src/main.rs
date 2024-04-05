@@ -7,6 +7,7 @@ use hb_api_mqtt::{
 use hb_api_rest::{
     context::{
         ApiRestCtx, ApiRestDaoCtx, ApiRestHashCtx, ApiRestMailerCtx, ApiRestTokenCtx, ApiRestWsCtx,
+        MqttAdminCredential,
     },
     ApiRestServer,
 };
@@ -121,6 +122,8 @@ async fn main() {
         config.api().mqtt().host(),
         config.api().mqtt().port(),
         config.api().mqtt().topic(),
+        config.api().mqtt().username(),
+        config.api().mqtt().password(),
         config.api().mqtt().channel_capacity(),
         config.api().mqtt().timeout(),
         ApiMqttCtx::new(
@@ -140,6 +143,10 @@ async fn main() {
             ApiRestMailerCtx::new(mailer_sender),
             ApiRestDaoCtx::new(db),
             ApiRestWsCtx::new(websocket_handler),
+            MqttAdminCredential::new(
+                config.api().mqtt().username(),
+                config.api().mqtt().password(),
+            ),
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),
             *config.auth().registration_ttl(),

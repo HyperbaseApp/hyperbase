@@ -1,4 +1,6 @@
-use actix_web::{http::StatusCode, web, HttpResponse};
+use std::str::FromStr;
+
+use actix_web::{http::StatusCode, web, HttpResponse, HttpResponseBuilder};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashSet, HashSetExt};
 use hb_dao::{
@@ -12,15 +14,16 @@ use hb_dao::{
 };
 use hb_mailer::MailPayload;
 use hb_token_jwt::{claim::UserClaim, kind::JwtTokenKind};
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::{
     model::{
         auth::{
             AuthTokenResJson, ConfirmPasswordResetReqJson, ConfirmPasswordResetResJson,
-            PasswordBasedReqJson, RegisterReqJson, RegisterResJson, RequestPasswordResetReqJson,
-            RequestPasswordResetResJson, TokenBasedReqJson, VerifyRegistrationReqJson,
-            VerifyRegistrationResJson,
+            MqttReqJson, MqttResJson, PasswordBasedReqJson, RegisterReqJson, RegisterResJson,
+            RequestPasswordResetReqJson, RequestPasswordResetResJson, TokenBasedReqJson,
+            VerifyRegistrationReqJson, VerifyRegistrationResJson,
         },
         Response,
     },
@@ -36,6 +39,7 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
         )
         .route("/auth/password-based", web::post().to(password_based))
         .route("/auth/token-based", web::post().to(token_based))
+        .route("/auth/mqtt", web::post().to(mqtt))
         .route(
             "/auth/request-password-reset",
             web::post().to(request_password_reset),
@@ -385,6 +389,52 @@ async fn token_based(
     };
 
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
+}
+
+async fn mqtt(ctx: web::Data<ApiRestCtx>, data: web::Json<MqttReqJson>) -> HttpResponse {
+    let mqtt_admin_credential = ctx.mqtt_admin_credential();
+
+    if mqtt_admin_credential.username() == data.username()
+        && mqtt_admin_credential.password() == data.password()
+    {
+        return HttpResponseBuilder::new(StatusCode::OK).json(MqttResJson::new("allow", &true));
+    }
+
+    let token_id = match Uuid::from_str(data.username()) {
+        Ok(id) => id,
+        Err(err) => {
+            hb_log::error(
+                None,
+                &format!("Failed to parse token id '{}': {}", data.username(), err),
+            );
+            return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
+                .json(MqttResJson::new("deny", &false));
+        }
+    };
+
+    let token_data = match TokenDao::db_select(ctx.dao().db(), &token_id).await {
+        Ok(data) => data,
+        Err(err) => {
+            hb_log::error(None, err);
+            return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
+                .json(MqttResJson::new("deny", &false));
+        }
+    };
+
+    if token_data.token() != data.password() {
+        hb_log::error(
+            None,
+            &format!(
+                "Token id '{}' doesn't match with token '{}'",
+                token_id,
+                data.password()
+            ),
+        );
+        return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
+            .json(MqttResJson::new("deny", &false));
+    }
+
+    HttpResponseBuilder::new(StatusCode::OK).json(MqttResJson::new("allow", &false))
 }
 
 async fn request_password_reset(

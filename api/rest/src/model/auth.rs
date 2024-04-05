@@ -80,6 +80,22 @@ impl TokenBasedReqJson {
     }
 }
 
+#[derive(Deserialize)]
+pub struct MqttReqJson {
+    username: String,
+    password: String,
+}
+
+impl MqttReqJson {
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+}
+
 #[derive(Deserialize, Validate)]
 pub struct RequestPasswordResetReqJson {
     #[validate(email)]
@@ -144,6 +160,21 @@ impl AuthTokenResJson {
     pub fn new(token: &str) -> Self {
         Self {
             token: token.to_owned(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct MqttResJson {
+    result: String,
+    is_superuser: bool,
+}
+
+impl MqttResJson {
+    pub fn new(result: &str, is_superuser: &bool) -> Self {
+        Self {
+            result: result.to_owned(),
+            is_superuser: *is_superuser,
         }
     }
 }

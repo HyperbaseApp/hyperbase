@@ -13,6 +13,7 @@ pub struct ApiRestCtx {
     mailer: ApiRestMailerCtx,
     dao: ApiRestDaoCtx,
     websocket: ApiRestWsCtx,
+    mqtt_admin_credential: MqttAdminCredential,
     admin_registration: bool,
     access_token_length: usize,
     registration_ttl: u32,
@@ -27,6 +28,7 @@ impl ApiRestCtx {
         mailer: ApiRestMailerCtx,
         dao: ApiRestDaoCtx,
         websocket: ApiRestWsCtx,
+        mqtt_admin_credential: MqttAdminCredential,
         admin_registration: bool,
         access_token_length: usize,
         registration_ttl: u32,
@@ -39,6 +41,7 @@ impl ApiRestCtx {
             mailer,
             dao,
             websocket,
+            mqtt_admin_credential,
             admin_registration,
             access_token_length,
             registration_ttl,
@@ -65,6 +68,10 @@ impl ApiRestCtx {
 
     pub fn websocket(&self) -> &ApiRestWsCtx {
         &self.websocket
+    }
+
+    pub fn mqtt_admin_credential(&self) -> &MqttAdminCredential {
+        &self.mqtt_admin_credential
     }
 
     pub fn admin_registration(&self) -> &bool {
@@ -155,5 +162,27 @@ impl ApiRestWsCtx {
 
     pub fn handler(&self) -> &WebSocketHandler {
         &self.handler
+    }
+}
+
+pub struct MqttAdminCredential {
+    username: String,
+    password: String,
+}
+
+impl MqttAdminCredential {
+    pub fn new(username: &str, password: &str) -> Self {
+        Self {
+            username: username.to_owned(),
+            password: password.to_owned(),
+        }
+    }
+
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn password(&self) -> &str {
+        &self.password
     }
 }

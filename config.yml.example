@@ -64,6 +64,8 @@ api:
     host: "broker.hivemq.com"
     port: 1883
     topic: "hyperbase"
+    username: "username"
+    password: "password"
     channel_capacity: 100
     timeout: "10s"
 

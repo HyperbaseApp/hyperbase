@@ -32,13 +32,16 @@ impl ApiMqttClient {
         host: &str,
         port: &u16,
         topic: &str,
+        username: &str,
+        password: &str,
         channel_capacity: &usize,
         timeout: &Duration,
         ctx: ApiMqttCtx,
     ) -> Self {
         hb_log::info(Some("⚡"), "ApiMqttClient: Initializing component");
 
-        let mqtt_opts = MqttOptions::new(format!("hyperbase-{}", Uuid::now_v7()), host, *port);
+        let mut mqtt_opts = MqttOptions::new(format!("hyperbase-{}", Uuid::now_v7()), host, *port);
+        mqtt_opts.set_credentials(username, password);
 
         let (client, eventloop) = AsyncClient::new(mqtt_opts, *channel_capacity);
 
