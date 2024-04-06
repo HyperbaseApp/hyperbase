@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use validator::Validate;
 
 #[derive(Deserialize)]
 pub struct InsertOneProjectReqJson {
@@ -61,6 +62,29 @@ impl DeleteOneProjectReqPath {
     }
 }
 
+#[derive(Deserialize)]
+pub struct TransferOneProjectReqPath {
+    project_id: Uuid,
+}
+
+impl TransferOneProjectReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+}
+
+#[derive(Deserialize, Validate)]
+pub struct TransferOneProjectReqJson {
+    #[validate(email)]
+    admin_email: String,
+}
+
+impl TransferOneProjectReqJson {
+    pub fn admin_email(&self) -> &str {
+        &self.admin_email
+    }
+}
+
 #[derive(Serialize)]
 pub struct ProjectResJson {
     id: Uuid,
@@ -86,11 +110,11 @@ impl ProjectResJson {
 }
 
 #[derive(Serialize)]
-pub struct DeleteProjectResJson {
+pub struct ProjectIDResJson {
     id: Uuid,
 }
 
-impl DeleteProjectResJson {
+impl ProjectIDResJson {
     pub fn new(id: &Uuid) -> Self {
         Self { id: *id }
     }

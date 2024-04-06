@@ -7,7 +7,7 @@ use crate::{db::ScyllaDb, model::project::ProjectModel};
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"admin_id\" = ?";
-const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
@@ -69,8 +69,16 @@ impl ScyllaDb {
     }
 
     pub async fn update_project(&self, value: &ProjectModel) -> Result<()> {
-        self.execute(UPDATE, &(value.updated_at(), value.name(), value.id()))
-            .await?;
+        self.execute(
+            UPDATE,
+            &(
+                value.updated_at(),
+                value.admin_id(),
+                value.name(),
+                value.id(),
+            ),
+        )
+        .await?;
         Ok(())
     }
 

@@ -7,7 +7,7 @@ use crate::{db::SqliteDb, model::project::ProjectModel};
 const INSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = ? ORDER BY \"created_at\" DESC";
-const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = ?, \"name\" = ? WHERE \"id\" = ?";
+const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
@@ -53,6 +53,7 @@ impl SqliteDb {
         self.execute(
             sqlx::query(UPDATE)
                 .bind(value.updated_at())
+                .bind(value.admin_id())
                 .bind(value.name())
                 .bind(value.id()),
         )

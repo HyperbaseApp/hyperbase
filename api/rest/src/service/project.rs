@@ -1,15 +1,17 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
+use futures::future;
 use hb_dao::{admin::AdminDao, project::ProjectDao, token::TokenDao};
 use hb_token_jwt::kind::JwtTokenKind;
+use validator::Validate;
 
 use crate::{
     context::ApiRestCtx,
     model::{
         project::{
-            DeleteOneProjectReqPath, DeleteProjectResJson, FindOneProjectReqPath,
-            InsertOneProjectReqJson, ProjectResJson, UpdateOneProjectReqJson,
-            UpdateOneProjectReqPath,
+            DeleteOneProjectReqPath, FindOneProjectReqPath, InsertOneProjectReqJson,
+            ProjectIDResJson, ProjectResJson, TransferOneProjectReqJson, TransferOneProjectReqPath,
+            UpdateOneProjectReqJson, UpdateOneProjectReqPath,
         },
         PaginationRes, Response,
     },
@@ -20,6 +22,10 @@ pub fn project_api(cfg: &mut web::ServiceConfig) {
         .route("/project/{project_id}", web::get().to(find_one))
         .route("/project/{project_id}", web::patch().to(update_one))
         .route("/project/{project_id}", web::delete().to(delete_one))
+        .route(
+            "/project/{project_id}/transfer",
+            web::post().to(transfer_one),
+        )
         .route("/projects", web::get().to(find_many));
 }
 
@@ -232,7 +238,84 @@ async fn delete_one(
     Response::data(
         &StatusCode::OK,
         &None,
-        &DeleteProjectResJson::new(project_data.id()),
+        &ProjectIDResJson::new(project_data.id()),
+    )
+}
+
+async fn transfer_one(
+    ctx: web::Data<ApiRestCtx>,
+    auth: BearerAuth,
+    path: web::Path<TransferOneProjectReqPath>,
+    data: web::Json<TransferOneProjectReqJson>,
+) -> HttpResponse {
+    if let Err(err) = data.validate() {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
+    let token = auth.token();
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if token_claim.kind() != &JwtTokenKind::Admin {
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            "Must be logged in using password-based login",
+        );
+    }
+
+    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        return Response::error_raw(
+            &StatusCode::BAD_REQUEST,
+            &format!("Failed to get user data: {err}"),
+        );
+    }
+
+    let mut project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != token_claim.id() {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
+    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), data.admin_email()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    project_data.set_admin_id(admin_data.id());
+
+    let mut tokens_data =
+        match TokenDao::db_select_many_by_project_id(ctx.dao().db(), path.project_id()).await {
+            Ok(data) => data,
+            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+        };
+
+    let mut update_token_fut = Vec::with_capacity(tokens_data.len());
+    for token_data in &mut tokens_data {
+        token_data.set_admin_id(admin_data.id());
+        token_data.set_name(&format!("[{}] {}", project_data.name(), token_data.name()));
+        update_token_fut.push(token_data.db_update(ctx.dao().db()));
+    }
+
+    if let Err(err) = tokio::try_join!(
+        future::try_join_all(update_token_fut),
+        project_data.db_update(ctx.dao().db())
+    ) {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
+    Response::data(
+        &StatusCode::OK,
+        &None,
+        &ProjectIDResJson::new(project_data.id()),
     )
 }
 

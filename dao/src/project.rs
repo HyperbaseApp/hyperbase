@@ -50,6 +50,10 @@ impl ProjectDao {
         &self.name
     }
 
+    pub fn set_admin_id(&mut self, admin_id: &Uuid) {
+        self.admin_id = *admin_id;
+    }
+
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_owned();
     }
