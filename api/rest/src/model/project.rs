@@ -85,6 +85,33 @@ impl TransferOneProjectReqJson {
     }
 }
 
+#[derive(Deserialize)]
+pub struct DuplicateOneProjectReqPath {
+    project_id: Uuid,
+}
+
+impl DuplicateOneProjectReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DuplicateOneProjectReqJson {
+    with_records: bool,
+    with_files: bool,
+}
+
+impl DuplicateOneProjectReqJson {
+    pub fn with_records(&self) -> &bool {
+        &self.with_records
+    }
+
+    pub fn with_files(&self) -> &bool {
+        &self.with_files
+    }
+}
+
 #[derive(Serialize)]
 pub struct ProjectResJson {
     id: Uuid,

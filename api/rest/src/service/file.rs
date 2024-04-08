@@ -363,7 +363,7 @@ async fn find_one(
     }
 
     let file =
-        match NamedFile::open_async(format!("{}/{}", bucket_data.path(), file_data.id())).await {
+        match NamedFile::open_async(&format!("{}/{}", bucket_data.path(), file_data.id())).await {
             Ok(file) => file,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
@@ -531,7 +531,7 @@ async fn download_one(
     }
 
     let file =
-        match NamedFile::open_async(format!("{}/{}", bucket_data.path(), file_data.id())).await {
+        match NamedFile::open_async(&format!("{}/{}", bucket_data.path(), file_data.id())).await {
             Ok(file) => file,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
