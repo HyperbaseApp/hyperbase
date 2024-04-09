@@ -391,20 +391,20 @@ pub enum CollectionPermission {
 }
 
 impl CollectionPermission {
-    pub fn to_str(&self) -> &str {
-        match self {
-            Self::All => "all",
-            Self::SelfMade => "self_made",
-            Self::None => "none",
-        }
-    }
-
     pub fn from_str(str: &str) -> Result<Self> {
         match str {
             "all" => Ok(Self::All),
             "self_made" => Ok(Self::SelfMade),
             "none" => Ok(Self::None),
             _ => Err(Error::msg(format!("Unknown collection permission '{str}'"))),
+        }
+    }
+
+    pub fn to_str(&self) -> &str {
+        match self {
+            Self::All => "all",
+            Self::SelfMade => "self_made",
+            Self::None => "none",
         }
     }
 }

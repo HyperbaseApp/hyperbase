@@ -6,7 +6,7 @@ use crate::{db::MysqlDb, model::bucket::BucketModel};
 
 const INSERT: &str = "INSERT INTO `buckets` (`id`, `created_at`, `updated_at`, `project_id`, `name`, `path`) VALUES (?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path` FROM `buckets` WHERE `id` = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path` FROM `buckets` WHERE `project_id` = ? ORDER BY `created_at` DESC";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path` FROM `buckets` WHERE `project_id` = ? ORDER BY `id` DESC";
 const UPDATE: &str = "UPDATE `buckets` SET `updated_at` = ?, `name` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `buckets` WHERE `id` = ?";
 
@@ -15,10 +15,13 @@ pub async fn init(pool: &Pool<MySql>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS `buckets` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `name` text, `path` text, PRIMARY KEY (`id`))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+    )
+    .unwrap();
 }
 
 impl MysqlDb {

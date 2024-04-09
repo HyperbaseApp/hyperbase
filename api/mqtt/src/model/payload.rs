@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Payload {
     project_id: Uuid,
 
@@ -36,7 +36,7 @@ impl Payload {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct UserPayload {
     collection_id: Uuid,
     id: Uuid,

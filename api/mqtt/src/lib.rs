@@ -79,11 +79,18 @@ impl ApiMqttClient {
                             if let Event::Incoming(packet) = &event {
                                 if let Packet::Publish(publish) = packet {
                                     match serde_json::from_slice::<Payload>(&publish.payload) {
-                                        Ok(payload) => record_service(&self.context, &payload).await,
+                                        Ok(payload) => {
+                                            let ctx = self.context.clone();
+                                            let payload = payload.clone();
+                                            tokio::spawn((|| async move {
+                                                record_service(&ctx, &payload).await;
+                                            })());
+                                        }
                                         Err(err) => hb_log::error(None, err),
-                                    }
+                                    };
                                 }
                             }
+                            continue;
                         }
                     }
                 }

@@ -6,7 +6,7 @@ use scylla::{
 
 use crate::query::{
     admin, admin_password_reset, bucket, bucket_rule, collection, collection_rule, file, keyspace,
-    project, registration, token,
+    log, project, registration, token,
 };
 
 pub struct ScyllaDb {
@@ -23,6 +23,7 @@ impl ScyllaDb {
         cache_size: &usize,
         table_registration_ttl: &u32,
         table_reset_password_ttl: &u32,
+        table_log_ttl: &u32,
     ) -> Self {
         hb_log::info(Some("⚡"), "ScyllaDB: Initializing component");
 
@@ -42,6 +43,7 @@ impl ScyllaDb {
             replication_factor,
             table_registration_ttl,
             table_reset_password_ttl,
+            table_log_ttl,
         )
         .await;
 
@@ -88,6 +90,7 @@ impl ScyllaDb {
         replication_factor: &i64,
         table_registration_ttl: &u32,
         table_reset_password_ttl: &u32,
+        table_log_ttl: &u32,
     ) {
         // Create keyspace
         keyspace::init(cached_session, replication_factor).await;
@@ -103,5 +106,6 @@ impl ScyllaDb {
         file::init(cached_session).await;
         registration::init(cached_session, table_registration_ttl).await;
         admin_password_reset::init(cached_session, table_reset_password_ttl).await;
+        log::init(cached_session, table_log_ttl).await;
     }
 }

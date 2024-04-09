@@ -261,29 +261,36 @@ impl TokenDao {
         }
     }
 
-    pub async fn db_select_many_by_admin_id(db: &Db, admin_id: &Uuid) -> Result<Vec<Self>> {
+    pub async fn db_select_many_by_admin_id_and_project_id(
+        db: &Db,
+        admin_id: &Uuid,
+        project_id: &Uuid,
+    ) -> Result<Vec<Self>> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut tokens_data = Vec::new();
-                for token in db.select_many_tokens_by_admin_id(admin_id).await? {
+                for token in db
+                    .select_many_tokens_by_admin_id_and_project_id(admin_id, project_id)
+                    .await?
+                {
                     tokens_data.push(Self::from_scylladb_model(&token?)?);
                 }
                 Ok(tokens_data)
             }
             Db::PostgresqlDb(db) => Ok(db
-                .select_many_tokens_by_admin_id(admin_id)
+                .select_many_tokens_by_admin_id_and_project_id(admin_id, project_id)
                 .await?
                 .iter()
                 .map(|data| Self::from_postgresdb_model(data))
                 .collect()),
             Db::MysqlDb(db) => Ok(db
-                .select_many_tokens_by_admin_id(admin_id)
+                .select_many_tokens_by_admin_id_and_project_id(admin_id, project_id)
                 .await?
                 .iter()
                 .map(|data| Self::from_mysqldb_model(data))
                 .collect()),
             Db::SqliteDb(db) => Ok(db
-                .select_many_tokens_by_admin_id(admin_id)
+                .select_many_tokens_by_admin_id_and_project_id(admin_id, project_id)
                 .await?
                 .iter()
                 .map(|data| Self::from_sqlitedb_model(data))

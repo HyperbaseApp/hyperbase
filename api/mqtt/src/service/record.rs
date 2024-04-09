@@ -4,7 +4,11 @@ use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
 use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSocketMessageKind};
 use hb_dao::{
-    collection::CollectionDao, project::ProjectDao, record::RecordDao, token::TokenDao,
+    collection::CollectionDao,
+    log::{LogDao, LogKind},
+    project::ProjectDao,
+    record::RecordDao,
+    token::TokenDao,
     value::ColumnValue,
 };
 use uuid::Uuid;
@@ -13,14 +17,35 @@ use crate::{context::ApiMqttCtx, model::payload::Payload};
 
 pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
     match insert_one(ctx.clone(), payload).await {
-        Ok(_) => hb_log::info(
-            None,
-            format!(
+        Ok(_) => {
+            let msg = format!(
                 "ApiMqttClient: Successfully insert one payload to collection_id {}",
                 payload.collection_id()
-            ),
-        ),
-        Err(err) => hb_log::error(None, err),
+            );
+            hb_log::info(None, &msg);
+            if let Ok(token_data) = TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
+                let log_data = LogDao::new(
+                    token_data.admin_id(),
+                    payload.project_id(),
+                    &LogKind::Info,
+                    &msg,
+                );
+                let _ = log_data.db_insert(ctx.dao().db()).await;
+            };
+        }
+        Err(err) => {
+            let err_msg = format!("ApiMqttClient: {err}");
+            hb_log::error(None, &err_msg);
+            if let Ok(token_data) = TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
+                let log_data = LogDao::new(
+                    token_data.admin_id(),
+                    payload.project_id(),
+                    &LogKind::Error,
+                    &err_msg,
+                );
+                let _ = log_data.db_insert(ctx.dao().db()).await;
+            };
+        }
     };
 }
 

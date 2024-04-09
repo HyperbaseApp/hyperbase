@@ -16,15 +16,19 @@ pub async fn init(pool: &Pool<Sqlite>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"admin_password_resets\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" blob, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+        pool.prepare(DELETE_EXPIRE),
+    )
+    .unwrap();
 }
 
 impl SqliteDb {
     pub async fn insert_admin_password_reset(&self, value: &AdminPasswordResetModel) -> Result<()> {
-        let _ = self.delete_expired_admin_password_reset().await;
+        let _ = self.delete_expired_admin_password_resets().await;
         self.execute(
             sqlx::query(INSERT)
                 .bind(value.id())
@@ -38,7 +42,7 @@ impl SqliteDb {
     }
 
     pub async fn select_admin_password_reset(&self, id: &Uuid) -> Result<AdminPasswordResetModel> {
-        let _ = self.delete_expired_admin_password_reset().await;
+        let _ = self.delete_expired_admin_password_resets().await;
         Ok(self
             .fetch_one(sqlx::query_as(SELECT).bind(id).bind(&{
                 let now = Utc::now();
@@ -52,7 +56,7 @@ impl SqliteDb {
     }
 
     pub async fn update_admin_password_reset(&self, value: &AdminPasswordResetModel) -> Result<()> {
-        let _ = self.delete_expired_admin_password_reset().await;
+        let _ = self.delete_expired_admin_password_resets().await;
         self.execute(
             sqlx::query(UPDATE)
                 .bind(value.updated_at())
@@ -72,14 +76,14 @@ impl SqliteDb {
     }
 
     pub async fn delete_admin_password_reset(&self, id: &Uuid) -> Result<()> {
-        let _ = self.delete_expired_admin_password_reset().await;
+        let _ = self.delete_expired_admin_password_resets().await;
         self.execute(sqlx::query(DELETE).bind(id)).await?;
         Ok(())
     }
 
-    async fn delete_expired_admin_password_reset(&self) -> Result<()> {
-        self.fetch_one(
-            sqlx::query_as(DELETE_EXPIRE).bind(
+    async fn delete_expired_admin_password_resets(&self) -> Result<()> {
+        self.execute(
+            sqlx::query(DELETE_EXPIRE).bind(
                 Utc::now()
                     .checked_sub_signed(
                         Duration::try_seconds(*self.table_reset_password_ttl()).ok_or_else(

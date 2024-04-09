@@ -7,27 +7,29 @@ use crate::{db::PostgresDb, model::collection_rule::CollectionRuleModel};
 const INSERT: &str = "INSERT INTO \"collection_rules\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"id\" = $1";
 const SELECT_BY_TOKEN_ID_AND_COLLECTION_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = $1 AND \"collection_id\" = $2";
-const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = $1 ORDER BY \"created_at\" DESC";
+const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = $1 ORDER BY \"id\" DESC";
 const UPDATE: &str = "UPDATE \"collection_rules\" SET \"updated_at\" = $1, \"find_one\" = $2, \"find_many\" = $3, \"insert_one\" = $4, \"update_one\" = $5, \"delete_one\" = $6 WHERE \"id\" = $7";
 const DELETE: &str = "DELETE FROM \"collection_rules\" WHERE \"id\" = $1";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"token_id\" = $1";
-const DELETE_MANY_BY_COLLECTION_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"collection_id\" = $1";
+const DELETE_MANY_BY_COLLECTION_ID: &str =
+    "DELETE FROM \"collection_rules\" WHERE \"collection_id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up collection_rules table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"collection_rules\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"token_id\" uuid, \"collection_id\" uuid, \"find_one\" text, \"find_many\" text, \"insert_one\" boolean, \"update_one\" text, \"delete_one\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_BY_TOKEN_ID_AND_COLLECTION_ID)
-        .await
-        .unwrap();
-    pool.prepare(SELECT_MANY_BY_TOKEN_ID).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
-    pool.prepare(DELETE_MANY_BY_TOKEN_ID).await.unwrap();
-    pool.prepare(DELETE_MANY_BY_COLLECTION_ID).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_BY_TOKEN_ID_AND_COLLECTION_ID),
+        pool.prepare(SELECT_MANY_BY_TOKEN_ID),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+        pool.prepare(DELETE_MANY_BY_TOKEN_ID),
+        pool.prepare(DELETE_MANY_BY_COLLECTION_ID),
+    )
+    .unwrap();
 }
 
 impl PostgresDb {

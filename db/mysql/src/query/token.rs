@@ -6,9 +6,9 @@ use crate::{db::MysqlDb, model::token::TokenModel};
 
 const INSERT: &str = "INSERT INTO `tokens` (`id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `id` = ?";
-const SELECT_MANY_BY_ADMIN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ? ORDER BY `created_at` DESC";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ? ORDER BY `created_at` DESC";
-const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `name` = ?, `allow_anonymous` = ?, `expired_at` = ? WHERE `id` = ?";
+const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `admin_id` = ? AND `project_id` = ? ORDER BY `id` DESC";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `admin_id`, `name`, `token`, `allow_anonymous`, `expired_at` FROM `tokens` WHERE `project_id` = ? ORDER BY `id` DESC";
+const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `admin_id` = ?, `name` = ?, `allow_anonymous` = ?, `expired_at` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `tokens` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
@@ -16,12 +16,15 @@ pub async fn init(pool: &Pool<MySql>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS `tokens` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `admin_id` binary(16), `name` text, `token` text, `allow_anonymous` boolean, `expired_at` timestamp, PRIMARY KEY (`id`))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_ADMIN_ID).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_PROJECT_ID).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID),
+        pool.prepare(SELECT_MANY_BY_PROJECT_ID),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+    )
+    .unwrap();
 }
 
 impl MysqlDb {
@@ -46,9 +49,17 @@ impl MysqlDb {
         Ok(self.fetch_one(sqlx::query_as(SELECT).bind(id)).await?)
     }
 
-    pub async fn select_many_tokens_by_admin_id(&self, admin_id: &Uuid) -> Result<Vec<TokenModel>> {
+    pub async fn select_many_tokens_by_admin_id_and_project_id(
+        &self,
+        admin_id: &Uuid,
+        project_id: &Uuid,
+    ) -> Result<Vec<TokenModel>> {
         Ok(self
-            .fetch_all(sqlx::query_as(SELECT_MANY_BY_ADMIN_ID).bind(admin_id))
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID)
+                    .bind(admin_id)
+                    .bind(project_id),
+            )
             .await?)
     }
 
@@ -65,6 +76,7 @@ impl MysqlDb {
         self.execute(
             sqlx::query(UPDATE)
                 .bind(value.updated_at())
+                .bind(value.admin_id())
                 .bind(value.name())
                 .bind(value.allow_anonymous())
                 .bind(value.expired_at())

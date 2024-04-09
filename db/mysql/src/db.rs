@@ -5,14 +5,15 @@ use sqlx::{
 };
 
 use crate::query::{
-    admin, admin_password_reset, bucket, bucket_rule, collection, collection_rule, file, project,
-    registration, token,
+    admin, admin_password_reset, bucket, bucket_rule, collection, collection_rule, file, log,
+    project, registration, token,
 };
 
 pub struct MysqlDb {
     pool: Pool<MySql>,
     table_registration_ttl: i64,
     table_reset_password_ttl: i64,
+    table_log_ttl: i64,
 }
 
 impl MysqlDb {
@@ -25,6 +26,7 @@ impl MysqlDb {
         max_connections: &u32,
         table_registration_ttl: &i64,
         table_reset_password_ttl: &i64,
+        table_log_ttl: &i64,
     ) -> Self {
         hb_log::info(Some("⚡"), "MySQL: Initializing component");
 
@@ -41,6 +43,7 @@ impl MysqlDb {
             pool,
             table_registration_ttl: *table_registration_ttl,
             table_reset_password_ttl: *table_reset_password_ttl,
+            table_log_ttl: *table_log_ttl,
         }
     }
 
@@ -101,16 +104,23 @@ impl MysqlDb {
         &self.table_reset_password_ttl
     }
 
+    pub fn table_log_ttl(&self) -> &i64 {
+        &self.table_log_ttl
+    }
+
     async fn init(pool: &Pool<MySql>) {
-        admin::init(pool).await;
-        token::init(pool).await;
-        project::init(pool).await;
-        collection::init(pool).await;
-        collection_rule::init(pool).await;
-        bucket::init(pool).await;
-        bucket_rule::init(pool).await;
-        file::init(pool).await;
-        registration::init(pool).await;
-        admin_password_reset::init(pool).await;
+        tokio::join!(
+            admin::init(pool),
+            token::init(pool),
+            project::init(pool),
+            collection::init(pool),
+            collection_rule::init(pool),
+            bucket::init(pool),
+            bucket_rule::init(pool),
+            file::init(pool),
+            registration::init(pool),
+            admin_password_reset::init(pool),
+            log::init(pool),
+        );
     }
 }

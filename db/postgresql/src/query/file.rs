@@ -9,8 +9,7 @@ const SELECT: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_a
 const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"bucket_id\" = $1";
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bucket_id\" = $1";
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
-const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str =
-    "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
+const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3 WHERE \"id\" = $4";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
@@ -19,14 +18,17 @@ pub async fn init(pool: &Pool<Postgres>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, PRIMARY KEY (\"id\"))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_BUCKET_ID).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID)
-        .await
-        .unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_MANY_BY_BUCKET_ID),
+        pool.prepare(COUNT_MANY_BY_BUCKET_ID),
+        pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
+        pool.prepare(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+    )
+    .unwrap();
 }
 
 impl PostgresDb {
@@ -53,12 +55,12 @@ impl PostgresDb {
     pub async fn select_many_files_by_bucket_id(
         &self,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
+        before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<Vec<FileModel>> {
         let mut sql = SELECT_MANY_BY_BUCKET_ID.to_owned();
         let mut count_values = 1;
-        if after_id.is_some() {
+        if before_id.is_some() {
             count_values += 1;
             sql += &format!(" AND \"id\" < ${count_values}");
         }
@@ -69,8 +71,8 @@ impl PostgresDb {
         }
 
         let mut query = sqlx::query_as(&sql).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
+        if let Some(before_id) = before_id {
+            query = query.bind(before_id);
         }
         if let Some(limit) = limit {
             query = query.bind(limit);
@@ -79,36 +81,23 @@ impl PostgresDb {
         Ok(self.fetch_all(query).await?)
     }
 
-    pub async fn count_many_files_by_bucket_id(
-        &self,
-        bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
-    ) -> Result<i64> {
-        let mut sql = COUNT_MANY_BY_BUCKET_ID.to_owned();
-        let mut count_values = 1;
-        if after_id.is_some() {
-            count_values += 1;
-            sql += &format!(" AND \"id\" < ${count_values}");
-        }
-
-        let mut query = sqlx::query_as(&sql).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        Ok(self.fetch_one::<(i64,)>(query).await?.0)
+    pub async fn count_many_files_by_bucket_id(&self, bucket_id: &Uuid) -> Result<i64> {
+        Ok(self
+            .fetch_one::<(i64,)>(sqlx::query_as(COUNT_MANY_BY_BUCKET_ID).bind(bucket_id))
+            .await?
+            .0)
     }
 
     pub async fn select_many_files_by_created_by_and_bucket_id(
         &self,
         created_by: &Uuid,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
+        before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<Vec<FileModel>> {
         let mut sql = SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID.to_owned();
         let mut count_values = 2;
-        if after_id.is_some() {
+        if before_id.is_some() {
             count_values += 1;
             sql += &format!(" AND \"id\" < ${count_values}");
         }
@@ -119,8 +108,8 @@ impl PostgresDb {
         }
 
         let mut query = sqlx::query_as(&sql).bind(created_by).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
+        if let Some(before_id) = before_id {
+            query = query.bind(before_id);
         }
         if let Some(limit) = limit {
             query = query.bind(limit);
@@ -133,21 +122,15 @@ impl PostgresDb {
         &self,
         created_by: &Uuid,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
     ) -> Result<i64> {
-        let mut sql = COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID.to_owned();
-        let mut count_values = 2;
-        if after_id.is_some() {
-            count_values += 1;
-            sql += &format!(" AND \"id\" < ${count_values}");
-        }
-
-        let mut query = sqlx::query_as(&sql).bind(created_by).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        Ok(self.fetch_one::<(i64,)>(query).await?.0)
+        Ok(self
+            .fetch_one::<(i64,)>(
+                sqlx::query_as(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID)
+                    .bind(created_by)
+                    .bind(bucket_id),
+            )
+            .await?
+            .0)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

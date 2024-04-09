@@ -164,13 +164,13 @@ impl FindManyFileReqPath {
 
 #[derive(Deserialize)]
 pub struct FindManyFileReqQuery {
-    after_id: Option<Uuid>,
+    before_id: Option<Uuid>,
     limit: Option<i32>,
 }
 
 impl FindManyFileReqQuery {
-    pub fn after_id(&self) -> &Option<Uuid> {
-        &self.after_id
+    pub fn before_id(&self) -> &Option<Uuid> {
+        &self.before_id
     }
 
     pub fn limit(&self) -> &Option<i32> {

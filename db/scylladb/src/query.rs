@@ -6,6 +6,7 @@ pub mod collection;
 pub mod collection_rule;
 pub mod file;
 pub mod keyspace;
+pub mod log;
 pub mod project;
 pub mod record;
 pub mod registration;

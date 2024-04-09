@@ -5,6 +5,7 @@ pub mod bucket_rule;
 pub mod collection;
 pub mod collection_rule;
 pub mod file;
+pub mod log;
 pub mod project;
 pub mod registration;
 pub mod system;

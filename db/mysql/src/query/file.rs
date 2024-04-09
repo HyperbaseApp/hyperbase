@@ -18,14 +18,17 @@ pub async fn init(pool: &Pool<MySql>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS `files` (`id` binary(16), `created_by` binary(16), `created_at` timestamp, `updated_at` timestamp, `bucket_id` binary(16), `file_name` text, `content_type` text, `size` bigint, PRIMARY KEY (`id`))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_BUCKET_ID).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID)
-        .await
-        .unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_MANY_BY_BUCKET_ID),
+        pool.prepare(COUNT_MANY_BY_BUCKET_ID),
+        pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
+        pool.prepare(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+    )
+    .unwrap();
 }
 
 impl MysqlDb {
@@ -52,11 +55,11 @@ impl MysqlDb {
     pub async fn select_many_files_by_bucket_id(
         &self,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
+        before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<Vec<FileModel>> {
         let mut sql = SELECT_MANY_BY_BUCKET_ID.to_owned();
-        if after_id.is_some() {
+        if before_id.is_some() {
             sql += " AND `id` < ?";
         }
         sql += " ORDER BY `id` DESC";
@@ -65,8 +68,8 @@ impl MysqlDb {
         }
 
         let mut query = sqlx::query_as(&sql).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
+        if let Some(before_id) = before_id {
+            query = query.bind(before_id);
         }
         if let Some(limit) = limit {
             query = query.bind(limit);
@@ -75,33 +78,22 @@ impl MysqlDb {
         Ok(self.fetch_all(query).await?)
     }
 
-    pub async fn count_many_files_by_bucket_id(
-        &self,
-        bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
-    ) -> Result<i64> {
-        let mut sql = COUNT_MANY_BY_BUCKET_ID.to_owned();
-        if after_id.is_some() {
-            sql += " AND `id` < ?";
-        }
-
-        let mut query = sqlx::query_as(&sql).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        Ok(self.fetch_one::<(i64,)>(query).await?.0)
+    pub async fn count_many_files_by_bucket_id(&self, bucket_id: &Uuid) -> Result<i64> {
+        Ok(self
+            .fetch_one::<(i64,)>(sqlx::query_as(COUNT_MANY_BY_BUCKET_ID).bind(bucket_id))
+            .await?
+            .0)
     }
 
     pub async fn select_many_files_by_created_by_and_bucket_id(
         &self,
         created_by: &Uuid,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
+        before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<Vec<FileModel>> {
         let mut sql = SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID.to_owned();
-        if after_id.is_some() {
+        if before_id.is_some() {
             sql += " AND `id` < ?";
         }
         sql += " ORDER BY `id` DESC";
@@ -110,8 +102,8 @@ impl MysqlDb {
         }
 
         let mut query = sqlx::query_as(&sql).bind(created_by).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
+        if let Some(before_id) = before_id {
+            query = query.bind(before_id);
         }
         if let Some(limit) = limit {
             query = query.bind(limit);
@@ -124,19 +116,15 @@ impl MysqlDb {
         &self,
         created_by: &Uuid,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
     ) -> Result<i64> {
-        let mut sql = COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID.to_owned();
-        if after_id.is_some() {
-            sql += " AND `id` < ?";
-        }
-
-        let mut query = sqlx::query_as(&sql).bind(created_by).bind(bucket_id);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        Ok(self.fetch_one::<(i64,)>(query).await?.0)
+        Ok(self
+            .fetch_one::<(i64,)>(
+                sqlx::query_as(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID)
+                    .bind(created_by)
+                    .bind(bucket_id),
+            )
+            .await?
+            .0)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

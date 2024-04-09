@@ -1,7 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use futures::future;
 use hb_dao::{
     admin::AdminDao,
     bucket::BucketDao,
@@ -302,31 +301,34 @@ async fn transfer_one(
         );
     }
 
-    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), data.admin_email()).await {
+    let admin_email = data.admin_email().to_lowercase();
+
+    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), &admin_email).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
     project_data.set_admin_id(admin_data.id());
-
-    let mut tokens_data =
-        match TokenDao::db_select_many_by_project_id(ctx.dao().db(), path.project_id()).await {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
-
-    let mut update_token_fut = Vec::with_capacity(tokens_data.len());
-    for token_data in &mut tokens_data {
-        token_data.set_admin_id(admin_data.id());
-        token_data.set_name(&format!("[{}] {}", project_data.name(), token_data.name()));
-        update_token_fut.push(token_data.db_update(ctx.dao().db()));
+    if let Err(err) = project_data.db_update(ctx.dao().db()).await {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    if let Err(err) = tokio::try_join!(
-        future::try_join_all(update_token_fut),
-        project_data.db_update(ctx.dao().db())
-    ) {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+    let tokens_data = match TokenDao::db_select_many_by_admin_id_and_project_id(
+        ctx.dao().db(),
+        token_claim.id(),
+        path.project_id(),
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    for mut token_data in tokens_data {
+        token_data.set_admin_id(admin_data.id());
+        if let Err(err) = token_data.db_update(ctx.dao().db()).await {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+        }
     }
 
     Response::data(

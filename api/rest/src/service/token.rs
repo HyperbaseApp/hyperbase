@@ -364,11 +364,16 @@ async fn find_many(
         );
     }
 
-    let tokens_data =
-        match TokenDao::db_select_many_by_admin_id(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => data,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let tokens_data = match TokenDao::db_select_many_by_admin_id_and_project_id(
+        ctx.dao().db(),
+        token_claim.id(),
+        path.project_id(),
+    )
+    .await
+    {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
 
     let mut tokens_res = Vec::with_capacity(tokens_data.len());
     for token_data in &tokens_data {

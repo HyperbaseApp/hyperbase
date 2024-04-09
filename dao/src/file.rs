@@ -119,15 +119,15 @@ impl FileDao {
     pub async fn db_select_many_by_bucket_id(
         db: &Db,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
+        before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<(Vec<Self>, i64)> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut files_data = Vec::new();
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id)
                 )?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
@@ -136,8 +136,8 @@ impl FileDao {
             }
             Db::PostgresqlDb(db) => {
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id)
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -147,8 +147,8 @@ impl FileDao {
             }
             Db::MysqlDb(db) => {
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id)
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -158,8 +158,8 @@ impl FileDao {
             }
             Db::SqliteDb(db) => {
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, after_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id, after_id)
+                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_id)
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -174,7 +174,7 @@ impl FileDao {
         db: &Db,
         created_by: &Uuid,
         bucket_id: &Uuid,
-        after_id: &Option<Uuid>,
+        before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<(Vec<Self>, i64)> {
         match db {
@@ -182,11 +182,9 @@ impl FileDao {
                 let mut files_data = Vec::new();
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id, limit,
+                        created_by, bucket_id, before_id, limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id,
-                    )
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
                 )?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
@@ -196,11 +194,9 @@ impl FileDao {
             Db::PostgresqlDb(db) => {
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id, limit,
+                        created_by, bucket_id, before_id, limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id,
-                    )
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -211,11 +207,9 @@ impl FileDao {
             Db::MysqlDb(db) => {
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id, limit,
+                        created_by, bucket_id, before_id, limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id,
-                    )
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -226,11 +220,9 @@ impl FileDao {
             Db::SqliteDb(db) => {
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id, limit,
+                        created_by, bucket_id, before_id, limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, after_id,
-                    )
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {

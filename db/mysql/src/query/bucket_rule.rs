@@ -7,7 +7,7 @@ use crate::{db::MysqlDb, model::bucket_rule::BucketRuleModel};
 const INSERT: &str = "INSERT INTO `bucket_rules` (`id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `id` = ?";
 const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? AND `bucket_id` = ?";
-const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? ORDER BY `created_at` DESC";
+const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? ORDER BY `id` DESC";
 const UPDATE: &str = "UPDATE `bucket_rules` SET `updated_at` = ?, `find_one` = ?, `find_many` = ?, `insert_one` = ?, `update_one` = ?, `delete_one` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `bucket_rules` WHERE `id` = ?";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM `bucket_rules` WHERE `token_id` = ?";
@@ -18,16 +18,17 @@ pub async fn init(pool: &Pool<MySql>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS `bucket_rules` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `token_id` binary(16), `bucket_id` binary(16), `find_one` text, `find_many` text, `insert_one` boolean, `update_one` text, `delete_one` text, PRIMARY KEY (`id`))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_BY_TOKEN_ID_AND_BUCKET_ID)
-        .await
-        .unwrap();
-    pool.prepare(SELECT_MANY_BY_TOKEN_ID).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
-    pool.prepare(DELETE_MANY_BY_TOKEN_ID).await.unwrap();
-    pool.prepare(DELETE_MANY_BY_BUCKET_ID).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_BY_TOKEN_ID_AND_BUCKET_ID),
+        pool.prepare(SELECT_MANY_BY_TOKEN_ID),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+        pool.prepare(DELETE_MANY_BY_TOKEN_ID),
+        pool.prepare(DELETE_MANY_BY_BUCKET_ID),
+    )
+    .unwrap();
 }
 
 impl MysqlDb {

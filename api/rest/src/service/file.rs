@@ -1038,7 +1038,7 @@ async fn find_many(
                 ctx.dao().db(),
                 &created_by,
                 path.bucket_id(),
-                query.after_id(),
+                query.before_id(),
                 query.limit(),
             )
             .await
@@ -1051,7 +1051,7 @@ async fn find_many(
             match FileDao::db_select_many_by_bucket_id(
                 ctx.dao().db(),
                 path.bucket_id(),
-                query.after_id(),
+                query.before_id(),
                 query.limit(),
             )
             .await

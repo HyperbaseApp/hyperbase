@@ -5,13 +5,14 @@ use sqlx::{
 };
 
 use crate::query::{
-    admin, admin_password_reset, bucket, collection, file, project, registration, token,
+    admin, admin_password_reset, bucket, collection, file, log, project, registration, token,
 };
 
 pub struct SqliteDb {
     pool: Pool<Sqlite>,
     table_registration_ttl: i64,
     table_reset_password_ttl: i64,
+    table_log_ttl: i64,
 }
 
 impl SqliteDb {
@@ -20,6 +21,7 @@ impl SqliteDb {
         max_connections: &u32,
         table_registration_ttl: &i64,
         table_reset_password_ttl: &i64,
+        table_log_ttl: &i64,
     ) -> Self {
         hb_log::info(Some("⚡"), "SQLite: Initializing component");
 
@@ -36,6 +38,7 @@ impl SqliteDb {
             pool,
             table_registration_ttl: *table_registration_ttl,
             table_reset_password_ttl: *table_reset_password_ttl,
+            table_log_ttl: *table_log_ttl,
         }
     }
 
@@ -99,14 +102,21 @@ impl SqliteDb {
         &self.table_reset_password_ttl
     }
 
+    pub fn table_log_ttl(&self) -> &i64 {
+        &self.table_log_ttl
+    }
+
     async fn init(pool: &Pool<Sqlite>) {
-        admin::init(pool).await;
-        token::init(pool).await;
-        project::init(pool).await;
-        collection::init(pool).await;
-        bucket::init(pool).await;
-        file::init(pool).await;
-        registration::init(pool).await;
-        admin_password_reset::init(pool).await;
+        tokio::join!(
+            admin::init(pool),
+            token::init(pool),
+            project::init(pool),
+            collection::init(pool),
+            bucket::init(pool),
+            file::init(pool),
+            registration::init(pool),
+            admin_password_reset::init(pool),
+            log::init(pool),
+        );
     }
 }

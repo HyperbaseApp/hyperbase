@@ -110,7 +110,9 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    if AdminDao::db_select_by_email(ctx.dao().db(), data.email())
+    let email = data.email().to_lowercase();
+
+    if AdminDao::db_select_by_email(ctx.dao().db(), &email)
         .await
         .is_ok()
     {
@@ -128,8 +130,7 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         }
     };
 
-    let registration_data = match RegistrationDao::db_select_by_email(ctx.dao().db(), data.email())
-        .await
+    let registration_data = match RegistrationDao::db_select_by_email(ctx.dao().db(), &email).await
     {
         Ok(mut registration_data) => {
             registration_data.regenerate_code();
@@ -139,7 +140,7 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
             registration_data
         }
         Err(_) => {
-            let registration_data = RegistrationDao::new(data.email(), &password_hash.to_string());
+            let registration_data = RegistrationDao::new(&email, &password_hash.to_string());
             if let Err(err) = registration_data.db_insert(ctx.dao().db()).await {
                 return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
             }
@@ -151,7 +152,7 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         .mailer()
         .sender()
         .send(MailPayload::new(
-            data.email(),
+            &email,
             "Registration Verification Code",
             &format!(
                 "Your registration verification code is {}. This code will expire in {} seconds",
@@ -226,7 +227,9 @@ async fn password_based(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), data.email()).await {
+    let email = data.email().to_lowercase();
+
+    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), &email).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -445,7 +448,9 @@ async fn request_password_reset(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     };
 
-    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), data.email()).await {
+    let email = data.email().to_lowercase();
+
+    let admin_data = match AdminDao::db_select_by_email(ctx.dao().db(), &email).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -459,7 +464,7 @@ async fn request_password_reset(
     if let Err(err)= ctx.mailer()
         .sender()
         .send(MailPayload::new(
-            data.email(),
+            &email,
             "Request Password Reset Verification Code",
             &format!(
                 "Your request password reset verification code is {}. This code will expire in {} seconds",

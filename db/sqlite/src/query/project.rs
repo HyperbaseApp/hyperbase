@@ -6,7 +6,7 @@ use crate::{db::SqliteDb, model::project::ProjectModel};
 
 const INSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = ? ORDER BY \"created_at\" DESC";
+const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = ? ORDER BY \"id\" DESC";
 const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = ?";
 
@@ -15,11 +15,14 @@ pub async fn init(pool: &Pool<Sqlite>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"projects\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" blob, \"name\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_MANY_BY_ADMIN_ID).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_MANY_BY_ADMIN_ID),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+    )
+    .unwrap();
 }
 
 impl SqliteDb {

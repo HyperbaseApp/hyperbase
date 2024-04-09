@@ -15,12 +15,15 @@ pub async fn init(pool: &Pool<Sqlite>) {
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"admins\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"email\" text, \"password_hash\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
-    pool.prepare(INSERT).await.unwrap();
-    pool.prepare(SELECT).await.unwrap();
-    pool.prepare(SELECT_BY_EMAIL).await.unwrap();
-    pool.prepare(SELECT_BY_EMAIL).await.unwrap();
-    pool.prepare(UPDATE).await.unwrap();
-    pool.prepare(DELETE).await.unwrap();
+    tokio::try_join!(
+        pool.prepare(INSERT),
+        pool.prepare(SELECT),
+        pool.prepare(SELECT_BY_EMAIL),
+        pool.prepare(SELECT_BY_EMAIL),
+        pool.prepare(UPDATE),
+        pool.prepare(DELETE),
+    )
+    .unwrap();
 }
 
 impl SqliteDb {
