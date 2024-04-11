@@ -3,17 +3,19 @@ use std::str::FromStr;
 use actix_web::{http::StatusCode, web, HttpResponse, HttpResponseBuilder};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashSet, HashSetExt};
+use hb_api_websocket::server::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
     admin::AdminDao,
     admin_password_reset::AdminPasswordResetDao,
     collection::CollectionDao,
+    log::{LogDao, LogKind},
     record::{RecordDao, RecordFilter, RecordFilters, RecordPagination},
     register::RegistrationDao,
     token::TokenDao,
     value::ColumnValue,
 };
 use hb_mailer::MailPayload;
-use hb_token_jwt::{claim::UserClaim, kind::JwtTokenKind};
+use hb_token_jwt::claim::{ClaimId, UserClaim};
 use uuid::Uuid;
 use validator::Validate;
 
@@ -21,12 +23,15 @@ use crate::{
     model::{
         auth::{
             AuthTokenResJson, ConfirmPasswordResetReqJson, ConfirmPasswordResetResJson,
-            MqttReqJson, MqttResJson, PasswordBasedReqJson, RegisterReqJson, RegisterResJson,
+            MqttAuthenticationReqJson, MqttAuthenticationResJson, MqttAuthorizationReqJson,
+            MqttAuthorizationResJson, PasswordBasedReqJson, RegisterReqJson, RegisterResJson,
             RequestPasswordResetReqJson, RequestPasswordResetResJson, TokenBasedReqJson,
             VerifyRegistrationReqJson, VerifyRegistrationResJson,
         },
+        log::LogResJson,
         Response,
     },
+    util::ws_broadcast::websocket_broadcast,
     ApiRestCtx,
 };
 
@@ -39,7 +44,14 @@ pub fn auth_api(cfg: &mut web::ServiceConfig) {
         )
         .route("/auth/password-based", web::post().to(password_based))
         .route("/auth/token-based", web::post().to(token_based))
-        .route("/auth/mqtt", web::post().to(mqtt))
+        .route(
+            "/auth/mqtt_authentication",
+            web::post().to(mqtt_authentication),
+        )
+        .route(
+            "/auth/mqtt_authorization",
+            web::post().to(mqtt_authorization),
+        )
         .route(
             "/auth/request-password-reset",
             web::post().to(request_password_reset),
@@ -58,17 +70,17 @@ async fn token(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse {
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    match token_claim.kind() {
-        JwtTokenKind::Admin => {
-            if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+    match token_claim.id() {
+        ClaimId::Admin(id) => {
+            if let Err(err) = AdminDao::db_select(ctx.dao().db(), id).await {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &format!("Failed to get admin data: {err}"),
                 );
             }
         }
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            if let Err(err) = TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
+        ClaimId::Token(id, _) => {
+            if let Err(err) = TokenDao::db_select(ctx.dao().db(), id).await {
                 return Response::error_raw(
                     &StatusCode::BAD_REQUEST,
                     &format!("Failed to get token data: {err}"),
@@ -242,11 +254,7 @@ async fn password_based(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let token = match ctx
-        .token()
-        .jwt()
-        .encode(admin_data.id(), &None, &JwtTokenKind::Admin)
-    {
+    let token = match ctx.token().jwt().encode(&ClaimId::Admin(*admin_data.id())) {
         Ok(token) => token,
         Err(err) => {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
@@ -362,11 +370,10 @@ async fn token_based(
             );
         };
 
-        match ctx.token().jwt().encode(
-            token_data.id(),
-            &Some(UserClaim::new(collection_id, record_id)),
-            &JwtTokenKind::User,
-        ) {
+        match ctx.token().jwt().encode(&ClaimId::Token(
+            *token_data.id(),
+            Some(UserClaim::new(collection_id, record_id)),
+        )) {
             Ok(token) => token,
             Err(err) => {
                 return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
@@ -382,7 +389,7 @@ async fn token_based(
         match ctx
             .token()
             .jwt()
-            .encode(token_data.id(), &None, &JwtTokenKind::UserAnonymous)
+            .encode(&ClaimId::Token(*token_data.id(), None))
         {
             Ok(token) => token,
             Err(err) => {
@@ -394,13 +401,20 @@ async fn token_based(
     Response::data(&StatusCode::OK, &None, &AuthTokenResJson::new(&token))
 }
 
-async fn mqtt(ctx: web::Data<ApiRestCtx>, data: web::Json<MqttReqJson>) -> HttpResponse {
+async fn mqtt_authentication(
+    ctx: web::Data<ApiRestCtx>,
+    data: web::Json<MqttAuthenticationReqJson>,
+) -> HttpResponse {
     let mqtt_admin_credential = ctx.mqtt_admin_credential();
 
-    if mqtt_admin_credential.username() == data.username()
-        && mqtt_admin_credential.password() == data.password()
-    {
-        return HttpResponseBuilder::new(StatusCode::OK).json(MqttResJson::new("allow", &true));
+    if mqtt_admin_credential.username() == data.username() {
+        if mqtt_admin_credential.password() == data.password() {
+            return HttpResponseBuilder::new(StatusCode::OK)
+                .json(MqttAuthenticationResJson::new("allow", &true));
+        } else {
+            return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
+                .json(MqttAuthenticationResJson::new("deny", &false));
+        }
     }
 
     let token_id = match Uuid::from_str(data.username()) {
@@ -411,7 +425,7 @@ async fn mqtt(ctx: web::Data<ApiRestCtx>, data: web::Json<MqttReqJson>) -> HttpR
                 &format!("Failed to parse token id '{}': {}", data.username(), err),
             );
             return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
-                .json(MqttResJson::new("deny", &false));
+                .json(MqttAuthenticationResJson::new("deny", &false));
         }
     };
 
@@ -420,24 +434,100 @@ async fn mqtt(ctx: web::Data<ApiRestCtx>, data: web::Json<MqttReqJson>) -> HttpR
         Err(err) => {
             hb_log::error(None, err);
             return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
-                .json(MqttResJson::new("deny", &false));
+                .json(MqttAuthenticationResJson::new("deny", &false));
         }
     };
 
     if token_data.token() != data.password() {
-        hb_log::error(
-            None,
-            &format!(
-                "Token id '{}' doesn't match with token '{}'",
-                token_id,
-                data.password()
-            ),
+        let err_msg = format!(
+            "Token id '{}' doesn't match with token '{}'",
+            token_id,
+            data.password()
         );
+        let log_data = LogDao::new(
+            token_data.admin_id(),
+            token_data.project_id(),
+            &LogKind::Error,
+            &format!("MQTT: Client is not authenticated: {err_msg}"),
+        );
+        tokio::spawn((|| async move {
+            if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                if let Err(err) = websocket_broadcast(
+                    ctx.websocket().handler(),
+                    WebSocketTarget::Log,
+                    None,
+                    WebSocketMessageKind::InsertOne,
+                    LogResJson::new(
+                        log_data.id(),
+                        log_data.created_at(),
+                        log_data.kind().to_str(),
+                        log_data.message(),
+                    ),
+                ) {
+                    hb_log::error(
+                        None,
+                        &format!("ApiRestServer: Error when broadcasting websocket data: {err}"),
+                    );
+                }
+            }
+        })());
+        hb_log::error(None, &err_msg);
         return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
-            .json(MqttResJson::new("deny", &false));
+            .json(MqttAuthenticationResJson::new("deny", &false));
     }
 
-    HttpResponseBuilder::new(StatusCode::OK).json(MqttResJson::new("allow", &false))
+    tokio::spawn((|| async move {
+        let log_data = LogDao::new(
+            token_data.admin_id(),
+            token_data.project_id(),
+            &LogKind::Info,
+            &format!(
+                "MQTT: Client is authenticated using token id '{}' and token '{}'",
+                token_data.id(),
+                token_data.token()
+            ),
+        );
+        if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+            if let Err(err) = websocket_broadcast(
+                ctx.websocket().handler(),
+                WebSocketTarget::Log,
+                None,
+                WebSocketMessageKind::InsertOne,
+                LogResJson::new(
+                    log_data.id(),
+                    log_data.created_at(),
+                    log_data.kind().to_str(),
+                    log_data.message(),
+                ),
+            ) {
+                hb_log::error(
+                    None,
+                    &format!("ApiRestServer: Error when broadcasting websocket data: {err}"),
+                );
+            }
+        }
+    })());
+
+    HttpResponseBuilder::new(StatusCode::OK).json(MqttAuthenticationResJson::new("allow", &false))
+}
+
+async fn mqtt_authorization(
+    ctx: web::Data<ApiRestCtx>,
+    data: web::Json<MqttAuthorizationReqJson>,
+) -> HttpResponse {
+    let mqtt_admin_credential = ctx.mqtt_admin_credential();
+
+    if data.action() == "subscribe" && mqtt_admin_credential.topic() == data.topic() {
+        if mqtt_admin_credential.username() == data.username() {
+            return HttpResponseBuilder::new(StatusCode::OK)
+                .json(MqttAuthorizationResJson::new("allow"));
+        }
+    } else if data.topic().chars().all(|c| c.is_alphabetic() || c == '/') {
+        return HttpResponseBuilder::new(StatusCode::OK)
+            .json(MqttAuthorizationResJson::new("allow"));
+    }
+
+    HttpResponseBuilder::new(StatusCode::OK).json(MqttAuthorizationResJson::new("deny"))
 }
 
 async fn request_password_reset(

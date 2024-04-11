@@ -18,6 +18,7 @@ use uuid::Uuid;
 pub mod context;
 mod model;
 mod service;
+mod util;
 
 pub struct ApiMqttClient {
     client: AsyncClient,

@@ -66,7 +66,7 @@ async fn main() {
                 scylla.prepared_statement_cache_size(),
                 config.auth().registration_ttl(),
                 config.auth().reset_password_ttl(),
-                config.log().log_ttl(),
+                config.log().db_ttl(),
             )
             .await,
         ))
@@ -81,7 +81,7 @@ async fn main() {
                 postgres.max_connections(),
                 &i64::from(*config.auth().registration_ttl()),
                 &i64::from(*config.auth().reset_password_ttl()),
-                &i64::from(*config.log().log_ttl()),
+                &i64::from(*config.log().db_ttl()),
             )
             .await,
         ))
@@ -96,7 +96,7 @@ async fn main() {
                 mysql.max_connections(),
                 &i64::from(*config.auth().registration_ttl()),
                 &i64::from(*config.auth().reset_password_ttl()),
-                &i64::from(*config.log().log_ttl()),
+                &i64::from(*config.log().db_ttl()),
             )
             .await,
         ))
@@ -107,7 +107,7 @@ async fn main() {
                 sqlite.max_connections(),
                 &i64::from(*config.auth().registration_ttl()),
                 &i64::from(*config.auth().reset_password_ttl()),
-                &i64::from(*config.log().log_ttl()),
+                &i64::from(*config.log().db_ttl()),
             )
             .await,
         ))
@@ -150,6 +150,7 @@ async fn main() {
             MqttAdminCredential::new(
                 config.api().mqtt().username(),
                 config.api().mqtt().password(),
+                config.api().mqtt().topic(),
             ),
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),

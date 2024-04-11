@@ -1,13 +1,12 @@
 use anyhow::{Error, Result};
 use tokio::sync::mpsc;
 
-use crate::server::{CollectionId, ConnectionId, Message, TokenId, UserId};
+use crate::server::{ConnectionId, Message, Target, UserSession};
 
 pub enum Connection {
     Connect {
-        user_id: Option<UserId>,
-        token_id: TokenId,
-        collection_id: CollectionId,
+        user_session: UserSession,
+        target: Target,
         connection_id: ConnectionId,
         connection_tx: mpsc::UnboundedSender<Message>,
     },
@@ -26,17 +25,15 @@ impl WebSocketConnection {
 
     pub fn connect(
         &self,
-        user_id: Option<UserId>,
-        token_id: TokenId,
-        collection_id: CollectionId,
+        user_session: UserSession,
+        target: Target,
         connection_id: ConnectionId,
         connection_tx: mpsc::UnboundedSender<Message>,
     ) -> Result<()> {
         self.tx
             .send(Connection::Connect {
-                user_id,
-                token_id,
-                collection_id,
+                user_session,
+                target,
                 connection_id,
                 connection_tx,
             })

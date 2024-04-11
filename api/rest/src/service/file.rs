@@ -13,7 +13,7 @@ use hb_dao::{
     admin::AdminDao, bucket::BucketDao, bucket_rule::BucketPermission, collection::CollectionDao,
     file::FileDao, project::ProjectDao, record::RecordDao, token::TokenDao, value::ColumnValue,
 };
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::claim::ClaimId;
 use uuid::Uuid;
 
 use crate::{
@@ -68,19 +68,19 @@ async fn insert_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -122,9 +122,9 @@ async fn insert_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         admin_id
-    } else if let Some(user_claim) = token_claim.user() {
+    } else if let Some(user_claim) = user_claim {
         let collection_data =
             match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
                 Ok(data) => data,
@@ -157,8 +157,13 @@ async fn insert_one(
         } else {
             return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
         }
+    } else if let Some(token_data) = token_data {
+        *token_data.id()
     } else {
-        *token_claim.id()
+        return Response::error_raw(
+            &StatusCode::INTERNAL_SERVER_ERROR,
+            "Cannot determine created_by",
+        );
     };
     let mut file_name = Uuid::now_v7().to_string();
     if let Some(name) = form.file_name() {
@@ -221,19 +226,19 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -279,12 +284,12 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_find_one {
         match rule {
             BucketPermission::All => None,
-            BucketPermission::SelfMade => match token_claim.user() {
+            BucketPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -328,7 +333,16 @@ async fn find_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             BucketPermission::None => {
                 return Response::error_raw(
@@ -389,19 +403,19 @@ async fn download_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -447,12 +461,12 @@ async fn download_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_find_one {
         match rule {
             BucketPermission::All => None,
-            BucketPermission::SelfMade => match token_claim.user() {
+            BucketPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -496,7 +510,16 @@ async fn download_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             BucketPermission::None => {
                 return Response::error_raw(
@@ -561,19 +584,19 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -619,12 +642,12 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_update_one {
         match rule {
             BucketPermission::All => None,
-            BucketPermission::SelfMade => match token_claim.user() {
+            BucketPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -668,7 +691,16 @@ async fn update_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             BucketPermission::None => {
                 return Response::error_raw(
@@ -744,19 +776,19 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -802,12 +834,12 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_delete_one {
         match rule {
             BucketPermission::All => None,
-            BucketPermission::SelfMade => match token_claim.user() {
+            BucketPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -851,7 +883,16 @@ async fn delete_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             BucketPermission::None => {
                 return Response::error_raw(
@@ -909,19 +950,19 @@ async fn find_many(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -967,12 +1008,12 @@ async fn find_many(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_find_many {
         match rule {
             BucketPermission::All => None,
-            BucketPermission::SelfMade => match token_claim.user() {
+            BucketPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -1016,7 +1057,16 @@ async fn find_many(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             BucketPermission::None => {
                 return Response::error_raw(

@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     broadcaster::WebSocketBroadcaster,
     connection::WebSocketConnection,
-    server::{CollectionId, Message, TokenId, UserId},
+    server::{Message, Target, UserSession},
 };
 
 #[derive(Clone)]
@@ -37,9 +37,8 @@ impl WebSocketHandler {
 
     pub async fn connection(
         self,
-        user_id: Option<UserId>,
-        token_id: TokenId,
-        collection_id: CollectionId,
+        user_session: UserSession,
+        target: Target,
         mut session: actix_ws_ng::Session,
         mut msg_stream: actix_ws_ng::MessageStream,
     ) -> Result<()> {
@@ -47,13 +46,8 @@ impl WebSocketHandler {
 
         let (connection_tx, mut connection_rx) = mpsc::unbounded_channel();
 
-        self.connection.connect(
-            user_id,
-            token_id,
-            collection_id,
-            connection_id,
-            connection_tx,
-        )?;
+        self.connection
+            .connect(user_session, target, connection_id, connection_tx)?;
 
         let mut last_heartbeat = Instant::now();
         let mut interval = interval(self.heartbeat_interval);
@@ -112,8 +106,7 @@ impl WebSocketHandler {
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiWebSocketServer: Error when serializing message with id {}: {}",
-                                    msg.data_id, err
+                                    "ApiWebSocketServer: Error when serializing message: {err}",
                                 ),
                             );
                             continue;
@@ -139,7 +132,7 @@ impl WebSocketHandler {
         Ok(())
     }
 
-    pub fn broadcast(&self, collection_id: CollectionId, message: Message) -> Result<()> {
-        self.broadcaster.broadcast(collection_id, message)
+    pub fn broadcast(&self, message: Message) -> Result<()> {
+        self.broadcaster.broadcast(message)
     }
 }

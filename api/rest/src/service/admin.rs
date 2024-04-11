@@ -1,7 +1,7 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hb_dao::admin::AdminDao;
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::claim::ClaimId;
 
 use crate::{
     context::ApiRestCtx,
@@ -25,16 +25,22 @@ async fn find_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse 
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    let admin_data = match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        Ok(data) => data,
-        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    let admin_data = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => data,
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
     };
 
     Response::data(
@@ -61,16 +67,22 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    let mut admin_data = match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        Ok(data) => data,
-        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    let mut admin_data = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => data,
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
     };
 
     if data.is_all_none() {
@@ -112,24 +124,27 @@ async fn delete_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpRespons
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+    if let Err(err) = AdminDao::db_delete(ctx.dao().db(), &admin_id).await {
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    if let Err(err) = AdminDao::db_delete(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
-    Response::data(
-        &StatusCode::OK,
-        &None,
-        &DeleteAdminResJson::new(token_claim.id()),
-    )
+    Response::data(&StatusCode::OK, &None, &DeleteAdminResJson::new(&admin_id))
 }

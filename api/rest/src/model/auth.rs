@@ -81,18 +81,39 @@ impl TokenBasedReqJson {
 }
 
 #[derive(Deserialize)]
-pub struct MqttReqJson {
+pub struct MqttAuthenticationReqJson {
     username: String,
     password: String,
 }
 
-impl MqttReqJson {
+impl MqttAuthenticationReqJson {
     pub fn username(&self) -> &str {
         &self.username
     }
 
     pub fn password(&self) -> &str {
         &self.password
+    }
+}
+
+#[derive(Deserialize)]
+pub struct MqttAuthorizationReqJson {
+    username: String,
+    topic: String,
+    action: String,
+}
+
+impl MqttAuthorizationReqJson {
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn topic(&self) -> &str {
+        &self.topic
+    }
+
+    pub fn action(&self) -> &str {
+        &self.action
     }
 }
 
@@ -165,16 +186,29 @@ impl AuthTokenResJson {
 }
 
 #[derive(Serialize)]
-pub struct MqttResJson {
+pub struct MqttAuthenticationResJson {
     result: String,
     is_superuser: bool,
 }
 
-impl MqttResJson {
+impl MqttAuthenticationResJson {
     pub fn new(result: &str, is_superuser: &bool) -> Self {
         Self {
             result: result.to_owned(),
             is_superuser: *is_superuser,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct MqttAuthorizationResJson {
+    result: String,
+}
+
+impl MqttAuthorizationResJson {
+    pub fn new(result: &str) -> Self {
+        Self {
+            result: result.to_owned(),
         }
     }
 }

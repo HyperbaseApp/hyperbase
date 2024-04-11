@@ -168,13 +168,15 @@ impl ApiRestWsCtx {
 pub struct MqttAdminCredential {
     username: String,
     password: String,
+    topic: String,
 }
 
 impl MqttAdminCredential {
-    pub fn new(username: &str, password: &str) -> Self {
+    pub fn new(username: &str, password: &str, topic: &str) -> Self {
         Self {
             username: username.to_owned(),
             password: password.to_owned(),
+            topic: topic.to_owned(),
         }
     }
 
@@ -184,5 +186,9 @@ impl MqttAdminCredential {
 
     pub fn password(&self) -> &str {
         &self.password
+    }
+
+    pub fn topic(&self) -> &str {
+        &self.topic
     }
 }

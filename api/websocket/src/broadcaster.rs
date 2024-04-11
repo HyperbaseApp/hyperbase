@@ -1,21 +1,21 @@
 use anyhow::{Error, Result};
 use tokio::sync::mpsc;
 
-use crate::server::{CollectionId, Message};
+use crate::server::Message;
 
 #[derive(Clone)]
 pub struct WebSocketBroadcaster {
-    broadcast_tx: mpsc::UnboundedSender<(CollectionId, Message)>,
+    broadcast_tx: mpsc::UnboundedSender<Message>,
 }
 
 impl WebSocketBroadcaster {
-    pub fn new(broadcast_tx: mpsc::UnboundedSender<(CollectionId, Message)>) -> Self {
+    pub fn new(broadcast_tx: mpsc::UnboundedSender<Message>) -> Self {
         Self { broadcast_tx }
     }
 
-    pub fn broadcast(&self, collection_id: CollectionId, message: Message) -> Result<()> {
+    pub fn broadcast(&self, message: Message) -> Result<()> {
         self.broadcast_tx
-            .send((collection_id, message))
+            .send(message)
             .map_err(|err| Error::msg(err.to_string()))?;
         Ok(())
     }

@@ -2,7 +2,7 @@ use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use hb_dao::{collection::CollectionDao, record::RecordDao};
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::claim::ClaimId;
 
 use crate::{context::ApiRestCtx, model::Response};
 
@@ -18,14 +18,17 @@ async fn find_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse 
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() == &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using token-based login",
-        );
-    }
+    let user_claim = match token_claim.id() {
+        ClaimId::Admin(_) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using token-based login",
+            )
+        }
+        ClaimId::Token(_, user_claim) => user_claim,
+    };
 
-    match token_claim.user() {
+    match user_claim {
         Some(user) => {
             let collection_data =
                 match CollectionDao::db_select(ctx.dao().db(), user.collection_id()).await {

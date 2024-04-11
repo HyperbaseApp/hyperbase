@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
-use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSocketMessageKind};
+use hb_api_websocket::server::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
     collection::CollectionDao,
     log::{LogDao, LogKind},
@@ -13,37 +13,68 @@ use hb_dao::{
 };
 use uuid::Uuid;
 
-use crate::{context::ApiMqttCtx, model::payload::Payload};
+use crate::{
+    context::ApiMqttCtx,
+    model::{log::LogJson, payload::Payload},
+    util::ws_broadcast::websocket_broadcast,
+};
 
 pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
     match insert_one(ctx.clone(), payload).await {
         Ok(_) => {
             let msg = format!(
-                "ApiMqttClient: Successfully insert one payload to collection_id {}",
+                "Successfully insert one payload to collection id {}",
                 payload.collection_id()
             );
-            hb_log::info(None, &msg);
+            hb_log::info(None, &format!("ApiMqttClient: {msg}"));
             if let Ok(token_data) = TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
                 let log_data = LogDao::new(
                     token_data.admin_id(),
                     payload.project_id(),
                     &LogKind::Info,
-                    &msg,
+                    &format!("MQTT: {msg}"),
                 );
-                let _ = log_data.db_insert(ctx.dao().db()).await;
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().broadcaster(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogJson::from_dao(&log_data),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                        );
+                    }
+                }
             };
         }
         Err(err) => {
-            let err_msg = format!("ApiMqttClient: {err}");
-            hb_log::error(None, &err_msg);
+            hb_log::error(None, &format!("ApiMqttClient: {err}"));
             if let Ok(token_data) = TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
                 let log_data = LogDao::new(
                     token_data.admin_id(),
                     payload.project_id(),
                     &LogKind::Error,
-                    &err_msg,
+                    &format!("MQTT: {err}"),
                 );
-                let _ = log_data.db_insert(ctx.dao().db()).await;
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().broadcaster(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogJson::from_dao(&log_data),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!(
+                                "ApiMqttClient: Error when broadcasting websocket data: {err}"
+                            ),
+                        );
+                    }
+                }
             };
         }
     };
@@ -190,36 +221,21 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
             record.insert(key.to_owned(), value);
         }
 
-        let record_id = Uuid::parse_str(record["_id"].as_str().unwrap()).unwrap();
         let created_by = Uuid::parse_str(record["_created_by"].as_str().unwrap()).unwrap();
 
-        let record = match serde_json::to_value(&record) {
-            Ok(value) => value,
-            Err(err) => {
-                hb_log::error(
-                    None,
-                    &format!("ApiMqttClient: Error when serializing record {record_id}: {err}"),
-                );
-                return;
-            }
-        };
-
-        if let Err(err) = ctx.websocket().broadcaster().broadcast(
-            *collection_data.id(),
-            WebSocketMessage::new(
-                *collection_data.id(),
-                record_id,
-                created_by,
-                WebSocketMessageKind::InsertOne,
-                record,
-            ),
+        if let Err(err) = websocket_broadcast(
+            ctx.websocket().broadcaster(),
+            WebSocketTarget::Collection(*collection_data.id()),
+            Some(created_by),
+            WebSocketMessageKind::InsertOne,
+            record,
         ) {
             hb_log::error(
-                    None,
-                    &format!(
-                        "ApiMqttClient: Error when broadcasting insert_one record {record_id} to websocket: {err}"
-                    ),
-                );
+                None,
+                &format!(
+                    "ApiMqttClient: Error when broadcasting insert_one record to websocket: {err}"
+                ),
+            );
             return;
         }
     })());

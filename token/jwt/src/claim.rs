@@ -1,41 +1,30 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::kind::JwtTokenKind;
-
 #[derive(Deserialize, Serialize)]
 pub struct Claim {
-    id: Uuid,
-    user: Option<UserClaim>,
-    kind: JwtTokenKind,
+    id: ClaimId,
     exp: usize,
 }
 
 impl Claim {
-    pub fn new(id: &Uuid, user: &Option<UserClaim>, kind: &JwtTokenKind, exp: &usize) -> Self {
-        Self {
-            id: *id,
-            user: *user,
-            kind: *kind,
-            exp: *exp,
-        }
+    pub fn new(id: &ClaimId, exp: &usize) -> Self {
+        Self { id: *id, exp: *exp }
     }
 
-    pub fn id(&self) -> &Uuid {
+    pub fn id(&self) -> &ClaimId {
         &self.id
-    }
-
-    pub fn user(&self) -> &Option<UserClaim> {
-        &self.user
-    }
-
-    pub fn kind(&self) -> &JwtTokenKind {
-        &self.kind
     }
 
     pub fn exp(&self) -> &usize {
         &self.exp
     }
+}
+
+#[derive(Deserialize, Serialize, Clone, Copy)]
+pub enum ClaimId {
+    Admin(Uuid),
+    Token(Uuid, Option<UserClaim>),
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy)]

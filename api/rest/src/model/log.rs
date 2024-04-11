@@ -29,6 +29,28 @@ impl FindManyLogReqQuery {
     }
 }
 
+#[derive(Deserialize)]
+pub struct SubscribeLogReqPath {
+    project_id: Uuid,
+}
+
+impl SubscribeLogReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SubscribeLogReqQuery {
+    token: String,
+}
+
+impl SubscribeLogReqQuery {
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+}
+
 #[derive(Serialize)]
 pub struct LogResJson {
     id: Uuid,

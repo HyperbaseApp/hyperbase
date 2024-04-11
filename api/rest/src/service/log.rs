@@ -1,18 +1,26 @@
-use actix_web::{http::StatusCode, web, HttpResponse};
+use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use hb_dao::{admin::AdminDao, log::LogDao};
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_api_websocket::server::{Target, UserSession};
+use hb_dao::{admin::AdminDao, log::LogDao, project::ProjectDao};
+use hb_token_jwt::claim::ClaimId;
 
 use crate::{
     context::ApiRestCtx,
     model::{
-        log::{FindManyLogReqPath, FindManyLogReqQuery, LogResJson},
+        log::{
+            FindManyLogReqPath, FindManyLogReqQuery, LogResJson, SubscribeLogReqPath,
+            SubscribeLogReqQuery,
+        },
         PaginationRes, Response,
     },
 };
 
 pub fn log_api(cfg: &mut web::ServiceConfig) {
-    cfg.route("/project/{project_id}/logs", web::get().to(find_many));
+    cfg.route("/project/{project_id}/logs", web::get().to(find_many))
+        .route(
+            "/project/{project_id}/logs/subscribe",
+            web::get().to(subscribe),
+        );
 }
 
 async fn find_many(
@@ -28,23 +36,39 @@ async fn find_many(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
         );
     }
 
     let (logs_data, total) = match LogDao::db_select_many_by_admin_id_and_project_id(
         ctx.dao().db(),
-        token_claim.id(),
+        &admin_id,
         path.project_id(),
         query.before_id(),
         query.limit(),
@@ -77,4 +101,72 @@ async fn find_many(
             })
             .collect::<Vec<_>>(),
     )
+}
+
+async fn subscribe(
+    ctx: web::Data<ApiRestCtx>,
+    req: HttpRequest,
+    stream: web::Payload,
+    path: web::Path<SubscribeLogReqPath>,
+    query: web::Query<SubscribeLogReqQuery>,
+) -> HttpResponse {
+    let token = query.token();
+
+    let token_claim = match ctx.token().jwt().decode(token) {
+        Ok(token) => token,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
+
+    let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
+        Ok(data) => data,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
+
+    if project_data.admin_id() != &admin_id {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This project does not belong to you",
+        );
+    }
+
+    let (res, session, msg_stream) = match actix_ws_ng::handle(&req, stream) {
+        Ok(res) => res,
+        Err(err) => {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string())
+        }
+    };
+
+    tokio::task::spawn_local((|| async move {
+        let _ = ctx
+            .websocket()
+            .handler()
+            .clone()
+            .connection(
+                UserSession::Admin(admin_id),
+                Target::Log,
+                session,
+                msg_stream,
+            )
+            .await;
+    })());
+
+    res
 }

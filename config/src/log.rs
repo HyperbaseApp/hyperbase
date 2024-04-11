@@ -4,7 +4,7 @@ use serde::Deserialize;
 pub struct LogConfig {
     display_level: bool,
     level_filter: String,
-    log_ttl: u32,
+    db_ttl: u32,
 }
 
 impl LogConfig {
@@ -16,7 +16,7 @@ impl LogConfig {
         &self.level_filter
     }
 
-    pub fn log_ttl(&self) -> &u32 {
-        &self.log_ttl
+    pub fn db_ttl(&self) -> &u32 {
+        &self.db_ttl
     }
 }

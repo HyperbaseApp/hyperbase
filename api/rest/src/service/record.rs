@@ -1,22 +1,26 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use hb_api_websocket::server::{Message as WebSocketMessage, MessageKind as WebSocketMessageKind};
+use hb_api_websocket::server::{
+    Message as WebSocketMessage, MessageKind as WebSocketMessageKind, Target as WebSocketTarget,
+};
 use hb_dao::{
     admin::AdminDao,
     collection::CollectionDao,
     collection_rule::CollectionPermission,
+    log::{LogDao, LogKind},
     project::ProjectDao,
     record::{RecordDao, RecordFilters, RecordOrder, RecordPagination},
     token::TokenDao,
     value::{ColumnKind, ColumnValue},
 };
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::claim::ClaimId;
 use uuid::Uuid;
 
 use crate::{
     context::ApiRestCtx,
     model::{
+        log::LogResJson,
         record::{
             DeleteOneRecordReqPath, DeleteRecordResJson, FindManyRecordReqJson,
             FindManyRecordReqPath, FindOneRecordReqPath, FindOneRecordReqQuery,
@@ -25,6 +29,7 @@ use crate::{
         },
         PaginationRes, Response,
     },
+    util::ws_broadcast::websocket_broadcast,
 };
 
 pub fn record_api(cfg: &mut web::ServiceConfig) {
@@ -63,19 +68,19 @@ async fn insert_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -91,10 +96,41 @@ async fn insert_one(
             .is_allow_insert_record(ctx.dao().db(), path.collection_id())
             .await
         {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to write data to this collection",
+            let err_msg = "This token doesn't have permission to write data to this collection";
+            let log_data = LogDao::new(
+                token_data.admin_id(),
+                token_data.project_id(),
+                &LogKind::Error,
+                &format!(
+                    "REST: Failed to insert a record using token id '{}': {}",
+                    token_data.id(),
+                    err_msg
+                ),
             );
+            tokio::spawn((|| async move {
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().handler(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogResJson::new(
+                            log_data.id(),
+                            log_data.created_at(),
+                            log_data.kind().to_str(),
+                            log_data.message(),
+                        ),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!(
+                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            ),
+                        );
+                    }
+                }
+            })());
+            return Response::error_raw(&StatusCode::FORBIDDEN, &err_msg);
         }
     }
 
@@ -119,7 +155,7 @@ async fn insert_one(
 
     for field_name in data.keys() {
         if field_name == "_created_by" {
-            if *token_claim.kind() == JwtTokenKind::Admin {
+            if matches!(token_claim.id(), ClaimId::Admin(_)) {
                 continue;
             } else {
                 return Response::error_raw(
@@ -149,9 +185,9 @@ async fn insert_one(
                 )
             }
         }
-    } else if *token_claim.kind() == JwtTokenKind::Admin {
+    } else if matches!(token_claim.id(), ClaimId::Admin(_)) {
         admin_id
-    } else if let Some(user_claim) = token_claim.user() {
+    } else if let Some(user_claim) = user_claim {
         let collection_data =
             match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id()).await {
                 Ok(data) => data,
@@ -184,8 +220,13 @@ async fn insert_one(
         } else {
             return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
         }
+    } else if let Some(token_data) = token_data {
+        *token_data.id()
     } else {
-        *token_claim.id()
+        return Response::error_raw(
+            &StatusCode::INTERNAL_SERVER_ERROR,
+            "Cannot determine created_by",
+        );
     };
 
     let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
@@ -251,16 +292,12 @@ async fn insert_one(
             }
         };
 
-        if let Err(err) = ctx.websocket().handler().clone().broadcast(
-            *collection_data.id(),
-            WebSocketMessage::new(
-                *collection_data.id(),
-                record_id,
-                created_by,
-                WebSocketMessageKind::InsertOne,
-                record,
-            ),
-        ) {
+        if let Err(err) = ctx.websocket().handler().broadcast(WebSocketMessage::new(
+            WebSocketTarget::Collection(*collection_data.id()),
+            Some(created_by),
+            WebSocketMessageKind::InsertOne,
+            record,
+        )) {
             hb_log::error(
                 None,
                 &format!(
@@ -288,19 +325,19 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -318,10 +355,42 @@ async fn find_one(
         {
             Some(rule)
         } else {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to read this record",
+            let err_msg = "This token doesn't have permission to read this record";
+            let log_data = LogDao::new(
+                token_data.admin_id(),
+                token_data.project_id(),
+                &LogKind::Error,
+                &format!(
+                    "REST: Failed to read a record in collection id '{}' using token id '{}': {}",
+                    path.collection_id(),
+                    token_data.id(),
+                    err_msg
+                ),
             );
+            tokio::spawn((|| async move {
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().handler(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogResJson::new(
+                            log_data.id(),
+                            log_data.created_at(),
+                            log_data.kind().to_str(),
+                            log_data.message(),
+                        ),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!(
+                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            ),
+                        );
+                    }
+                }
+            })());
+            return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
         }
     } else {
         None
@@ -346,12 +415,12 @@ async fn find_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_find_one {
         match rule {
             CollectionPermission::All => None,
-            CollectionPermission::SelfMade => match token_claim.user() {
+            CollectionPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -395,7 +464,16 @@ async fn find_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             CollectionPermission::None => {
                 return Response::error_raw(
@@ -469,19 +547,19 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -499,10 +577,42 @@ async fn update_one(
         {
             Some(rule)
         } else {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to update this record",
+            let err_msg = "This token doesn't have permission to update this record";
+            let log_data = LogDao::new(
+                token_data.admin_id(),
+                token_data.project_id(),
+                &LogKind::Error,
+                &format!(
+                    "REST: Failed to update a record in collection id '{}' using token id '{}': {}",
+                    path.collection_id(),
+                    token_data.id(),
+                    err_msg
+                ),
             );
+            tokio::spawn((|| async move {
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().handler(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogResJson::new(
+                            log_data.id(),
+                            log_data.created_at(),
+                            log_data.kind().to_str(),
+                            log_data.message(),
+                        ),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!(
+                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            ),
+                        );
+                    }
+                }
+            })());
+            return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
         }
     } else {
         None
@@ -527,12 +637,12 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_update_one {
         match rule {
             CollectionPermission::All => None,
-            CollectionPermission::SelfMade => match token_claim.user() {
+            CollectionPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -576,7 +686,16 @@ async fn update_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             CollectionPermission::None => {
                 return Response::error_raw(
@@ -594,7 +713,7 @@ async fn update_one(
 
     for field_name in data.keys() {
         if field_name == "_created_by" {
-            if *token_claim.kind() == JwtTokenKind::Admin {
+            if matches!(token_claim.id(), ClaimId::Admin(_)) {
                 continue;
             } else {
                 return Response::error_raw(
@@ -697,16 +816,12 @@ async fn update_one(
             }
         };
 
-        if let Err(err) = ctx.websocket().handler().clone().broadcast(
-            *collection_data.id(),
-            WebSocketMessage::new(
-                *collection_data.id(),
-                record_id,
-                created_by,
-                WebSocketMessageKind::UpdateOne,
-                record,
-            ),
-        ) {
+        if let Err(err) = ctx.websocket().handler().broadcast(WebSocketMessage::new(
+            WebSocketTarget::Collection(*collection_data.id()),
+            Some(created_by),
+            WebSocketMessageKind::UpdateOne,
+            record,
+        )) {
             hb_log::error(
                 None,
                 &format!(
@@ -733,19 +848,19 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -763,10 +878,42 @@ async fn delete_one(
         {
             Some(rule)
         } else {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to delete this record",
+            let err_msg = "This token doesn't have permission to delete this record";
+            let log_data = LogDao::new(
+                token_data.admin_id(),
+                token_data.project_id(),
+                &LogKind::Error,
+                &format!(
+                    "REST: Failed to delete a record in collection id '{}' using token id '{}': {}",
+                    path.collection_id(),
+                    token_data.id(),
+                    err_msg
+                ),
             );
+            tokio::spawn((|| async move {
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().handler(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogResJson::new(
+                            log_data.id(),
+                            log_data.created_at(),
+                            log_data.kind().to_str(),
+                            log_data.message(),
+                        ),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!(
+                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            ),
+                        );
+                    }
+                }
+            })());
+            return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
         }
     } else {
         None
@@ -791,12 +938,12 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_delete_one {
         match rule {
             CollectionPermission::All => None,
-            CollectionPermission::SelfMade => match token_claim.user() {
+            CollectionPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -840,7 +987,16 @@ async fn delete_one(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             CollectionPermission::None => {
                 return Response::error_raw(
@@ -905,16 +1061,12 @@ async fn delete_one(
             }
         };
 
-        if let Err(err) = ctx.websocket().handler().clone().broadcast(
-            *collection_data.id(),
-            WebSocketMessage::new(
-                *collection_data.id(),
-                record_id,
-                created_by,
-                WebSocketMessageKind::DeleteOne,
-                record_id_val,
-            ),
-        ) {
+        if let Err(err) = ctx.websocket().handler().broadcast(WebSocketMessage::new(
+            WebSocketTarget::Collection(*collection_data.id()),
+            Some(created_by),
+            WebSocketMessageKind::DeleteOne,
+            record_id_val,
+        )) {
             hb_log::error(
                 None,
                 &format!(
@@ -945,19 +1097,19 @@ async fn find_many(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let (admin_id, token_data) = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-            Ok(data) => (*data.id(), None),
+    let (admin_id, token_data, user_claim) = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => (*data.id(), None, None),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => (*data.admin_id(), Some(data)),
+        ClaimId::Token(token_id, user_claim) => {
+            match TokenDao::db_select(ctx.dao().db(), token_id).await {
+                Ok(data) => (*data.admin_id(), Some(data), *user_claim),
                 Err(err) => {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -975,10 +1127,42 @@ async fn find_many(
         {
             Some(rule)
         } else {
-            return Response::error_raw(
-                &StatusCode::FORBIDDEN,
-                "This token doesn't have permission to read these records",
+            let err_msg = "This token doesn't have permission to read these records";
+            let log_data = LogDao::new(
+                token_data.admin_id(),
+                token_data.project_id(),
+                &LogKind::Error,
+                &format!(
+                    "REST: Failed to read many records in collection id '{}' using token id '{}': {}",
+                    path.collection_id(),
+                    token_data.id(),
+                    err_msg
+                ),
             );
+            tokio::spawn((|| async move {
+                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().handler(),
+                        WebSocketTarget::Log,
+                        None,
+                        WebSocketMessageKind::InsertOne,
+                        LogResJson::new(
+                            log_data.id(),
+                            log_data.created_at(),
+                            log_data.kind().to_str(),
+                            log_data.message(),
+                        ),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!(
+                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            ),
+                        );
+                    }
+                }
+            })());
+            return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
         }
     } else {
         None
@@ -1003,12 +1187,12 @@ async fn find_many(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let created_by = if *token_claim.kind() == JwtTokenKind::Admin {
+    let created_by = if matches!(token_claim.id(), ClaimId::Admin(_)) {
         None
     } else if let Some(rule) = rule_find_many {
         match rule {
             CollectionPermission::All => None,
-            CollectionPermission::SelfMade => match token_claim.user() {
+            CollectionPermission::SelfMade => match user_claim {
                 Some(user_claim) => {
                     let collection_data =
                         match CollectionDao::db_select(ctx.dao().db(), user_claim.collection_id())
@@ -1052,7 +1236,16 @@ async fn find_many(
 
                     user_id
                 }
-                None => Some(*token_claim.id()),
+                None => {
+                    if let Some(token_data) = token_data {
+                        Some(*token_data.id())
+                    } else {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            "Cannot determine created_by",
+                        );
+                    }
+                }
             },
             CollectionPermission::None => {
                 return Response::error_raw(

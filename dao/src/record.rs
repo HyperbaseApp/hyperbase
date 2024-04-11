@@ -1000,7 +1000,7 @@ impl RecordDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        let mut columns: Vec<_> = Vec::with_capacity(self.data.len());
+        let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
             columns.push(col.as_str());

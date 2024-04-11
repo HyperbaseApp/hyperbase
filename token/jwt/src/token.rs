@@ -2,12 +2,8 @@ use std::time;
 
 use anyhow::Result;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use uuid::Uuid;
 
-use crate::{
-    claim::{Claim, UserClaim},
-    kind::JwtTokenKind,
-};
+use crate::claim::{Claim, ClaimId};
 
 pub struct JwtToken {
     header: Header,
@@ -29,12 +25,7 @@ impl JwtToken {
         }
     }
 
-    pub fn encode(
-        &self,
-        id: &Uuid,
-        user: &Option<UserClaim>,
-        kind: &JwtTokenKind,
-    ) -> Result<String> {
+    pub fn encode(&self, id: &ClaimId) -> Result<String> {
         let expiration_time = match usize::try_from(
             time::SystemTime::now()
                 .duration_since(time::UNIX_EPOCH)?
@@ -47,7 +38,7 @@ impl JwtToken {
 
         Ok(encode(
             &self.header,
-            &Claim::new(id, user, kind, &expiration_time),
+            &Claim::new(id, &expiration_time),
             &self.encoding_key,
         )?)
     }
@@ -73,6 +64,6 @@ impl JwtToken {
     }
 
     pub fn renew(&self, claim: &Claim) -> Result<String> {
-        self.encode(claim.id(), claim.user(), claim.kind())
+        self.encode(claim.id())
     }
 }

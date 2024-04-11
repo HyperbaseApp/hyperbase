@@ -7,7 +7,7 @@ use hb_dao::{
     project::ProjectDao,
     token::TokenDao,
 };
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::claim::ClaimId;
 
 use crate::{
     context::ApiRestCtx,
@@ -57,19 +57,23 @@ async fn insert_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let (project_data, token_data, bucket_data) = match tokio::try_join!(
         ProjectDao::db_select(ctx.dao().db(), path.project_id()),
@@ -80,7 +84,7 @@ async fn insert_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() {
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -158,19 +162,23 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let (token_data, bucket_rule_data) = match tokio::try_join!(
         TokenDao::db_select(ctx.dao().db(), path.token_id()),
@@ -180,7 +188,7 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_data.admin_id() != token_claim.id() {
+    if token_data.admin_id() != &admin_id {
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 
@@ -223,19 +231,23 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let (token_data, mut bucket_rule_data) = match tokio::try_join!(
         TokenDao::db_select(ctx.dao().db(), path.token_id()),
@@ -245,7 +257,7 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_data.admin_id() != token_claim.id() {
+    if token_data.admin_id() != &admin_id {
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 
@@ -329,19 +341,23 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let (token_data, bucket_rule_data) = match tokio::try_join!(
         TokenDao::db_select(ctx.dao().db(), path.token_id()),
@@ -351,7 +367,7 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_data.admin_id() != token_claim.id() {
+    if token_data.admin_id() != &admin_id {
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 
@@ -385,19 +401,23 @@ async fn find_many(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let (token_data, bucket_rules_data) = match tokio::try_join!(
         TokenDao::db_select(ctx.dao().db(), path.token_id()),
@@ -407,7 +427,7 @@ async fn find_many(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_data.admin_id() != token_claim.id() {
+    if token_data.admin_id() != &admin_id {
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }
 

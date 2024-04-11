@@ -4,7 +4,7 @@ app:
 log:
   display_level: true
   level_filter: "info"
-  log_ttl: 604800 # seconds
+  db_ttl: 604800 # seconds
 
 hash:
   argon2:

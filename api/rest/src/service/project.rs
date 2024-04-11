@@ -13,7 +13,7 @@ use hb_dao::{
     token::TokenDao,
     value::ColumnValue,
 };
-use hb_token_jwt::kind::JwtTokenKind;
+use hb_token_jwt::claim::ClaimId;
 use validator::Validate;
 
 use crate::{
@@ -57,21 +57,25 @@ async fn insert_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
-
-    let project_data = ProjectDao::new(token_claim.id(), data.name());
+    let project_data = ProjectDao::new(&admin_id, data.name());
 
     if let Err(err) = project_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -101,26 +105,21 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    let admin_id = match token_claim.kind() {
-        JwtTokenKind::Admin => match AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
             Ok(data) => *data.id(),
             Err(err) => {
                 return Response::error_raw(
-                    &StatusCode::BAD_REQUEST,
-                    &format!("Failed to get user data: {err}"),
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
                 )
             }
         },
-        JwtTokenKind::UserAnonymous | JwtTokenKind::User => {
-            match TokenDao::db_select(ctx.dao().db(), token_claim.id()).await {
-                Ok(data) => *data.admin_id(),
-                Err(err) => {
-                    return Response::error_raw(
-                        &StatusCode::BAD_REQUEST,
-                        &format!("Failed to get token data: {err}"),
-                    )
-                }
-            }
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
         }
     };
 
@@ -129,7 +128,7 @@ async fn find_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if &admin_id != project_data.admin_id() {
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -161,26 +160,30 @@ async fn update_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let mut project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() {
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -221,26 +224,30 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() {
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -275,26 +282,30 @@ async fn transfer_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let mut project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() {
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -315,7 +326,7 @@ async fn transfer_one(
 
     let tokens_data = match TokenDao::db_select_many_by_admin_id_and_project_id(
         ctx.dao().db(),
-        token_claim.id(),
+        &admin_id,
         path.project_id(),
     )
     .await
@@ -351,26 +362,30 @@ async fn duplicate_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let project_data = match ProjectDao::db_select(ctx.dao().db(), path.project_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if project_data.admin_id() != token_claim.id() {
+    if project_data.admin_id() != &admin_id {
         return Response::error_raw(
             &StatusCode::FORBIDDEN,
             "This project does not belong to you",
@@ -625,22 +640,26 @@ async fn find_many(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
-    if token_claim.kind() != &JwtTokenKind::Admin {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            "Must be logged in using password-based login",
-        );
-    }
-
-    if let Err(err) = AdminDao::db_select(ctx.dao().db(), token_claim.id()).await {
-        return Response::error_raw(
-            &StatusCode::BAD_REQUEST,
-            &format!("Failed to get user data: {err}"),
-        );
-    }
+    let admin_id = match token_claim.id() {
+        ClaimId::Admin(id) => match AdminDao::db_select(ctx.dao().db(), id).await {
+            Ok(data) => *data.id(),
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::UNAUTHORIZED,
+                    &format!("Failed to get admin data: {err}"),
+                )
+            }
+        },
+        ClaimId::Token(_, _) => {
+            return Response::error_raw(
+                &StatusCode::BAD_REQUEST,
+                "Must be logged in using password-based login",
+            )
+        }
+    };
 
     let projects_data =
-        match ProjectDao::db_select_many_by_admin_id(ctx.dao().db(), token_claim.id()).await {
+        match ProjectDao::db_select_many_by_admin_id(ctx.dao().db(), &admin_id).await {
             Ok(data) => data,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };

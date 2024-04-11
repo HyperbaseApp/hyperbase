@@ -18,6 +18,7 @@ mod error_handler;
 mod logger;
 mod model;
 mod service;
+mod util;
 
 pub struct ApiRestServer {
     app_mode: AppConfigMode,

@@ -18,16 +18,19 @@ use crate::{
 pub type ConnectionId = Uuid;
 pub type UserId = Uuid;
 pub type TokenId = Uuid;
-pub type CollectionId = Uuid;
+pub type AdminId = Uuid;
+
+pub enum UserSession {
+    Admin(AdminId),
+    Token(TokenId, Option<UserId>),
+}
 
 #[derive(Serialize, Clone)]
 pub struct Message {
     #[serde(skip_serializing)]
-    pub collection_id: CollectionId,
+    pub target: Target,
     #[serde(skip_serializing)]
-    pub data_id: Uuid,
-    #[serde(skip_serializing)]
-    pub created_by: UserId,
+    pub created_by: Option<UserId>,
 
     kind: MessageKind,
     data: serde_json::Value,
@@ -35,20 +38,24 @@ pub struct Message {
 
 impl Message {
     pub fn new(
-        collection_id: CollectionId,
-        data_id: Uuid,
-        created_by: UserId,
+        target: Target,
+        created_by: Option<UserId>,
         kind: MessageKind,
         data: serde_json::Value,
     ) -> Self {
         Self {
-            collection_id,
-            data_id,
+            target,
             created_by,
             kind,
             data,
         }
     }
+}
+
+#[derive(Eq, Hash, PartialEq, Clone)]
+pub enum Target {
+    Collection(Uuid),
+    Log,
 }
 
 #[derive(Serialize, Clone)]
@@ -63,11 +70,11 @@ pub struct ApiWebSocketServer {
     ctx: ApiWebSocketCtx,
 
     sessions: HashMap<ConnectionId, mpsc::UnboundedSender<Message>>,
-    user_sessions: HashMap<ConnectionId, (Option<UserId>, TokenId)>,
-    subscribers: HashMap<CollectionId, HashSet<ConnectionId>>,
+    user_sessions: HashMap<ConnectionId, UserSession>,
+    subscribers: HashMap<Target, HashSet<ConnectionId>>,
 
     connection_rx: mpsc::UnboundedReceiver<Connection>,
-    broadcast_rx: mpsc::UnboundedReceiver<(CollectionId, Message)>,
+    broadcast_rx: mpsc::UnboundedReceiver<Message>,
 }
 
 impl ApiWebSocketServer {
@@ -123,15 +130,13 @@ impl ApiWebSocketServer {
                         if let Some(connection) = connection {
                             match connection {
                                 Connection::Connect {
-                                    user_id,
-                                    token_id,
-                                    collection_id,
+                                    user_session,
+                                    target,
                                     connection_id,
                                     connection_tx,
                                 } => self.insert_connection(
-                                    user_id,
-                                    token_id,
-                                    collection_id,
+                                    user_session,
+                                    target,
                                     connection_id,
                                     connection_tx,
                                 ),
@@ -142,8 +147,8 @@ impl ApiWebSocketServer {
                         }
                     }
                     broadcast = self.broadcast_rx.recv() => {
-                        if let Some((resource, message)) = broadcast {
-                            let _ = self.broadcast(resource, message).await;
+                        if let Some(message) = broadcast {
+                            let _ = self.broadcast(message).await;
                         } else {
                             break;
                         }
@@ -157,17 +162,15 @@ impl ApiWebSocketServer {
 
     fn insert_connection(
         &mut self,
-        user_id: Option<UserId>,
-        token_id: TokenId,
-        collection_id: CollectionId,
+        user_session: UserSession,
+        target: Target,
         connection_id: ConnectionId,
         connection_tx: mpsc::UnboundedSender<Message>,
     ) {
         self.sessions.insert(connection_id, connection_tx);
-        self.user_sessions
-            .insert(connection_id, (user_id, token_id));
+        self.user_sessions.insert(connection_id, user_session);
         self.subscribers
-            .entry(collection_id)
+            .entry(target)
             .or_default()
             .insert(connection_id);
     }
@@ -181,19 +184,30 @@ impl ApiWebSocketServer {
         }
     }
 
-    async fn broadcast(&self, collection_id: CollectionId, message: Message) -> Result<()> {
-        if let Some(connection_ids) = self.subscribers.get(&collection_id) {
+    async fn broadcast(&self, message: Message) -> Result<()> {
+        if let Some(connection_ids) = self.subscribers.get(&message.target) {
             for connection_id in connection_ids {
-                if let Some((user_id, token_id)) = self.user_sessions.get(connection_id) {
-                    if let Some(user_id) = user_id {
-                        let token_data = TokenDao::db_select(self.ctx.dao().db(), token_id).await?;
-                        if let Some(permission) = token_data
-                            .is_allow_find_many_records(self.ctx.dao().db(), &collection_id)
-                            .await
-                        {
-                            if permission == CollectionPermission::SelfMade
-                                && message.created_by != *user_id
+                if let Some(user_session) = self.user_sessions.get(connection_id) {
+                    if let UserSession::Token(token_id, user_id) = user_session {
+                        if message.created_by.is_none() {
+                            continue;
+                        }
+                        if let Target::Collection(collection_id) = &message.target {
+                            let token_data =
+                                TokenDao::db_select(self.ctx.dao().db(), token_id).await?;
+                            if let Some(permission) = token_data
+                                .is_allow_find_many_records(self.ctx.dao().db(), collection_id)
+                                .await
                             {
+                                if permission == CollectionPermission::None {
+                                    continue;
+                                }
+                                if permission == CollectionPermission::SelfMade
+                                    && &message.created_by != user_id
+                                {
+                                    continue;
+                                }
+                            } else {
                                 continue;
                             }
                         } else {
