@@ -450,25 +450,32 @@ async fn mqtt_authentication(
             &LogKind::Error,
             &format!("MQTT: Client is not authenticated: {err_msg}"),
         );
+
         tokio::spawn((|| async move {
-            if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                if let Err(err) = websocket_broadcast(
-                    ctx.websocket().handler(),
-                    WebSocketTarget::Log,
-                    None,
-                    WebSocketMessageKind::InsertOne,
-                    LogResJson::new(
-                        log_data.id(),
-                        log_data.created_at(),
-                        log_data.kind().to_str(),
-                        log_data.message(),
-                    ),
-                ) {
-                    hb_log::error(
+            match log_data.db_insert(ctx.dao().db()).await {
+                Ok(_) => {
+                    if let Err(err) = websocket_broadcast(
+                        ctx.websocket().handler(),
+                        WebSocketTarget::Log,
                         None,
-                        &format!("ApiRestServer: Error when broadcasting websocket data: {err}"),
-                    );
+                        WebSocketMessageKind::InsertOne,
+                        LogResJson::new(
+                            log_data.id(),
+                            log_data.created_at(),
+                            log_data.kind().to_str(),
+                            log_data.message(),
+                        ),
+                    ) {
+                        hb_log::error(
+                            None,
+                            &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                        );
+                    }
                 }
+                Err(err) => hb_log::error(
+                    None,
+                    &format!("ApiMqttClient: Error when inserting log data: {err}"),
+                ),
             }
         })());
         hb_log::error(None, &err_msg);
@@ -487,24 +494,30 @@ async fn mqtt_authentication(
                 token_data.token()
             ),
         );
-        if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-            if let Err(err) = websocket_broadcast(
-                ctx.websocket().handler(),
-                WebSocketTarget::Log,
-                None,
-                WebSocketMessageKind::InsertOne,
-                LogResJson::new(
-                    log_data.id(),
-                    log_data.created_at(),
-                    log_data.kind().to_str(),
-                    log_data.message(),
-                ),
-            ) {
-                hb_log::error(
+        match log_data.db_insert(ctx.dao().db()).await {
+            Ok(_) => {
+                if let Err(err) = websocket_broadcast(
+                    ctx.websocket().handler(),
+                    WebSocketTarget::Log,
                     None,
-                    &format!("ApiRestServer: Error when broadcasting websocket data: {err}"),
-                );
+                    WebSocketMessageKind::InsertOne,
+                    LogResJson::new(
+                        log_data.id(),
+                        log_data.created_at(),
+                        log_data.kind().to_str(),
+                        log_data.message(),
+                    ),
+                ) {
+                    hb_log::error(
+                        None,
+                        &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                    );
+                }
             }
+            Err(err) => hb_log::error(
+                None,
+                &format!("ApiMqttClient: Error when inserting log data: {err}"),
+            ),
         }
     })());
 
@@ -517,17 +530,97 @@ async fn mqtt_authorization(
 ) -> HttpResponse {
     let mqtt_admin_credential = ctx.mqtt_admin_credential();
 
+    let mut is_allow = false;
+
     if data.action() == "subscribe" && mqtt_admin_credential.topic() == data.topic() {
         if mqtt_admin_credential.username() == data.username() {
-            return HttpResponseBuilder::new(StatusCode::OK)
-                .json(MqttAuthorizationResJson::new("allow"));
+            is_allow = true;
         }
     } else if data.topic().chars().all(|c| c.is_alphabetic() || c == '/') {
-        return HttpResponseBuilder::new(StatusCode::OK)
-            .json(MqttAuthorizationResJson::new("allow"));
+        is_allow = true
     }
 
-    HttpResponseBuilder::new(StatusCode::OK).json(MqttAuthorizationResJson::new("deny"))
+    tokio::spawn((|| async move {
+        let token_id = match Uuid::from_str(data.username()) {
+            Ok(id) => id,
+            Err(err) => {
+                hb_log::error(
+                    None,
+                    &format!("Failed to parse token id '{}': {}", data.username(), err),
+                );
+                return;
+            }
+        };
+        let token_data = match TokenDao::db_select(ctx.dao().db(), &token_id).await {
+            Ok(data) => data,
+            Err(err) => {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "Failed to get token data with id '{}': {}",
+                        data.username(),
+                        err
+                    ),
+                );
+                return;
+            }
+        };
+        let (kind, message) = match is_allow {
+            true => (
+                LogKind::Info,
+                format!(
+                    "MQTT: Client is authorized using token id '{}'",
+                    token_data.id(),
+                ),
+            ),
+            false => (
+                LogKind::Error,
+                format!(
+                    "MQTT: Client is not authorized: Token id '{}' Topic '{}' Action '{}'",
+                    token_data.id(),
+                    data.topic(),
+                    data.action()
+                ),
+            ),
+        };
+        let log_data = LogDao::new(
+            token_data.admin_id(),
+            token_data.project_id(),
+            &kind,
+            &message,
+        );
+        match log_data.db_insert(ctx.dao().db()).await {
+            Ok(_) => {
+                if let Err(err) = websocket_broadcast(
+                    ctx.websocket().handler(),
+                    WebSocketTarget::Log,
+                    None,
+                    WebSocketMessageKind::InsertOne,
+                    LogResJson::new(
+                        log_data.id(),
+                        log_data.created_at(),
+                        log_data.kind().to_str(),
+                        log_data.message(),
+                    ),
+                ) {
+                    hb_log::error(
+                        None,
+                        &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                    );
+                }
+            }
+            Err(err) => hb_log::error(
+                None,
+                &format!("ApiMqttClient: Error when inserting log data: {err}"),
+            ),
+        }
+    })());
+
+    if is_allow {
+        HttpResponseBuilder::new(StatusCode::OK).json(MqttAuthorizationResJson::new("allow"))
+    } else {
+        HttpResponseBuilder::new(StatusCode::OK).json(MqttAuthorizationResJson::new("deny"))
+    }
 }
 
 async fn request_password_reset(

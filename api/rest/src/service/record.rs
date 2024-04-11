@@ -108,26 +108,32 @@ async fn insert_one(
                 ),
             );
             tokio::spawn((|| async move {
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().handler(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogResJson::new(
-                            log_data.id(),
-                            log_data.created_at(),
-                            log_data.kind().to_str(),
-                            log_data.message(),
-                        ),
-                    ) {
-                        hb_log::error(
+                match log_data.db_insert(ctx.dao().db()).await {
+                    Ok(_) => {
+                        if let Err(err) = websocket_broadcast(
+                            ctx.websocket().handler(),
+                            WebSocketTarget::Log,
                             None,
-                            &format!(
-                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            WebSocketMessageKind::InsertOne,
+                            LogResJson::new(
+                                log_data.id(),
+                                log_data.created_at(),
+                                log_data.kind().to_str(),
+                                log_data.message(),
                             ),
-                        );
+                        ) {
+                            hb_log::error(
+                                None,
+                                &format!(
+                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                ),
+                            );
+                        }
                     }
+                    Err(err) => hb_log::error(
+                        None,
+                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                    ),
                 }
             })());
             return Response::error_raw(&StatusCode::FORBIDDEN, &err_msg);
@@ -368,26 +374,32 @@ async fn find_one(
                 ),
             );
             tokio::spawn((|| async move {
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().handler(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogResJson::new(
-                            log_data.id(),
-                            log_data.created_at(),
-                            log_data.kind().to_str(),
-                            log_data.message(),
-                        ),
-                    ) {
-                        hb_log::error(
+                match log_data.db_insert(ctx.dao().db()).await {
+                    Ok(_) => {
+                        if let Err(err) = websocket_broadcast(
+                            ctx.websocket().handler(),
+                            WebSocketTarget::Log,
                             None,
-                            &format!(
-                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            WebSocketMessageKind::InsertOne,
+                            LogResJson::new(
+                                log_data.id(),
+                                log_data.created_at(),
+                                log_data.kind().to_str(),
+                                log_data.message(),
                             ),
-                        );
+                        ) {
+                            hb_log::error(
+                                None,
+                                &format!(
+                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                ),
+                            );
+                        }
                     }
+                    Err(err) => hb_log::error(
+                        None,
+                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                    ),
                 }
             })());
             return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
@@ -590,26 +602,32 @@ async fn update_one(
                 ),
             );
             tokio::spawn((|| async move {
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().handler(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogResJson::new(
-                            log_data.id(),
-                            log_data.created_at(),
-                            log_data.kind().to_str(),
-                            log_data.message(),
-                        ),
-                    ) {
-                        hb_log::error(
+                match log_data.db_insert(ctx.dao().db()).await {
+                    Ok(_) => {
+                        if let Err(err) = websocket_broadcast(
+                            ctx.websocket().handler(),
+                            WebSocketTarget::Log,
                             None,
-                            &format!(
-                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            WebSocketMessageKind::InsertOne,
+                            LogResJson::new(
+                                log_data.id(),
+                                log_data.created_at(),
+                                log_data.kind().to_str(),
+                                log_data.message(),
                             ),
-                        );
+                        ) {
+                            hb_log::error(
+                                None,
+                                &format!(
+                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                ),
+                            );
+                        }
                     }
+                    Err(err) => hb_log::error(
+                        None,
+                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                    ),
                 }
             })());
             return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
@@ -891,26 +909,32 @@ async fn delete_one(
                 ),
             );
             tokio::spawn((|| async move {
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().handler(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogResJson::new(
-                            log_data.id(),
-                            log_data.created_at(),
-                            log_data.kind().to_str(),
-                            log_data.message(),
-                        ),
-                    ) {
-                        hb_log::error(
+                match log_data.db_insert(ctx.dao().db()).await {
+                    Ok(_) => {
+                        if let Err(err) = websocket_broadcast(
+                            ctx.websocket().handler(),
+                            WebSocketTarget::Log,
                             None,
-                            &format!(
-                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            WebSocketMessageKind::InsertOne,
+                            LogResJson::new(
+                                log_data.id(),
+                                log_data.created_at(),
+                                log_data.kind().to_str(),
+                                log_data.message(),
                             ),
-                        );
+                        ) {
+                            hb_log::error(
+                                None,
+                                &format!(
+                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                ),
+                            );
+                        }
                     }
+                    Err(err) => hb_log::error(
+                        None,
+                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                    ),
                 }
             })());
             return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);
@@ -1140,26 +1164,32 @@ async fn find_many(
                 ),
             );
             tokio::spawn((|| async move {
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().handler(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogResJson::new(
-                            log_data.id(),
-                            log_data.created_at(),
-                            log_data.kind().to_str(),
-                            log_data.message(),
-                        ),
-                    ) {
-                        hb_log::error(
+                match log_data.db_insert(ctx.dao().db()).await {
+                    Ok(_) => {
+                        if let Err(err) = websocket_broadcast(
+                            ctx.websocket().handler(),
+                            WebSocketTarget::Log,
                             None,
-                            &format!(
-                                "ApiRestServer: Error when broadcasting websocket data: {err}"
+                            WebSocketMessageKind::InsertOne,
+                            LogResJson::new(
+                                log_data.id(),
+                                log_data.created_at(),
+                                log_data.kind().to_str(),
+                                log_data.message(),
                             ),
-                        );
+                        ) {
+                            hb_log::error(
+                                None,
+                                &format!(
+                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                ),
+                            );
+                        }
                     }
+                    Err(err) => hb_log::error(
+                        None,
+                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                    ),
                 }
             })());
             return Response::error_raw(&StatusCode::FORBIDDEN, err_msg);

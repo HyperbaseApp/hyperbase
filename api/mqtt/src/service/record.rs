@@ -20,64 +20,56 @@ use crate::{
 };
 
 pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
-    match insert_one(ctx.clone(), payload).await {
+    let result = match insert_one(ctx.clone(), payload).await {
         Ok(_) => {
             let msg = format!(
                 "Successfully insert one payload to collection id {}",
                 payload.collection_id()
             );
             hb_log::info(None, &format!("ApiMqttClient: {msg}"));
-            if let Ok(token_data) = TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
-                let log_data = LogDao::new(
-                    token_data.admin_id(),
-                    payload.project_id(),
-                    &LogKind::Info,
-                    &format!("MQTT: {msg}"),
-                );
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().broadcaster(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogJson::from_dao(&log_data),
-                    ) {
-                        hb_log::error(
-                            None,
-                            &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
-                        );
-                    }
-                }
-            };
+            (LogKind::Info, msg)
         }
         Err(err) => {
             hb_log::error(None, &format!("ApiMqttClient: {err}"));
-            if let Ok(token_data) = TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
-                let log_data = LogDao::new(
-                    token_data.admin_id(),
-                    payload.project_id(),
-                    &LogKind::Error,
-                    &format!("MQTT: {err}"),
-                );
-                if log_data.db_insert(ctx.dao().db()).await.is_ok() {
-                    if let Err(err) = websocket_broadcast(
-                        ctx.websocket().broadcaster(),
-                        WebSocketTarget::Log,
-                        None,
-                        WebSocketMessageKind::InsertOne,
-                        LogJson::from_dao(&log_data),
-                    ) {
-                        hb_log::error(
-                            None,
-                            &format!(
-                                "ApiMqttClient: Error when broadcasting websocket data: {err}"
-                            ),
-                        );
-                    }
-                }
-            };
+            (LogKind::Error, err.to_string())
         }
     };
+
+    let log_data = match TokenDao::db_select(ctx.dao().db(), payload.token_id()).await {
+        Ok(token_data) => LogDao::new(
+            token_data.admin_id(),
+            payload.project_id(),
+            &result.0,
+            &format!("MQTT: {}", result.1),
+        ),
+        Err(err) => {
+            hb_log::error(
+                None,
+                &format!("ApiMqttClient: Failed to get token data: {err}"),
+            );
+            return;
+        }
+    };
+    match log_data.db_insert(ctx.dao().db()).await {
+        Ok(_) => {
+            if let Err(err) = websocket_broadcast(
+                ctx.websocket().broadcaster(),
+                WebSocketTarget::Log,
+                None,
+                WebSocketMessageKind::InsertOne,
+                LogJson::from_dao(&log_data),
+            ) {
+                hb_log::error(
+                    None,
+                    &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                );
+            }
+        }
+        Err(err) => hb_log::error(
+            None,
+            &format!("ApiMqttClient: Error when inserting log data: {err}"),
+        ),
+    }
 }
 
 async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
