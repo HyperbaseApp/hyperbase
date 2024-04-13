@@ -20,6 +20,7 @@ pub struct CollectionModel {
     name: String,
     schema_fields: Json<HashMap<String, SchemaFieldPropsModel>>,
     opt_auth_column_id: bool,
+    opt_ttl: Option<i64>,
 }
 
 impl CollectionModel {
@@ -31,6 +32,7 @@ impl CollectionModel {
         name: &str,
         schema_fields: &Json<HashMap<String, SchemaFieldPropsModel>>,
         opt_auth_column_id: &bool,
+        opt_ttl: &Option<i64>,
     ) -> Self {
         Self {
             id: *id,
@@ -40,6 +42,7 @@ impl CollectionModel {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             opt_auth_column_id: *opt_auth_column_id,
+            opt_ttl: *opt_ttl,
         }
     }
 
@@ -70,6 +73,10 @@ impl CollectionModel {
     pub fn opt_auth_column_id(&self) -> &bool {
         &self.opt_auth_column_id
     }
+
+    pub fn opt_ttl(&self) -> &Option<i64> {
+        &self.opt_ttl
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -80,6 +87,7 @@ pub struct SchemaFieldPropsModel {
     unique: bool,
     indexed: bool,
     auth_column: bool,
+    hidden: bool,
 }
 
 impl SchemaFieldPropsModel {
@@ -90,6 +98,7 @@ impl SchemaFieldPropsModel {
         unique: &bool,
         indexed: &bool,
         auth_column: &bool,
+        hidden: &bool,
     ) -> Self {
         Self {
             kind: kind.to_owned(),
@@ -98,6 +107,7 @@ impl SchemaFieldPropsModel {
             unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
+            hidden: *hidden,
         }
     }
 
@@ -123,5 +133,9 @@ impl SchemaFieldPropsModel {
 
     pub fn auth_column(&self) -> &bool {
         &self.auth_column
+    }
+
+    pub fn hidden(&self) -> &bool {
+        &self.hidden
     }
 }

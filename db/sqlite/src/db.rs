@@ -5,7 +5,8 @@ use sqlx::{
 };
 
 use crate::query::{
-    admin, admin_password_reset, bucket, collection, file, log, project, registration, token,
+    admin, admin_password_reset, bucket, bucket_rule, collection, collection_rule, file, log,
+    project, registration, token,
 };
 
 pub struct SqliteDb {
@@ -112,7 +113,9 @@ impl SqliteDb {
             token::init(pool),
             project::init(pool),
             collection::init(pool),
+            collection_rule::init(pool),
             bucket::init(pool),
+            bucket_rule::init(pool),
             file::init(pool),
             registration::init(pool),
             admin_password_reset::init(pool),

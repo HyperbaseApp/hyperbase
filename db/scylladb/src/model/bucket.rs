@@ -9,6 +9,7 @@ pub struct BucketModel {
     project_id: Uuid,
     name: String,
     path: String,
+    opt_ttl: Option<i64>,
 }
 
 impl BucketModel {
@@ -19,6 +20,7 @@ impl BucketModel {
         project_id: &Uuid,
         name: &str,
         path: &str,
+        opt_ttl: &Option<i64>,
     ) -> Self {
         Self {
             id: *id,
@@ -27,6 +29,7 @@ impl BucketModel {
             project_id: *project_id,
             name: name.to_owned(),
             path: path.to_owned(),
+            opt_ttl: *opt_ttl,
         }
     }
 
@@ -52,5 +55,9 @@ impl BucketModel {
 
     pub fn path(&self) -> &str {
         &self.path
+    }
+
+    pub fn opt_ttl(&self) -> &Option<i64> {
+        &self.opt_ttl
     }
 }

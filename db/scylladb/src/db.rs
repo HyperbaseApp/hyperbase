@@ -96,16 +96,18 @@ impl ScyllaDb {
         keyspace::init(cached_session, replication_factor).await;
 
         // Create tables
-        admin::init(cached_session).await;
-        token::init(cached_session).await;
-        project::init(cached_session).await;
-        collection::init(cached_session).await;
-        collection_rule::init(cached_session).await;
-        bucket::init(cached_session).await;
-        bucket_rule::init(cached_session).await;
-        file::init(cached_session).await;
-        registration::init(cached_session, table_registration_ttl).await;
-        admin_password_reset::init(cached_session, table_reset_password_ttl).await;
-        log::init(cached_session, table_log_ttl).await;
+        tokio::join!(
+            admin::init(cached_session),
+            token::init(cached_session),
+            project::init(cached_session),
+            collection::init(cached_session),
+            collection_rule::init(cached_session),
+            bucket::init(cached_session),
+            bucket_rule::init(cached_session),
+            file::init(cached_session),
+            registration::init(cached_session, table_registration_ttl),
+            admin_password_reset::init(cached_session, table_reset_password_ttl),
+            log::init(cached_session, table_log_ttl)
+        );
     }
 }

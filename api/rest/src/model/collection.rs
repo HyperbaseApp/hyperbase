@@ -19,6 +19,7 @@ pub struct InsertOneCollectionReqJson {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
     opt_auth_column_id: bool,
+    opt_ttl: Option<i64>,
 }
 
 impl InsertOneCollectionReqJson {
@@ -32,6 +33,10 @@ impl InsertOneCollectionReqJson {
 
     pub fn opt_auth_column_id(&self) -> &bool {
         &self.opt_auth_column_id
+    }
+
+    pub fn opt_ttl(&self) -> &Option<i64> {
+        &self.opt_ttl
     }
 }
 
@@ -99,6 +104,12 @@ pub struct UpdateOneCollectionReqJson {
     name: Option<String>,
     schema_fields: Option<HashMap<String, SchemaFieldPropsJson>>,
     opt_auth_column_id: Option<bool>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    opt_ttl: Option<Option<i64>>,
 }
 
 impl UpdateOneCollectionReqJson {
@@ -114,8 +125,15 @@ impl UpdateOneCollectionReqJson {
         &self.opt_auth_column_id
     }
 
+    pub fn opt_ttl(&self) -> &Option<Option<i64>> {
+        &self.opt_ttl
+    }
+
     pub fn is_all_none(&self) -> bool {
-        self.name.is_none() && self.schema_fields.is_none() && self.opt_auth_column_id.is_none()
+        self.name.is_none()
+            && self.schema_fields.is_none()
+            && self.opt_auth_column_id.is_none()
+            && self.opt_ttl.is_none()
     }
 }
 
@@ -155,6 +173,7 @@ pub struct CollectionResJson {
     name: String,
     schema_fields: HashMap<String, SchemaFieldPropsJson>,
     opt_auth_column_id: bool,
+    opt_ttl: Option<i64>,
 }
 
 impl CollectionResJson {
@@ -166,6 +185,7 @@ impl CollectionResJson {
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldPropsJson>,
         opt_auth_column_id: &bool,
+        opt_ttl: &Option<i64>,
     ) -> Self {
         Self {
             id: *id,
@@ -175,6 +195,7 @@ impl CollectionResJson {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             opt_auth_column_id: *opt_auth_column_id,
+            opt_ttl: *opt_ttl,
         }
     }
 }
@@ -197,6 +218,7 @@ pub struct SchemaFieldPropsJson {
     unique: Option<bool>,
     indexed: Option<bool>,
     auth_column: Option<bool>,
+    hidden: Option<bool>,
 }
 
 impl SchemaFieldPropsJson {
@@ -206,6 +228,7 @@ impl SchemaFieldPropsJson {
         unique: &Option<bool>,
         indexed: &Option<bool>,
         auth_column: &Option<bool>,
+        hidden: &Option<bool>,
     ) -> Self {
         Self {
             kind: kind.to_owned(),
@@ -213,6 +236,7 @@ impl SchemaFieldPropsJson {
             unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
+            hidden: *hidden,
         }
     }
 
@@ -234,5 +258,9 @@ impl SchemaFieldPropsJson {
 
     pub fn auth_column(&self) -> &Option<bool> {
         &self.auth_column
+    }
+
+    pub fn hidden(&self) -> &Option<bool> {
+        &self.hidden
     }
 }

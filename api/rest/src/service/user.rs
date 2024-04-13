@@ -44,6 +44,7 @@ async fn find_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpResponse 
                 &None,
                 &HashSet::new(),
                 &collection_data,
+                &false,
             )
             .await
             {

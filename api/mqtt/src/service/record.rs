@@ -136,6 +136,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
             &None,
             &HashSet::from_iter(["_id"]),
             &collection_data,
+            &true,
         )
         .await
         {

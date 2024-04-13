@@ -205,6 +205,7 @@ async fn insert_one(
             &None,
             &HashSet::from_iter(["_id"]),
             &collection_data,
+            &token_data.is_none(),
         )
         .await
         {
@@ -452,6 +453,7 @@ async fn find_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -477,7 +479,7 @@ async fn find_one(
                     user_id
                 }
                 None => {
-                    if let Some(token_data) = token_data {
+                    if let Some(token_data) = &token_data {
                         Some(*token_data.id())
                     } else {
                         return Response::error_raw(
@@ -525,6 +527,7 @@ async fn find_one(
         &created_by,
         &fields,
         &collection_data,
+        &token_data.is_none(),
     )
     .await
     {
@@ -680,6 +683,7 @@ async fn update_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -705,7 +709,7 @@ async fn update_one(
                     user_id
                 }
                 None => {
-                    if let Some(token_data) = token_data {
+                    if let Some(token_data) = &token_data {
                         Some(*token_data.id())
                     } else {
                         return Response::error_raw(
@@ -754,6 +758,7 @@ async fn update_one(
         &created_by,
         &HashSet::new(),
         &collection_data,
+        &token_data.is_none(),
     )
     .await
     {
@@ -987,6 +992,7 @@ async fn delete_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -1012,7 +1018,7 @@ async fn delete_one(
                     user_id
                 }
                 None => {
-                    if let Some(token_data) = token_data {
+                    if let Some(token_data) = &token_data {
                         Some(*token_data.id())
                     } else {
                         return Response::error_raw(
@@ -1045,6 +1051,7 @@ async fn delete_one(
         &created_by,
         &fields,
         &collection_data,
+        &token_data.is_none(),
     )
     .await
     {
@@ -1242,6 +1249,7 @@ async fn find_many(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -1267,7 +1275,7 @@ async fn find_many(
                     user_id
                 }
                 None => {
-                    if let Some(token_data) = token_data {
+                    if let Some(token_data) = &token_data {
                         Some(*token_data.id())
                     } else {
                         return Response::error_raw(
@@ -1359,6 +1367,7 @@ async fn find_many(
         &groups,
         &orders,
         &pagination,
+        &token_data.is_none(),
     )
     .await
     {

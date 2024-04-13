@@ -2,6 +2,7 @@ use std::{path::Path, str::FromStr};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use futures::future;
 use hb_db_mysql::model::file::FileModel as FileMysqlModel;
 use hb_db_postgresql::model::file::FileModel as FilePostgresModel;
 use hb_db_scylladb::model::file::FileModel as FileScyllaModel;
@@ -11,7 +12,7 @@ use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use tokio::fs;
 use uuid::Uuid;
 
-use crate::{util::conversion, Db};
+use crate::{bucket::BucketDao, util::conversion, Db};
 
 pub struct FileDao {
     id: Uuid,
@@ -98,6 +99,18 @@ impl FileDao {
         Self::db_delete(db, id).await
     }
 
+    async fn delete_expired(db: &Db, bucket_data: &BucketDao) -> Result<()> {
+        if let Some(ttl_seconds) = bucket_data.opt_ttl() {
+            let files_data = Self::db_select_many_expired(db, ttl_seconds).await?;
+            let mut delete_expired_mut = Vec::with_capacity(files_data.len());
+            for file_data in &files_data {
+                delete_expired_mut.push(Self::delete(db, bucket_data.path(), &file_data.id));
+            }
+            future::try_join_all(delete_expired_mut).await?;
+        }
+        Ok(())
+    }
+
     async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(db) => db.insert_file(&self.to_scylladb_model()).await,
@@ -107,7 +120,9 @@ impl FileDao {
         }
     }
 
-    pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
+    pub async fn db_select(db: &Db, bucket_data: &BucketDao, id: &Uuid) -> Result<Self> {
+        Self::delete_expired(db, bucket_data).await?;
+
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_file(id).await?),
             Db::PostgresqlDb(db) => Self::from_postgresdb_model(&db.select_file(id).await?),
@@ -118,16 +133,18 @@ impl FileDao {
 
     pub async fn db_select_many_by_bucket_id(
         db: &Db,
-        bucket_id: &Uuid,
+        bucket_data: &BucketDao,
         before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<(Vec<Self>, i64)> {
+        Self::delete_expired(db, bucket_data).await?;
+
         match db {
             Db::ScyllaDb(db) => {
                 let mut files_data = Vec::new();
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id)
+                    db.select_many_files_by_bucket_id(bucket_data.id(), before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_data.id())
                 )?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
@@ -136,8 +153,8 @@ impl FileDao {
             }
             Db::PostgresqlDb(db) => {
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id)
+                    db.select_many_files_by_bucket_id(bucket_data.id(), before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_data.id())
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -147,8 +164,8 @@ impl FileDao {
             }
             Db::MysqlDb(db) => {
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id)
+                    db.select_many_files_by_bucket_id(bucket_data.id(), before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_data.id())
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -158,8 +175,8 @@ impl FileDao {
             }
             Db::SqliteDb(db) => {
                 let (files, total) = tokio::try_join!(
-                    db.select_many_files_by_bucket_id(bucket_id, before_id, limit),
-                    db.count_many_files_by_bucket_id(bucket_id)
+                    db.select_many_files_by_bucket_id(bucket_data.id(), before_id, limit),
+                    db.count_many_files_by_bucket_id(bucket_data.id())
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -173,18 +190,23 @@ impl FileDao {
     pub async fn db_select_many_by_created_by_and_bucket_id(
         db: &Db,
         created_by: &Uuid,
-        bucket_id: &Uuid,
+        bucket_data: &BucketDao,
         before_id: &Option<Uuid>,
         limit: &Option<i32>,
     ) -> Result<(Vec<Self>, i64)> {
+        Self::delete_expired(db, bucket_data).await?;
+
         match db {
             Db::ScyllaDb(db) => {
                 let mut files_data = Vec::new();
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, before_id, limit,
+                        created_by,
+                        bucket_data.id(),
+                        before_id,
+                        limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_data.id())
                 )?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
@@ -194,9 +216,12 @@ impl FileDao {
             Db::PostgresqlDb(db) => {
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, before_id, limit,
+                        created_by,
+                        bucket_data.id(),
+                        before_id,
+                        limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_data.id())
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -207,9 +232,12 @@ impl FileDao {
             Db::MysqlDb(db) => {
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, before_id, limit,
+                        created_by,
+                        bucket_data.id(),
+                        before_id,
+                        limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_data.id())
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
@@ -220,15 +248,55 @@ impl FileDao {
             Db::SqliteDb(db) => {
                 let (files, total) = tokio::try_join!(
                     db.select_many_files_by_created_by_and_bucket_id(
-                        created_by, bucket_id, before_id, limit,
+                        created_by,
+                        bucket_data.id(),
+                        before_id,
+                        limit,
                     ),
-                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_id)
+                    db.count_many_files_by_created_by_and_bucket_id(created_by, bucket_data.id())
                 )?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_sqlitedb_model(file)?)
                 }
                 Ok((files_data, total))
+            }
+        }
+    }
+
+    async fn db_select_many_expired(db: &Db, ttl_seconds: &i64) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut files_data = Vec::new();
+                let files = db.select_many_expired_file(ttl_seconds).await?;
+                for file in files {
+                    files_data.push(Self::from_scylladb_model(&file?)?);
+                }
+                Ok(files_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_postgresdb_model(file)?);
+                }
+                Ok(files_data)
+            }
+            Db::MysqlDb(db) => {
+                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_mysqldb_model(file)?);
+                }
+                Ok(files_data)
+            }
+            Db::SqliteDb(db) => {
+                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_sqlitedb_model(file)?);
+                }
+                Ok(files_data)
             }
         }
     }

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use futures::future;
 use hb_db_mysql::model::bucket::BucketModel as BucketMysqlModel;
 use hb_db_postgresql::model::bucket::BucketModel as BucketPostgresModel;
 use hb_db_scylladb::model::bucket::BucketModel as BucketScyllaModel;
@@ -17,10 +18,16 @@ pub struct BucketDao {
     project_id: Uuid,
     name: String,
     path: String,
+    opt_ttl: Option<i64>,
 }
 
 impl BucketDao {
-    pub async fn new(project_id: &Uuid, name: &str, path: &str) -> Result<Self> {
+    pub async fn new(
+        project_id: &Uuid,
+        name: &str,
+        path: &str,
+        opt_ttl: &Option<i64>,
+    ) -> Result<Self> {
         fs::create_dir_all(path).await?;
 
         let now = Utc::now();
@@ -32,6 +39,7 @@ impl BucketDao {
             project_id: *project_id,
             name: name.to_owned(),
             path: path.to_owned(),
+            opt_ttl: *opt_ttl,
         })
     }
 
@@ -59,8 +67,22 @@ impl BucketDao {
         &self.path
     }
 
+    pub fn opt_ttl(&self) -> &Option<i64> {
+        &self.opt_ttl
+    }
+
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_owned();
+    }
+
+    pub fn set_opt_ttl(&mut self, opt_ttl: &Option<i64>) {
+        if let Some(opt_ttl) = opt_ttl {
+            if *opt_ttl <= 0 {
+                self.opt_ttl = None;
+                return;
+            }
+        }
+        self.opt_ttl = *opt_ttl;
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -131,10 +153,13 @@ impl BucketDao {
     pub async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
         let bucket_data = Self::db_select(db, id).await?;
 
-        let (files_data, _) = FileDao::db_select_many_by_bucket_id(db, id, &None, &None).await?;
+        let (files_data, _) =
+            FileDao::db_select_many_by_bucket_id(db, &bucket_data, &None, &None).await?;
+        let mut delete_file_mut = Vec::with_capacity(files_data.len());
         for file_data in &files_data {
-            FileDao::delete(db, &bucket_data.path, file_data.id()).await?;
+            delete_file_mut.push(FileDao::delete(db, &bucket_data.path, file_data.id()));
         }
+        future::try_join_all(delete_file_mut).await?;
 
         BucketRuleDao::db_delete_many_by_bucket_id(db, id).await?;
 
@@ -154,6 +179,7 @@ impl BucketDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             path: model.path().to_owned(),
+            opt_ttl: *model.opt_ttl(),
         })
     }
 
@@ -165,6 +191,7 @@ impl BucketDao {
             &self.project_id,
             &self.name,
             &self.path,
+            &self.opt_ttl,
         )
     }
 
@@ -176,6 +203,7 @@ impl BucketDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             path: model.path().to_owned(),
+            opt_ttl: *model.opt_ttl(),
         }
     }
 
@@ -187,6 +215,7 @@ impl BucketDao {
             &self.project_id,
             &self.name,
             &self.path,
+            &self.opt_ttl,
         )
     }
 
@@ -198,6 +227,7 @@ impl BucketDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             path: model.path().to_owned(),
+            opt_ttl: *model.opt_ttl(),
         }
     }
 
@@ -209,6 +239,7 @@ impl BucketDao {
             &self.project_id,
             &self.name,
             &self.path,
+            &self.opt_ttl,
         )
     }
 
@@ -220,6 +251,7 @@ impl BucketDao {
             project_id: *model.project_id(),
             name: model.name().to_owned(),
             path: model.path().to_owned(),
+            opt_ttl: *model.opt_ttl(),
         }
     }
 
@@ -231,6 +263,7 @@ impl BucketDao {
             &self.project_id,
             &self.name,
             &self.path,
+            &self.opt_ttl,
         )
     }
 }

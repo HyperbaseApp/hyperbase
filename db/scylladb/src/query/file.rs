@@ -1,5 +1,9 @@
-use anyhow::Result;
-use scylla::{serialize::value::SerializeCql, transport::session::TypedRowIter, CachingSession};
+use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
+use scylla::{
+    frame::value::CqlTimestamp, serialize::value::SerializeCql, transport::session::TypedRowIter,
+    CachingSession,
+};
 use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::file::FileModel};
@@ -8,8 +12,9 @@ const INSERT: &str = "INSERT INTO \"hyperbase\".\"files\" (\"id\", \"created_by\
 const SELECT: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
-const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ?";
-const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ?";
+const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
+const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
+const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"hyperbase\".\"files\" WHERE \"updated_at\" < ? ALLOW FILTERING";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"created_by\" = ?, \"updated_at\" = ?, \"file_name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
 
@@ -48,6 +53,10 @@ pub async fn init(cached_session: &CachingSession) {
         .unwrap();
     cached_session
         .add_prepared_statement(&COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID.into())
+        .await
+        .unwrap();
+    cached_session
+        .add_prepared_statement(&SELECT_MANY_EXPIRE.into())
         .await
         .unwrap();
     cached_session
@@ -140,6 +149,28 @@ impl ScyllaDb {
             .await?
             .first_row_typed::<(i64,)>()?
             .0)
+    }
+
+    pub async fn select_many_expired_file(
+        &self,
+        ttl_seconds: &i64,
+    ) -> Result<TypedRowIter<FileModel>> {
+        Ok(self
+            .execute(
+                SELECT_MANY_EXPIRE,
+                [CqlTimestamp(
+                    Utc::now()
+                        .checked_sub_signed(
+                            Duration::try_seconds(*ttl_seconds)
+                                .ok_or_else(|| Error::msg("bucket ttl is out of range."))?,
+                        )
+                        .ok_or_else(|| Error::msg("bucket ttl is out of range."))?
+                        .timestamp_millis(),
+                )]
+                .as_ref(),
+            )
+            .await?
+            .rows_typed()?)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

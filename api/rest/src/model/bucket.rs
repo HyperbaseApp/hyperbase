@@ -16,11 +16,16 @@ impl InsertOneBucketReqPath {
 #[derive(Deserialize)]
 pub struct InsertOneBucketReqJson {
     name: String,
+    opt_ttl: Option<i64>,
 }
 
 impl InsertOneBucketReqJson {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn opt_ttl(&self) -> &Option<i64> {
+        &self.opt_ttl
     }
 }
 
@@ -59,11 +64,25 @@ impl UpdateOneBucketReqPath {
 #[derive(Deserialize)]
 pub struct UpdateOneBucketReqJson {
     name: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "::serde_with::rust::double_option"
+    )]
+    opt_ttl: Option<Option<i64>>,
 }
 
 impl UpdateOneBucketReqJson {
     pub fn name(&self) -> &Option<String> {
         &self.name
+    }
+
+    pub fn opt_ttl(&self) -> &Option<Option<i64>> {
+        &self.opt_ttl
+    }
+
+    pub fn is_all_none(&self) -> bool {
+        self.name.is_none() && self.opt_ttl.is_none()
     }
 }
 
@@ -101,6 +120,7 @@ pub struct BucketResJson {
     updated_at: DateTime<Utc>,
     project_id: Uuid,
     name: String,
+    opt_ttl: Option<i64>,
 }
 
 impl BucketResJson {
@@ -110,6 +130,7 @@ impl BucketResJson {
         updated_at: &DateTime<Utc>,
         project_id: &Uuid,
         name: &str,
+        opt_ttl: &Option<i64>,
     ) -> Self {
         Self {
             id: *id,
@@ -117,6 +138,7 @@ impl BucketResJson {
             updated_at: *updated_at,
             project_id: *project_id,
             name: name.to_owned(),
+            opt_ttl: *opt_ttl,
         }
     }
 }

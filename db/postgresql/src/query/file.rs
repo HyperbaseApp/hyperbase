@@ -1,4 +1,5 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
 use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
@@ -10,6 +11,7 @@ const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bucket_id\" = $1";
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
+const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"updated_at\" < $1";
 const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3 WHERE \"id\" = $4";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
@@ -25,6 +27,7 @@ pub async fn init(pool: &Pool<Postgres>) {
         pool.prepare(COUNT_MANY_BY_BUCKET_ID),
         pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
         pool.prepare(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
+        pool.prepare(SELECT_MANY_EXPIRE),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -131,6 +134,21 @@ impl PostgresDb {
             )
             .await?
             .0)
+    }
+
+    pub async fn select_many_expired_file(&self, ttl_seconds: &i64) -> Result<Vec<FileModel>> {
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_EXPIRE).bind(
+                    Utc::now()
+                        .checked_sub_signed(
+                            Duration::try_seconds(*ttl_seconds)
+                                .ok_or_else(|| Error::msg("bucket ttl is out of range."))?,
+                        )
+                        .ok_or_else(|| Error::msg("bucket ttl is out of range."))?,
+                ),
+            )
+            .await?)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

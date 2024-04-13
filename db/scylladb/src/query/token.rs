@@ -6,8 +6,8 @@ use crate::{db::ScyllaDb, model::token::TokenModel};
 
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"tokens\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"admin_id\" = ? AND \"project_id\" = ? ORDER BY \"id\" DESC ALLOW FILTERING";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"project_id\" = ? ORDER BY \"id\" DESC";
+const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"admin_id\" = ? AND \"project_id\" = ? ALLOW FILTERING";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"project_id\" = ?";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"tokens\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ?, \"allow_anonymous\" = ?, \"expired_at\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 
@@ -15,14 +15,6 @@ pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up tokens table");
 
     cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"tokens\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" uuid, \"admin_id\" uuid, \"name\" text, \"token\" text, \"allow_anonymous\" boolean, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
-    cached_session
-        .get_session()
-        .query(
-            "CREATE INDEX IF NOT EXISTS ON \"hyperbase\".\"tokens\" (\"admin_id\")",
-            &[],
-        )
-        .await
-        .unwrap();
     cached_session
         .get_session()
         .query(

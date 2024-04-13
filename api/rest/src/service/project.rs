@@ -416,6 +416,7 @@ async fn duplicate_one(
             collection_data.name(),
             collection_data.schema_fields(),
             collection_data.opt_auth_column_id(),
+            collection_data.opt_ttl(),
         );
         if let Err(err) = new_collection_data.db_insert(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -433,6 +434,7 @@ async fn duplicate_one(
                 &Vec::new(),
                 &Vec::new(),
                 &RecordPagination::new(&None),
+                &true,
             )
             .await
             {
@@ -487,6 +489,7 @@ async fn duplicate_one(
             new_project_data.id(),
             bucket_data.name(),
             ctx.bucket_path(),
+            bucket_data.opt_ttl(),
         )
         .await
         {
@@ -504,7 +507,7 @@ async fn duplicate_one(
         if *data.with_files() {
             let (files_data, _) = match FileDao::db_select_many_by_bucket_id(
                 ctx.dao().db(),
-                bucket_data.id(),
+                bucket_data,
                 &None,
                 &None,
             )

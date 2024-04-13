@@ -31,6 +31,7 @@ pub struct CollectionDao {
     name: String,
     schema_fields: HashMap<String, SchemaFieldProps>,
     opt_auth_column_id: bool,
+    opt_ttl: Option<i64>,
     _preserve: Option<Preserve>,
 }
 
@@ -40,6 +41,7 @@ impl CollectionDao {
         name: &str,
         schema_fields: &HashMap<String, SchemaFieldProps>,
         opt_auth_column_id: &bool,
+        opt_ttl: &Option<i64>,
     ) -> Self {
         let now = Utc::now();
 
@@ -51,6 +53,7 @@ impl CollectionDao {
             name: name.to_owned(),
             schema_fields: schema_fields.clone(),
             opt_auth_column_id: *opt_auth_column_id,
+            opt_ttl: *opt_ttl,
             _preserve: None,
         }
     }
@@ -83,6 +86,10 @@ impl CollectionDao {
         &self.opt_auth_column_id
     }
 
+    pub fn opt_ttl(&self) -> &Option<i64> {
+        &self.opt_ttl
+    }
+
     pub fn set_name(&mut self, name: &str) {
         self.name = name.to_owned();
     }
@@ -100,6 +107,16 @@ impl CollectionDao {
 
     pub fn set_opt_auth_column_id(&mut self, opt_auth_column_id: &bool) {
         self.opt_auth_column_id = *opt_auth_column_id;
+    }
+
+    pub fn set_opt_ttl(&mut self, opt_ttl: &Option<i64>) {
+        if let Some(opt_ttl) = opt_ttl {
+            if *opt_ttl <= 0 {
+                self.opt_ttl = None;
+                return;
+            }
+        }
+        self.opt_ttl = *opt_ttl;
     }
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
@@ -381,6 +398,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             opt_auth_column_id: *model.opt_auth_column_id(),
+            opt_ttl: *model.opt_ttl(),
             _preserve: None,
         })
     }
@@ -398,6 +416,7 @@ impl CollectionDao {
                 .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
                 .collect(),
             &self.opt_auth_column_id,
+            &self.opt_ttl,
         )
     }
 
@@ -418,6 +437,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             opt_auth_column_id: *model.opt_auth_column_id(),
+            opt_ttl: *model.opt_ttl(),
             _preserve: None,
         })
     }
@@ -436,6 +456,7 @@ impl CollectionDao {
                     .collect(),
             ),
             &self.opt_auth_column_id,
+            &self.opt_ttl,
         )
     }
 
@@ -456,6 +477,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             opt_auth_column_id: *model.opt_auth_column_id(),
+            opt_ttl: *model.opt_ttl(),
             _preserve: None,
         })
     }
@@ -474,6 +496,7 @@ impl CollectionDao {
                     .collect(),
             ),
             &self.opt_auth_column_id,
+            &self.opt_ttl,
         )
     }
 
@@ -494,6 +517,7 @@ impl CollectionDao {
             name: model.name().to_owned(),
             schema_fields,
             opt_auth_column_id: *model.opt_auth_column_id(),
+            opt_ttl: *model.opt_ttl(),
             _preserve: None,
         })
     }
@@ -512,6 +536,7 @@ impl CollectionDao {
                     .collect(),
             ),
             &self.opt_auth_column_id,
+            &self.opt_ttl,
         )
     }
 }
@@ -523,6 +548,7 @@ pub struct SchemaFieldProps {
     unique: bool,
     indexed: bool,
     auth_column: bool,
+    hidden: bool,
 }
 
 impl SchemaFieldProps {
@@ -532,6 +558,7 @@ impl SchemaFieldProps {
         unique: &bool,
         indexed: &bool,
         auth_column: &bool,
+        hidden: &bool,
     ) -> Self {
         Self {
             kind: *kind,
@@ -539,6 +566,7 @@ impl SchemaFieldProps {
             unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
+            hidden: *hidden,
         }
     }
 
@@ -562,6 +590,10 @@ impl SchemaFieldProps {
         &self.auth_column
     }
 
+    pub fn hidden(&self) -> &bool {
+        &self.hidden
+    }
+
     fn from_scylladb_model(model: &SchemaFieldPropsScyllaModel) -> Result<Self> {
         let kind = match ColumnKind::from_str(model.kind()) {
             Ok(kind) => kind,
@@ -573,6 +605,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hidden: *model.hidden(),
         })
     }
 
@@ -584,6 +617,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hidden,
         )
     }
 
@@ -598,6 +632,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hidden: *model.hidden(),
         })
     }
 
@@ -609,6 +644,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hidden,
         )
     }
 
@@ -623,6 +659,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hidden: *model.hidden(),
         })
     }
 
@@ -634,6 +671,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hidden,
         )
     }
 
@@ -648,6 +686,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hidden: *model.hidden(),
         })
     }
 
@@ -659,6 +698,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hidden,
         )
     }
 }

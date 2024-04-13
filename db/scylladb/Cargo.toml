@@ -10,9 +10,11 @@ hb_log = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 scylla = { workspace = true }
+tokio = { workspace = true }
 uuid = { workspace = true }
 
 

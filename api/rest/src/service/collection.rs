@@ -129,6 +129,7 @@ async fn insert_one(
                 &props.unique().unwrap_or(false),
                 &props.indexed().unwrap_or(false),
                 &props.auth_column().unwrap_or(false),
+                &props.hidden().unwrap_or(false),
             ),
         );
     }
@@ -138,6 +139,7 @@ async fn insert_one(
         data.name(),
         &schema_fields,
         data.opt_auth_column_id(),
+        data.opt_ttl(),
     );
     if let Err(err) = collection_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
@@ -164,11 +166,13 @@ async fn insert_one(
                             &Some(*props.unique()),
                             &Some(*props.indexed()),
                             &Some(*props.auth_column()),
+                            &Some(*props.hidden()),
                         ),
                     )
                 })
                 .collect(),
             collection_data.opt_auth_column_id(),
+            collection_data.opt_ttl(),
         ),
     )
 }
@@ -243,11 +247,13 @@ async fn find_one(
                             &Some(*value.unique()),
                             &Some(*value.indexed()),
                             &Some(*value.auth_column()),
+                            &Some(*value.hidden()),
                         ),
                     )
                 })
                 .collect(),
             collection_data.opt_auth_column_id(),
+            collection_data.opt_ttl(),
         ),
     )
 }
@@ -287,7 +293,7 @@ async fn subscribe(
                     *token_id,
                     match user {
                         Some(user) => Some(*user.id()),
-                        None => todo!(),
+                        None => None,
                     },
                 )),
             )
@@ -427,6 +433,7 @@ async fn update_one(
                     &props.unique().unwrap_or(false),
                     &props.indexed().unwrap_or(false),
                     &props.auth_column().unwrap_or(false),
+                    &props.hidden().unwrap_or(false),
                 ),
             );
         }
@@ -435,6 +442,10 @@ async fn update_one(
 
     if let Some(opt_auth_column_id) = data.opt_auth_column_id() {
         collection_data.set_opt_auth_column_id(opt_auth_column_id);
+    }
+
+    if let Some(opt_ttl) = data.opt_ttl() {
+        collection_data.set_opt_ttl(opt_ttl);
     }
 
     if !data.is_all_none() {
@@ -464,11 +475,13 @@ async fn update_one(
                             &Some(*value.unique()),
                             &Some(*value.indexed()),
                             &Some(*value.auth_column()),
+                            &Some(*value.hidden()),
                         ),
                     )
                 })
                 .collect(),
             collection_data.opt_auth_column_id(),
+            collection_data.opt_ttl(),
         ),
     )
 }
@@ -612,11 +625,13 @@ async fn find_many(
                                     &Some(*value.unique()),
                                     &Some(*value.indexed()),
                                     &Some(*value.auth_column()),
+                                    &Some(*value.hidden()),
                                 ),
                             )
                         })
                         .collect(),
                     data.opt_auth_column_id(),
+                    data.opt_ttl(),
                 )
             })
             .collect::<Vec<_>>(),

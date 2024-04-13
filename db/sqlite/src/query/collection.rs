@@ -4,16 +4,16 @@ use uuid::Uuid;
 
 use crate::{db::SqliteDb, model::collection::CollectionModel};
 
-const INSERT: &str = "INSERT INTO \"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\") VALUES (?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\" FROM \"collections\" WHERE \"id\" = ?";
-const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\" FROM \"collections\" WHERE \"project_id\" = ? ORDER BY \"id\" DESC";
-const UPDATE: &str = "UPDATE \"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"opt_auth_column_id\" = ? WHERE \"id\" = ?";
+const INSERT: &str = "INSERT INTO \"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"collections\" WHERE \"id\" = ?";
+const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"collections\" WHERE \"project_id\" = ? ORDER BY \"id\" DESC";
+const UPDATE: &str = "UPDATE \"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"opt_auth_column_id\" = ?, \"opt_ttl\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"collections\" WHERE \"id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "SQLite: Setting up collections table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"collections\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"name\" text, \"schema_fields\" blob, \"opt_auth_column_id\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"collections\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"name\" text, \"schema_fields\" blob, \"opt_auth_column_id\" boolean, \"opt_ttl\" bigint, PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),
@@ -35,7 +35,8 @@ impl SqliteDb {
                 .bind(value.project_id())
                 .bind(value.name())
                 .bind(value.schema_fields())
-                .bind(value.opt_auth_column_id()),
+                .bind(value.opt_auth_column_id())
+                .bind(value.opt_ttl()),
         )
         .await?;
         Ok(())
@@ -61,6 +62,7 @@ impl SqliteDb {
                 .bind(value.name())
                 .bind(value.schema_fields())
                 .bind(value.opt_auth_column_id())
+                .bind(value.opt_ttl())
                 .bind(value.id()),
         )
         .await?;

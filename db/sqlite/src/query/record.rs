@@ -8,7 +8,7 @@ pub fn create_table(
     columns: &HashMap<String, SchemaFieldPropsModel>,
 ) -> String {
     format!(
-        "CREATE TABLE IF NOT EXISTS \"{}\" (\"_id\" blob, \"_created_by\" blob, {}PRIMARY KEY (\"_id\")) ",
+        "CREATE TABLE IF NOT EXISTS \"{}\" (\"_id\" blob, \"_created_by\" blob, \"_updated_at\" timestamp, {}PRIMARY KEY (\"_id\")) ",
         record_table,
         columns
             .iter()
@@ -175,6 +175,10 @@ pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
             .map(|col| format!("\"{col}\" = ?"))
             .join(" AND ")
     )
+}
+
+pub fn delete_expired(record_table: &str) -> String {
+    format!("DELETE FROM \"{record_table}\" WHERE _updated_at < ?")
 }
 
 pub fn count(record_table: &str, filter: &str) -> String {

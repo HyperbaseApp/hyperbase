@@ -345,6 +345,7 @@ async fn token_based(
             &Vec::new(),
             &Vec::new(),
             &RecordPagination::new(&Some(2)),
+            &true,
         )
         .await
         {

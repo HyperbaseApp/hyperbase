@@ -136,6 +136,7 @@ async fn insert_one(
             &None,
             &HashSet::from_iter(["_id"]),
             &collection_data,
+            &token_data.is_none(),
         )
         .await
         {
@@ -309,6 +310,7 @@ async fn find_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -358,7 +360,7 @@ async fn find_one(
         );
     };
 
-    let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
+    let file_data = match FileDao::db_select(ctx.dao().db(), &bucket_data, path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -486,6 +488,7 @@ async fn download_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -535,7 +538,7 @@ async fn download_one(
         );
     };
 
-    let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
+    let file_data = match FileDao::db_select(ctx.dao().db(), &bucket_data, path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -667,6 +670,7 @@ async fn update_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -716,7 +720,8 @@ async fn update_one(
         );
     };
 
-    let mut file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
+    let mut file_data = match FileDao::db_select(ctx.dao().db(), &bucket_data, path.file_id()).await
+    {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -859,6 +864,7 @@ async fn delete_one(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -908,7 +914,7 @@ async fn delete_one(
         );
     };
 
-    let file_data = match FileDao::db_select(ctx.dao().db(), path.file_id()).await {
+    let file_data = match FileDao::db_select(ctx.dao().db(), &bucket_data, path.file_id()).await {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
@@ -1033,6 +1039,7 @@ async fn find_many(
                         &None,
                         &HashSet::from_iter(["_id"]),
                         &collection_data,
+                        &token_data.is_none(),
                     )
                     .await
                     {
@@ -1087,7 +1094,7 @@ async fn find_many(
             match FileDao::db_select_many_by_created_by_and_bucket_id(
                 ctx.dao().db(),
                 &created_by,
-                path.bucket_id(),
+                &bucket_data,
                 query.before_id(),
                 query.limit(),
             )
@@ -1100,7 +1107,7 @@ async fn find_many(
         None => {
             match FileDao::db_select_many_by_bucket_id(
                 ctx.dao().db(),
-                path.bucket_id(),
+                &bucket_data,
                 query.before_id(),
                 query.limit(),
             )

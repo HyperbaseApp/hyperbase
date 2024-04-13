@@ -75,7 +75,13 @@ async fn insert_one(
         );
     }
 
-    let bucket_data = match BucketDao::new(project_data.id(), data.name(), ctx.bucket_path()).await
+    let bucket_data = match BucketDao::new(
+        project_data.id(),
+        data.name(),
+        ctx.bucket_path(),
+        data.opt_ttl(),
+    )
+    .await
     {
         Ok(data) => data,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
@@ -94,6 +100,7 @@ async fn insert_one(
             bucket_data.updated_at(),
             bucket_data.project_id(),
             bucket_data.name(),
+            bucket_data.opt_ttl(),
         ),
     )
 }
@@ -156,6 +163,7 @@ async fn find_one(
             bucket_data.updated_at(),
             bucket_data.project_id(),
             bucket_data.name(),
+            bucket_data.opt_ttl(),
         ),
     )
 }
@@ -212,7 +220,13 @@ async fn update_one(
 
     if let Some(name) = data.name() {
         bucket_data.set_name(name);
+    }
 
+    if let Some(opt_ttl) = data.opt_ttl() {
+        bucket_data.set_opt_ttl(opt_ttl);
+    }
+
+    if !data.is_all_none() {
         if let Err(err) = bucket_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
@@ -227,6 +241,7 @@ async fn update_one(
             bucket_data.updated_at(),
             bucket_data.project_id(),
             bucket_data.name(),
+            bucket_data.opt_ttl(),
         ),
     )
 }
@@ -348,6 +363,7 @@ async fn find_many(
                     data.updated_at(),
                     data.project_id(),
                     data.name(),
+                    data.opt_ttl(),
                 )
             })
             .collect::<Vec<_>>(),

@@ -2,6 +2,7 @@ use std::collections::hash_map::Keys;
 
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use anyhow::{Error, Result};
+use chrono::{Duration, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
     model::{
@@ -46,7 +47,10 @@ use hb_db_sqlite::{
     },
     query::{record as sqlite_record, system::COUNT_TABLE as SQLITE_COUNT_TABLE},
 };
-use scylla::{frame::response::result::CqlValue as ScyllaCqlValue, serialize::value::SerializeCql};
+use scylla::{
+    frame::{response::result::CqlValue as ScyllaCqlValue, value::CqlTimestamp},
+    serialize::value::SerializeCql,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -63,14 +67,18 @@ pub struct RecordDao {
 impl RecordDao {
     pub fn new(created_by: &Uuid, collection_id: &Uuid, capacity: &Option<usize>) -> Self {
         let mut data = HashMap::with_capacity(match capacity {
-            Some(capacity) => capacity + 2,
-            None => 2,
+            Some(capacity) => capacity + 3,
+            None => 3,
         });
+        data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::now_v7())));
         data.insert(
             "_created_by".to_owned(),
             ColumnValue::Uuid(Some(*created_by)),
         );
-        data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::now_v7())));
+        data.insert(
+            "_updated_at".to_owned(),
+            ColumnValue::Timestamp(Some(Utc::now())),
+        );
 
         Self {
             table_name: Self::new_table_name(collection_id),
@@ -398,7 +406,11 @@ impl RecordDao {
         created_by: &Option<Uuid>,
         fields: &HashSet<&str>,
         collection_data: &CollectionDao,
+        is_admin: &bool,
     ) -> Result<Self> {
+        if let Some(ttl_seconds) = collection_data.opt_ttl() {
+            Self::db_delete_expired(db, collection_data.id(), ttl_seconds).await?;
+        }
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -406,9 +418,8 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
-                        for column in ["_id", "_created_by"] {
+                        for column in ["_id", "_created_by", "_updated_at"] {
                             columns.push(column);
                         }
                         if collection_data.schema_fields().get(*column).is_some() {
@@ -416,9 +427,8 @@ impl RecordDao {
                         }
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-
-                    for column in ["_id", "_created_by"] {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    for column in ["_id", "_created_by", "_updated_at"] {
                         columns.push(column);
                     }
                     for column in collection_data.schema_fields().keys() {
@@ -434,8 +444,10 @@ impl RecordDao {
                     let kind;
                     if ["_id", "_created_by"].contains(&columns[idx]) {
                         kind = &ColumnKind::Uuid;
+                    } else if columns[idx] == "_updated_at" {
+                        kind = &ColumnKind::Timestamp;
                     } else {
-                        kind = collection_data
+                        let schema_field = collection_data
                             .schema_fields()
                             .get(columns[idx])
                             .ok_or_else(|| {
@@ -443,8 +455,11 @@ impl RecordDao {
                                     "Field {} is not found in the collection",
                                     columns[idx]
                                 ))
-                            })?
-                            .kind();
+                            })?;
+                        if !*is_admin && *schema_field.hidden() {
+                            continue;
+                        }
+                        kind = schema_field.kind();
                     }
                     match value {
                         Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
@@ -463,9 +478,8 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
-                        for column in ["_id", "_created_by"] {
+                        for column in ["_id", "_created_by", "_updated_at"] {
                             columns.push(column);
                         }
                         if collection_data.schema_fields().get(*column).is_some() {
@@ -473,8 +487,8 @@ impl RecordDao {
                         }
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    columns.append(&mut Vec::from(["_id", "_created_by", "_updated_at"]));
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -488,14 +502,17 @@ impl RecordDao {
                     let kind;
                     if ["_id", "_created_by"].contains(&column) {
                         kind = &ColumnKind::Uuid;
+                    } else if column == "_updated_at" {
+                        kind = &ColumnKind::Timestamp;
                     } else {
-                        kind = collection_data
-                            .schema_fields()
-                            .get(column)
-                            .ok_or_else(|| {
+                        let schema_field =
+                            collection_data.schema_fields().get(column).ok_or_else(|| {
                                 Error::msg(format!("Field {column} is not found in the collection"))
-                            })?
-                            .kind();
+                            })?;
+                        if !*is_admin && *schema_field.hidden() {
+                            continue;
+                        }
+                        kind = schema_field.kind();
                     }
                     data.insert(
                         column.to_owned(),
@@ -511,9 +528,8 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
-                        for column in ["_id", "_created_by"] {
+                        for column in ["_id", "_created_by", "_updated_at"] {
                             columns.push(column);
                         }
                         if collection_data.schema_fields().get(*column).is_some() {
@@ -521,8 +537,8 @@ impl RecordDao {
                         }
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    columns.append(&mut Vec::from(["_id", "_created_by", "_updated_at"]));
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -536,14 +552,17 @@ impl RecordDao {
                     let kind;
                     if ["_id", "_created_by"].contains(&column) {
                         kind = &ColumnKind::Uuid;
+                    } else if column == "_updated_at" {
+                        kind = &ColumnKind::Timestamp;
                     } else {
-                        kind = collection_data
-                            .schema_fields()
-                            .get(column)
-                            .ok_or_else(|| {
+                        let schema_field =
+                            collection_data.schema_fields().get(column).ok_or_else(|| {
                                 Error::msg(format!("Field {column} is not found in the collection"))
-                            })?
-                            .kind();
+                            })?;
+                        if !*is_admin && *schema_field.hidden() {
+                            continue;
+                        }
+                        kind = schema_field.kind();
                     }
                     data.insert(
                         column.to_owned(),
@@ -559,9 +578,8 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
-                        for column in ["_id", "_created_by"] {
+                        for column in ["_id", "_created_by", "_updated_at"] {
                             columns.push(column);
                         }
                         if collection_data.schema_fields().get(*column).is_some() {
@@ -569,8 +587,8 @@ impl RecordDao {
                         }
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    columns.append(&mut Vec::from(["_id", "_created_by", "_updated_at"]));
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -584,14 +602,17 @@ impl RecordDao {
                     let kind;
                     if ["_id", "_created_by"].contains(&column) {
                         kind = &ColumnKind::Uuid;
+                    } else if column == "_updated_at" {
+                        kind = &ColumnKind::Timestamp;
                     } else {
-                        kind = collection_data
-                            .schema_fields()
-                            .get(column)
-                            .ok_or_else(|| {
+                        let schema_field =
+                            collection_data.schema_fields().get(column).ok_or_else(|| {
                                 Error::msg(format!("Field {column} is not found in the collection"))
-                            })?
-                            .kind();
+                            })?;
+                        if !*is_admin && *schema_field.hidden() {
+                            continue;
+                        }
+                        kind = schema_field.kind();
                     }
                     data.insert(
                         column.to_owned(),
@@ -613,7 +634,11 @@ impl RecordDao {
         groups: &Vec<&str>,
         orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
+        is_admin: &bool,
     ) -> Result<(Vec<Self>, i64)> {
+        if let Some(ttl_seconds) = collection_data.opt_ttl() {
+            Self::db_delete_expired(db, collection_data.id(), ttl_seconds).await?;
+        }
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -621,19 +646,16 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
                         if collection_data.schema_fields().get(*column).is_some() {
                             columns.push(*column);
                         }
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 1);
-
-                    for column in ["_id", "_created_by"] {
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    for column in ["_id", "_created_by", "_updated_at"] {
                         columns.push(column);
                     }
-
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -658,8 +680,10 @@ impl RecordDao {
                         let kind;
                         if ["_id", "_created_by"].contains(&columns[idx]) {
                             kind = &ColumnKind::Uuid;
+                        } else if columns[idx] == "_updated_at" {
+                            kind = &ColumnKind::Timestamp;
                         } else {
-                            kind = collection_data
+                            let schema_field = collection_data
                                 .schema_fields()
                                 .get(columns[idx])
                                 .ok_or_else(|| {
@@ -667,8 +691,11 @@ impl RecordDao {
                                         "Field {} is not found in the collection",
                                         columns[idx]
                                     ))
-                                })?
-                                .kind();
+                                })?;
+                            if !*is_admin && *schema_field.hidden() {
+                                continue;
+                            }
+                            kind = schema_field.kind();
                         }
                         match value {
                             Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
@@ -703,13 +730,12 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
                         columns.push(*column);
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    columns.append(&mut Vec::from(["_id", "_created_by", "_updated_at"]));
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -734,16 +760,21 @@ impl RecordDao {
                         let kind;
                         if ["_id", "_created_by"].contains(&column) {
                             kind = &ColumnKind::Uuid;
+                        } else if *column == "_updated_at" {
+                            kind = &ColumnKind::Timestamp;
                         } else {
-                            kind = collection_data
+                            let schema_field = collection_data
                                 .schema_fields()
                                 .get(*column)
                                 .ok_or_else(|| {
                                     Error::msg(format!(
                                         "Field {column} is not found in the collection"
                                     ))
-                                })?
-                                .kind();
+                                })?;
+                            if !*is_admin && *schema_field.hidden() {
+                                continue;
+                            }
+                            kind = schema_field.kind();
                         }
                         data.insert(
                             column.to_string(),
@@ -764,13 +795,12 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
                         columns.push(*column);
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    columns.append(&mut Vec::from(["_id", "_created_by", "_updated_at"]));
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -795,16 +825,21 @@ impl RecordDao {
                         let kind;
                         if ["_id", "_created_by"].contains(&column) {
                             kind = &ColumnKind::Uuid;
+                        } else if *column == "_updated_at" {
+                            kind = &ColumnKind::Timestamp;
                         } else {
-                            kind = collection_data
+                            let schema_field = collection_data
                                 .schema_fields()
                                 .get(*column)
                                 .ok_or_else(|| {
                                     Error::msg(format!(
                                         "Field {column} is not found in the collection"
                                     ))
-                                })?
-                                .kind();
+                                })?;
+                            if !*is_admin && *schema_field.hidden() {
+                                continue;
+                            }
+                            kind = schema_field.kind();
                         }
                         data.insert(
                             column.to_string(),
@@ -825,13 +860,12 @@ impl RecordDao {
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
-
                     for column in fields {
                         columns.push(*column);
                     }
                 } else {
-                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 2);
-                    columns.append(&mut Vec::from(["_id", "_created_by"]));
+                    columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
+                    columns.append(&mut Vec::from(["_id", "_created_by", "_updated_at"]));
                     for column in collection_data.schema_fields().keys() {
                         columns.push(column);
                     }
@@ -856,16 +890,21 @@ impl RecordDao {
                         let kind;
                         if ["_id", "_created_by"].contains(&column) {
                             kind = &ColumnKind::Uuid;
+                        } else if *column == "_updated_at" {
+                            kind = &ColumnKind::Timestamp;
                         } else {
-                            kind = collection_data
+                            let schema_field = collection_data
                                 .schema_fields()
                                 .get(*column)
                                 .ok_or_else(|| {
                                     Error::msg(format!(
                                         "Field {column} is not found in the collection"
                                     ))
-                                })?
-                                .kind();
+                                })?;
+                            if !*is_admin && *schema_field.hidden() {
+                                continue;
+                            }
+                            kind = schema_field.kind();
                         }
                         data.insert(
                             column.to_string(),
@@ -883,7 +922,11 @@ impl RecordDao {
         }
     }
 
-    pub async fn db_update(&self, db: &Db) -> Result<()> {
+    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
+        self.data.insert(
+            "_updated_at".to_owned(),
+            ColumnValue::Timestamp(Some(Utc::now())),
+        );
         match db {
             Db::ScyllaDb(db) => Self::scylladb_update(self, db).await,
             Db::PostgresqlDb(db) => Self::postgresdb_update(self, db).await,
@@ -905,6 +948,17 @@ impl RecordDao {
             }
             Db::MysqlDb(db) => Self::mysqldb_delete(db, collection_id, id, created_by).await,
             Db::SqliteDb(db) => Self::sqlitedb_delete(db, collection_id, id, created_by).await,
+        }
+    }
+
+    async fn db_delete_expired(db: &Db, collection_id: &Uuid, ttl_seconds: &i64) -> Result<()> {
+        match db {
+            Db::ScyllaDb(db) => Self::scylladb_delete_expired(db, collection_id, ttl_seconds).await,
+            Db::PostgresqlDb(db) => {
+                Self::postgresdb_delete_expired(db, collection_id, ttl_seconds).await
+            }
+            Db::MysqlDb(db) => Self::mysqldb_delete_expired(db, collection_id, ttl_seconds).await,
+            Db::SqliteDb(db) => Self::sqlitedb_delete_expired(db, collection_id, ttl_seconds).await,
         }
     }
 
@@ -1103,14 +1157,21 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            if col != "_id" {
+            if col != "_id" && col != "_updated_at" {
                 columns.push(col.as_str());
                 values.push(val.to_scylladb_model()?);
             }
         }
+        match self.data.get("_updated_at") {
+            Some(updated_at) => {
+                columns.push("_updated_at");
+                values.push(updated_at.to_scylladb_model()?);
+            }
+            None => return Err(Error::msg("_updated_at is undefined")),
+        }
         match self.data.get("_id") {
             Some(id) => values.push(id.to_scylladb_model()?),
-            None => return Err(Error::msg("Id is undefined")),
+            None => return Err(Error::msg("_id is undefined")),
         }
         db.execute(&scylla_record::update(&self.table_name, &columns), &values)
             .await?;
@@ -1139,6 +1200,28 @@ impl RecordDao {
             )
             .await?;
         }
+        Ok(())
+    }
+
+    async fn scylladb_delete_expired(
+        db: &ScyllaDb,
+        collection_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<()> {
+        db.execute(
+            &scylla_record::delete_expired(&Self::new_table_name(collection_id)),
+            [CqlTimestamp(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*ttl_seconds)
+                            .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+                    )
+                    .ok_or_else(|| Error::msg("collection ttl is out of range."))?
+                    .timestamp_millis(),
+            )]
+            .as_ref(),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1374,14 +1457,21 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            if col != "_id" {
+            if col != "_id" && col != "_updated_at" {
                 columns.push(col.as_str());
                 values.push(val);
             }
         }
+        match self.data.get("_updated_at") {
+            Some(updated_at) => {
+                columns.push("_updated_at");
+                values.push(updated_at);
+            }
+            None => return Err(Error::msg("_updated_at is undefined")),
+        }
         match self.data.get("_id") {
             Some(id) => values.push(id),
-            None => return Err(Error::msg("Id is undefined")),
+            None => return Err(Error::msg("_id is undefined")),
         }
         let query = postgres_record::update(&self.table_name, &columns);
         let mut query = sqlx::query(&query);
@@ -1421,6 +1511,28 @@ impl RecordDao {
             )
             .await?;
         }
+        Ok(())
+    }
+
+    async fn postgresdb_delete_expired(
+        db: &PostgresDb,
+        collection_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<()> {
+        db.execute(
+            sqlx::query(&postgres_record::delete_expired(&Self::new_table_name(
+                collection_id,
+            )))
+            .bind(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*ttl_seconds)
+                            .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+                    )
+                    .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+            ),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1693,14 +1805,21 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            if col != "_id" {
+            if col != "_id" && col != "_updated_at" {
                 columns.push(col.as_str());
                 values.push(val);
             }
         }
+        match self.data.get("_updated_at") {
+            Some(updated_at) => {
+                columns.push("_updated_at");
+                values.push(updated_at);
+            }
+            None => return Err(Error::msg("_updated_at is undefined")),
+        }
         match self.data.get("_id") {
             Some(id) => values.push(id),
-            None => return Err(Error::msg("Id is undefined")),
+            None => return Err(Error::msg("_id is undefined")),
         }
         let query = mysql_record::update(&self.table_name, &columns);
         let mut query = sqlx::query(&query);
@@ -1740,6 +1859,28 @@ impl RecordDao {
             )
             .await?;
         }
+        Ok(())
+    }
+
+    async fn mysqldb_delete_expired(
+        db: &MysqlDb,
+        collection_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<()> {
+        db.execute(
+            sqlx::query(&mysql_record::delete_expired(&Self::new_table_name(
+                collection_id,
+            )))
+            .bind(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*ttl_seconds)
+                            .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+                    )
+                    .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+            ),
+        )
+        .await?;
         Ok(())
     }
 
@@ -1960,14 +2101,21 @@ impl RecordDao {
         let mut columns = Vec::with_capacity(self.data.len());
         let mut values = Vec::with_capacity(self.data.len());
         for (col, val) in &self.data {
-            if col != "_id" {
+            if col != "_id" && col != "_updated_at" {
                 columns.push(col.as_str());
                 values.push(val);
             }
         }
+        match self.data.get("_updated_at") {
+            Some(updated_at) => {
+                columns.push("_updated_at");
+                values.push(updated_at);
+            }
+            None => return Err(Error::msg("_updated_at is undefined")),
+        }
         match self.data.get("_id") {
             Some(id) => values.push(id),
-            None => return Err(Error::msg("Id is undefined")),
+            None => return Err(Error::msg("_id is undefined")),
         }
         let query = sqlite_record::update(&self.table_name, &columns);
         let mut query = sqlx::query(&query);
@@ -2007,6 +2155,28 @@ impl RecordDao {
             )
             .await?;
         }
+        Ok(())
+    }
+
+    async fn sqlitedb_delete_expired(
+        db: &SqliteDb,
+        collection_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<()> {
+        db.execute(
+            sqlx::query(&sqlite_record::delete_expired(&Self::new_table_name(
+                collection_id,
+            )))
+            .bind(
+                Utc::now()
+                    .checked_sub_signed(
+                        Duration::try_seconds(*ttl_seconds)
+                            .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+                    )
+                    .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
+            ),
+        )
+        .await?;
         Ok(())
     }
 }
