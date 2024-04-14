@@ -8,8 +8,7 @@ use crate::{db::PostgresDb, model::registration::RegistrationModel};
 const INSERT: &str = "INSERT INTO \"registrations\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\") VALUES ($1, $2, $3, $4, $5, $6)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\" FROM \"registrations\" WHERE \"id\" = $1 AND \"updated_at\" >= $2";
 const SELECT_BY_EMAIL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\", \"code\" FROM \"registrations\" WHERE \"email\" = $1 AND \"updated_at\" >= $2";
-const UPDATE: &str =
-    "UPDATE \"registrations\" SET \"updated_at\" = $1, \"code\" = $2 WHERE \"id\" = $3";
+const UPDATE: &str = "UPDATE \"registrations\" SET \"updated_at\" = $1, \"code\" = $2 WHERE \"id\" = $3";
 const DELETE: &str = "DELETE FROM \"registrations\" WHERE \"id\" = $1";
 const DELETE_EXPIRE: &str = "DELETE FROM \"registrations\" WHERE \"updated_at\" < $1";
 
@@ -21,8 +20,10 @@ pub async fn init(pool: &Pool<Postgres>) {
     tokio::try_join!(
         pool.prepare(INSERT),
         pool.prepare(SELECT),
+        pool.prepare(SELECT_BY_EMAIL),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
+        pool.prepare(DELETE_EXPIRE),
     )
     .unwrap();
 }

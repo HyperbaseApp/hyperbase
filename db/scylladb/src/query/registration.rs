@@ -32,6 +32,10 @@ pub async fn init(cached_session: &CachingSession, ttl: &u32) {
         .await
         .unwrap();
     cached_session
+        .add_prepared_statement(&SELECT_BY_EMAIL.into())
+        .await
+        .unwrap();
+    cached_session
         .add_prepared_statement(&UPDATE.into())
         .await
         .unwrap();

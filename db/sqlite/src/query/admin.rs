@@ -19,7 +19,6 @@ pub async fn init(pool: &Pool<Sqlite>) {
         pool.prepare(INSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_EMAIL),
-        pool.prepare(SELECT_BY_EMAIL),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )

@@ -27,7 +27,6 @@ pub async fn init(pool: &Pool<MySql>) {
         pool.prepare(COUNT_MANY_BY_BUCKET_ID),
         pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
         pool.prepare(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
-        pool.prepare(SELECT_MANY_BY_BUCKET_ID),
         pool.prepare(SELECT_MANY_EXPIRE),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),

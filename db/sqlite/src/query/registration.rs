@@ -20,8 +20,10 @@ pub async fn init(pool: &Pool<Sqlite>) {
     tokio::try_join!(
         pool.prepare(INSERT),
         pool.prepare(SELECT),
+        pool.prepare(SELECT_BY_EMAIL),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
+        pool.prepare(DELETE_EXPIRE),
     )
     .unwrap();
 }
