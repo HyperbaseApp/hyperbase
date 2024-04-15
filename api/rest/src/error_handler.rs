@@ -14,7 +14,7 @@ pub fn default_error_handler<B: MessageBody>(
 ) -> Result<ErrorHandlerResponse<B>> {
     if let Some(content_type) = svc_res.response().headers().get(header::CONTENT_TYPE) {
         if let Ok(content_type) = content_type.to_str() {
-            if content_type.to_lowercase() == "application/json" {
+            if content_type.eq_ignore_ascii_case("application/json") {
                 return Ok(ErrorHandlerResponse::Response(svc_res.map_into_left_body()));
             }
         }

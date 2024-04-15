@@ -5,20 +5,20 @@ use uuid::Uuid;
 
 use crate::{db::MysqlDb, model::file::FileModel};
 
-const INSERT: &str = "INSERT INTO `files` (`id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-const SELECT: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size` FROM `files` WHERE `id` = ?";
-const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size` FROM `files` WHERE `bucket_id` = ?";
+const INSERT: &str = "INSERT INTO `files` (`id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const SELECT: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `id` = ?";
+const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `bucket_id` = ?";
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM `files` WHERE `bucket_id` = ?";
-const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size` FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
+const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
-const SELECT_MANY_EXPIRE: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size` FROM `files` WHERE `updated_at` < ?";
-const UPDATE: &str = "UPDATE `files` SET `created_by` = ?, `updated_at` = ?, `file_name` = ? WHERE `id` = ?";
+const SELECT_MANY_EXPIRE: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `updated_at` < ?";
+const UPDATE: &str = "UPDATE `files` SET `created_by` = ?, `updated_at` = ?, `file_name` = ?, `public` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `files` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "MySQL: Setting up files table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `files` (`id` binary(16), `created_by` binary(16), `created_at` timestamp, `updated_at` timestamp, `bucket_id` binary(16), `file_name` text, `content_type` text, `size` bigint, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `files` (`id` binary(16), `created_by` binary(16), `created_at` timestamp, `updated_at` timestamp, `bucket_id` binary(16), `file_name` text, `content_type` text, `size` bigint, `public` boolean, PRIMARY KEY (`id`))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),
@@ -45,7 +45,8 @@ impl MysqlDb {
                 .bind(value.bucket_id())
                 .bind(value.file_name())
                 .bind(value.content_type())
-                .bind(value.size()),
+                .bind(value.size())
+                .bind(value.public()),
         )
         .await?;
         Ok(())
@@ -151,6 +152,7 @@ impl MysqlDb {
                 .bind(value.created_by())
                 .bind(value.updated_at())
                 .bind(value.file_name())
+                .bind(value.public())
                 .bind(value.id()),
         )
         .await?;

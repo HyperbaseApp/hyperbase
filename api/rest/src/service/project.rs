@@ -524,6 +524,7 @@ async fn duplicate_one(
                     file_data.file_name(),
                     file_data.content_type(),
                     file_data.size(),
+                    file_data.public(),
                 );
                 if let Err(err) = new_file_data
                     .save(

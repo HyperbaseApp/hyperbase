@@ -5,20 +5,20 @@ use uuid::Uuid;
 
 use crate::{db::PostgresDb, model::file::FileModel};
 
-const INSERT: &str = "INSERT INTO \"files\" (\"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
-const SELECT: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"id\" = $1";
-const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"bucket_id\" = $1";
+const INSERT: &str = "INSERT INTO \"files\" (\"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
+const SELECT: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"id\" = $1";
+const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"bucket_id\" = $1";
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bucket_id\" = $1";
-const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
+const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
-const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\" FROM \"files\" WHERE \"updated_at\" < $1";
-const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3 WHERE \"id\" = $4";
+const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"updated_at\" < $1";
+const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3, \"public\" = $4 WHERE \"id\" = $5";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up files table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),
@@ -45,7 +45,8 @@ impl PostgresDb {
                 .bind(value.bucket_id())
                 .bind(value.file_name())
                 .bind(value.content_type())
-                .bind(value.size()),
+                .bind(value.size())
+                .bind(value.public()),
         )
         .await?;
         Ok(())
@@ -157,6 +158,7 @@ impl PostgresDb {
                 .bind(value.created_by())
                 .bind(value.updated_at())
                 .bind(value.file_name())
+                .bind(value.public())
                 .bind(value.id()),
         )
         .await?;

@@ -23,6 +23,7 @@ pub struct FileDao {
     file_name: String,
     content_type: Mime,
     size: i64,
+    public: bool,
 }
 
 impl FileDao {
@@ -32,6 +33,7 @@ impl FileDao {
         file_name: &str,
         content_type: &Mime,
         size: &i64,
+        public: &bool,
     ) -> Self {
         let now = Utc::now();
 
@@ -44,6 +46,7 @@ impl FileDao {
             file_name: file_name.to_owned(),
             content_type: content_type.clone(),
             size: *size,
+            public: *public,
         }
     }
 
@@ -79,12 +82,20 @@ impl FileDao {
         &self.size
     }
 
+    pub fn public(&self) -> &bool {
+        &self.public
+    }
+
     pub fn set_created_by(&mut self, created_by: &Uuid) {
         self.created_by = *created_by;
     }
 
     pub fn set_file_name(&mut self, file_name: &str) {
         self.file_name = file_name.to_owned();
+    }
+
+    pub fn set_public(&mut self, public: &bool) {
+        self.public = *public;
     }
 
     pub async fn save(&self, db: &Db, bucket_path: &str, path: impl AsRef<Path>) -> Result<()> {
@@ -330,6 +341,7 @@ impl FileDao {
             file_name: model.file_name().to_owned(),
             content_type: Mime::from_str(model.content_type())?,
             size: *model.size(),
+            public: *model.public(),
         })
     }
 
@@ -343,6 +355,7 @@ impl FileDao {
             &self.file_name,
             &self.content_type.to_string(),
             &self.size,
+            &self.public,
         )
     }
 
@@ -356,6 +369,7 @@ impl FileDao {
             file_name: model.file_name().to_owned(),
             content_type: Mime::from_str(model.content_type())?,
             size: *model.size(),
+            public: *model.public(),
         })
     }
 
@@ -369,6 +383,7 @@ impl FileDao {
             &self.file_name,
             &self.content_type.to_string(),
             &self.size,
+            &self.public,
         )
     }
 
@@ -382,6 +397,7 @@ impl FileDao {
             file_name: model.file_name().to_owned(),
             content_type: Mime::from_str(model.content_type())?,
             size: *model.size(),
+            public: *model.public(),
         })
     }
 
@@ -395,6 +411,7 @@ impl FileDao {
             &self.file_name,
             &self.content_type.to_string(),
             &self.size,
+            &self.public,
         )
     }
 
@@ -408,6 +425,7 @@ impl FileDao {
             file_name: model.file_name().to_owned(),
             content_type: Mime::from_str(model.content_type())?,
             size: *model.size(),
+            public: *model.public(),
         })
     }
 
@@ -421,6 +439,7 @@ impl FileDao {
             &self.file_name,
             &self.content_type.to_string(),
             &self.size,
+            &self.public,
         )
     }
 }

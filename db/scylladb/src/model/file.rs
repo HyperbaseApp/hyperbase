@@ -11,6 +11,7 @@ pub struct FileModel {
     file_name: String,
     content_type: String,
     size: i64,
+    public: bool,
 }
 
 impl FileModel {
@@ -23,6 +24,7 @@ impl FileModel {
         file_name: &String,
         content_type: &str,
         size: &i64,
+        public: &bool,
     ) -> Self {
         Self {
             id: *id,
@@ -33,6 +35,7 @@ impl FileModel {
             file_name: file_name.to_owned(),
             content_type: content_type.to_owned(),
             size: *size,
+            public: *public,
         }
     }
 
@@ -66,5 +69,9 @@ impl FileModel {
 
     pub fn size(&self) -> &i64 {
         &self.size
+    }
+
+    pub fn public(&self) -> &bool {
+        &self.public
     }
 }

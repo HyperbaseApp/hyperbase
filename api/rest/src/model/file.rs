@@ -26,6 +26,7 @@ impl InsertOneFileReqPath {
 pub struct InsertOneFileReqForm {
     file: TempFile,
     file_name: Option<Text<String>>,
+    public: Option<Text<bool>>,
 }
 
 impl InsertOneFileReqForm {
@@ -49,6 +50,13 @@ impl InsertOneFileReqForm {
 
     pub fn size(&self) -> &usize {
         &self.file.size
+    }
+
+    pub fn public(&self) -> bool {
+        match &self.public {
+            Some(public) => public.0,
+            None => false,
+        }
     }
 }
 
@@ -75,11 +83,11 @@ impl FindOneFileReqPath {
 
 #[derive(Deserialize)]
 pub struct FindOneFileReqQuery {
-    token: String,
+    token: Option<String>,
 }
 
 impl FindOneFileReqQuery {
-    pub fn token(&self) -> &str {
+    pub fn token(&self) -> &Option<String> {
         &self.token
     }
 }
@@ -109,6 +117,7 @@ impl UpdateOneFileReqPath {
 pub struct UpdateOneFileReqJson {
     created_by: Option<Uuid>,
     file_name: Option<String>,
+    public: Option<bool>,
 }
 
 impl UpdateOneFileReqJson {
@@ -120,8 +129,12 @@ impl UpdateOneFileReqJson {
         &self.file_name
     }
 
+    pub fn public(&self) -> &Option<bool> {
+        &self.public
+    }
+
     pub fn is_all_none(&self) -> bool {
-        self.created_by.is_none() && self.file_name.is_none()
+        self.created_by.is_none() && self.file_name.is_none() && self.public.is_none()
     }
 }
 
@@ -188,6 +201,7 @@ pub struct FileResJson {
     file_name: String,
     content_type: String,
     size: i64,
+    public: bool,
 }
 
 impl FileResJson {
@@ -200,6 +214,7 @@ impl FileResJson {
         file_name: &str,
         content_type: &str,
         size: &i64,
+        public: &bool,
     ) -> Self {
         Self {
             id: *id,
@@ -210,6 +225,7 @@ impl FileResJson {
             file_name: file_name.to_owned(),
             content_type: content_type.to_owned(),
             size: *size,
+            public: *public,
         }
     }
 }
