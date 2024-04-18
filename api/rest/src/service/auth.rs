@@ -537,7 +537,11 @@ async fn mqtt_authorization(
         if mqtt_admin_credential.username() == data.username() {
             is_allow = true;
         }
-    } else if data.topic().chars().all(|c| c.is_alphabetic() || c == '/') {
+    } else if data
+        .topic()
+        .chars()
+        .all(|c| c.is_alphabetic() || c == '/' || c == '-')
+    {
         is_allow = true
     }
 
