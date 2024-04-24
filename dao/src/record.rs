@@ -1,6 +1,6 @@
 use std::collections::hash_map::Keys;
 
-use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
 use chrono::{Duration, Utc};
 use hb_db_mysql::{
@@ -643,13 +643,22 @@ impl RecordDao {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
+                let mut count = false;
+
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
                     for column in fields {
-                        if collection_data.schema_fields().get(*column).is_some() {
+                        if collection_data.schema_fields().get(*column).is_some()
+                            || ["_id", "_created_by", "_updated_at"].contains(column)
+                        {
                             columns.push(*column);
+                        } else if *column == "$COUNT" {
+                            count = true;
                         }
+                    }
+                    if count {
+                        columns.push("COUNT(1)");
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
@@ -682,6 +691,8 @@ impl RecordDao {
                             kind = &ColumnKind::Uuid;
                         } else if columns[idx] == "_updated_at" {
                             kind = &ColumnKind::Timestamp;
+                        } else if columns[idx] == "COUNT(1)" {
+                            kind = &ColumnKind::BigInt;
                         } else {
                             let schema_field = collection_data
                                 .schema_fields()
@@ -699,7 +710,13 @@ impl RecordDao {
                         }
                         match value {
                             Some(value) => match ColumnValue::from_scylladb_model(kind, value) {
-                                Ok(value) => data.insert(columns[idx].to_owned(), value),
+                                Ok(value) => {
+                                    let mut field = columns[idx];
+                                    if field == "COUNT(1)" {
+                                        field = "$COUNT";
+                                    }
+                                    data.insert(field.to_owned(), value)
+                                }
                                 Err(err) => return Err(err),
                             },
                             None => data.insert(columns[idx].to_owned(), ColumnValue::none(kind)),
@@ -727,11 +744,22 @@ impl RecordDao {
             Db::PostgresqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
+                let mut count = false;
+
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
                     for column in fields {
-                        columns.push(*column);
+                        if collection_data.schema_fields().get(*column).is_some()
+                            || ["_id", "_created_by", "_updated_at"].contains(column)
+                        {
+                            columns.push(*column);
+                        } else if *column == "$COUNT" {
+                            count = true;
+                        }
+                    }
+                    if count {
+                        columns.push("COUNT(1)");
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
@@ -762,6 +790,8 @@ impl RecordDao {
                             kind = &ColumnKind::Uuid;
                         } else if *column == "_updated_at" {
                             kind = &ColumnKind::Timestamp;
+                        } else if *column == "COUNT(1)" {
+                            kind = &ColumnKind::BigInt;
                         } else {
                             let schema_field = collection_data
                                 .schema_fields()
@@ -776,9 +806,15 @@ impl RecordDao {
                             }
                             kind = schema_field.kind();
                         }
+                        let mut field = *column;
+                        let mut index = *column;
+                        if index == "COUNT(1)" {
+                            field = "$COUNT";
+                            index = "count";
+                        }
                         data.insert(
-                            column.to_string(),
-                            ColumnValue::from_postgresdb_model(kind, column, &postgres_data)?,
+                            field.to_owned(),
+                            ColumnValue::from_postgresdb_model(kind, index, &postgres_data)?,
                         );
                     }
                     data_many.push(Self {
@@ -792,11 +828,22 @@ impl RecordDao {
             Db::MysqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
+                let mut count = false;
+
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
                     for column in fields {
-                        columns.push(*column);
+                        if collection_data.schema_fields().get(*column).is_some()
+                            || ["_id", "_created_by", "_updated_at"].contains(column)
+                        {
+                            columns.push(*column);
+                        } else if *column == "$COUNT" {
+                            count = true;
+                        }
+                    }
+                    if count {
+                        columns.push("COUNT(1)");
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
@@ -827,6 +874,8 @@ impl RecordDao {
                             kind = &ColumnKind::Uuid;
                         } else if *column == "_updated_at" {
                             kind = &ColumnKind::Timestamp;
+                        } else if *column == "COUNT(1)" {
+                            kind = &ColumnKind::BigInt;
                         } else {
                             let schema_field = collection_data
                                 .schema_fields()
@@ -841,9 +890,15 @@ impl RecordDao {
                             }
                             kind = schema_field.kind();
                         }
+                        let mut field = *column;
+                        let mut index = *column;
+                        if index == "COUNT(1)" {
+                            field = "$COUNT";
+                            index = "count";
+                        }
                         data.insert(
-                            column.to_string(),
-                            ColumnValue::from_mysqldb_model(kind, column, &mysql_data)?,
+                            field.to_owned(),
+                            ColumnValue::from_mysqldb_model(kind, index, &mysql_data)?,
                         );
                     }
                     data_many.push(Self {
@@ -857,11 +912,22 @@ impl RecordDao {
             Db::SqliteDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
 
+                let mut count = false;
+
                 let mut columns;
                 if fields.len() > 0 {
                     columns = Vec::with_capacity(fields.len());
                     for column in fields {
-                        columns.push(*column);
+                        if collection_data.schema_fields().get(*column).is_some()
+                            || ["_id", "_created_by", "_updated_at"].contains(column)
+                        {
+                            columns.push(*column);
+                        } else if *column == "$COUNT" {
+                            count = true;
+                        }
+                    }
+                    if count {
+                        columns.push("COUNT(1)");
                     }
                 } else {
                     columns = Vec::with_capacity(collection_data.schema_fields().len() + 3);
@@ -892,6 +958,8 @@ impl RecordDao {
                             kind = &ColumnKind::Uuid;
                         } else if *column == "_updated_at" {
                             kind = &ColumnKind::Timestamp;
+                        } else if *column == "COUNT(1)" {
+                            kind = &ColumnKind::BigInt;
                         } else {
                             let schema_field = collection_data
                                 .schema_fields()
@@ -906,9 +974,15 @@ impl RecordDao {
                             }
                             kind = schema_field.kind();
                         }
+                        let mut field = *column;
+                        let mut index = *column;
+                        if index == "COUNT(1)" {
+                            field = "$COUNT";
+                            index = "count";
+                        }
                         data.insert(
-                            column.to_string(),
-                            ColumnValue::from_sqlitedb_model(kind, column, &sqlite_data)?,
+                            field.to_owned(),
+                            ColumnValue::from_sqlitedb_model(kind, index, &sqlite_data)?,
                         );
                     }
                     data_many.push(Self {
@@ -1184,10 +1258,10 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(2);
-        column.insert("_id".to_owned());
+        let mut column = Vec::with_capacity(2);
+        column.push("_id");
         if let Some(created_by) = created_by {
-            column.insert("_created_by".to_owned());
+            column.push("_created_by");
             db.execute(
                 &scylla_record::delete(&Self::new_table_name(collection_id), &column),
                 [id, created_by].as_ref(),
@@ -1488,10 +1562,10 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(2);
-        column.insert("_id".to_owned());
+        let mut column = Vec::with_capacity(2);
+        column.push("_id");
         if let Some(created_by) = created_by {
-            column.insert("_created_by".to_owned());
+            column.push("_created_by");
             db.execute(
                 sqlx::query(&postgres_record::delete(
                     &Self::new_table_name(collection_id),
@@ -1836,10 +1910,10 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(2);
-        column.insert("_id".to_owned());
+        let mut column = Vec::with_capacity(2);
+        column.push("_id");
         if let Some(created_by) = created_by {
-            column.insert("_created_by".to_owned());
+            column.push("_created_by");
             db.execute(
                 sqlx::query(&mysql_record::delete(
                     &Self::new_table_name(collection_id),
@@ -2132,10 +2206,10 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<()> {
-        let mut column = HashSet::<String>::with_capacity(1);
-        column.insert("_id".to_owned());
+        let mut column = Vec::with_capacity(2);
+        column.push("_id");
         if let Some(created_by) = created_by {
-            column.insert("_created_by".to_owned());
+            column.push("_created_by");
             db.execute(
                 sqlx::query(&sqlite_record::delete(
                     &Self::new_table_name(collection_id),

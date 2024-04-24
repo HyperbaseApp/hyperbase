@@ -21,8 +21,9 @@ use crate::{
     model::{
         file::{
             DeleteFileResJson, DeleteOneFileReqPath, FileResJson, FindManyFileReqPath,
-            FindManyFileReqQuery, FindOneFileReqPath, FindOneFileReqQuery, InsertOneFileReqForm,
-            InsertOneFileReqPath, UpdateOneFileReqJson, UpdateOneFileReqPath,
+            FindManyFileReqQuery, FindOneFileReqPath, FindOneFileReqQuery, HeadFindOneFileReqPath,
+            HeadFindOneFileReqQuery, InsertOneFileReqForm, InsertOneFileReqPath,
+            UpdateOneFileReqJson, UpdateOneFileReqPath,
         },
         PaginationRes, Response,
     },
@@ -35,11 +36,11 @@ pub fn file_api(cfg: &mut web::ServiceConfig) {
     )
     .route(
         "/project/{project_id}/bucket/{bucket_id}/file/{file_id}",
-        web::head().to(find_one),
+        web::head().to(head_find_one),
     )
     .route(
         "/project/{project_id}/bucket/{bucket_id}/file/{file_id}",
-        web::get().to(download_one),
+        web::get().to(find_one),
     )
     .route(
         "/project/{project_id}/bucket/{bucket_id}/file/{file_id}",
@@ -216,11 +217,11 @@ async fn insert_one(
     )
 }
 
-async fn find_one(
+async fn head_find_one(
     ctx: web::Data<ApiRestCtx>,
     req: HttpRequest,
-    path: web::Path<FindOneFileReqPath>,
-    query: web::Query<FindOneFileReqQuery>,
+    path: web::Path<HeadFindOneFileReqPath>,
+    query: web::Query<HeadFindOneFileReqQuery>,
 ) -> HttpResponse {
     let bucket_data = match BucketDao::db_select(ctx.dao().db(), path.bucket_id()).await {
         Ok(data) => data,
@@ -421,7 +422,7 @@ async fn find_one(
     res.finish()
 }
 
-async fn download_one(
+async fn find_one(
     ctx: web::Data<ApiRestCtx>,
     req: HttpRequest,
     path: web::Path<FindOneFileReqPath>,
@@ -603,22 +604,45 @@ async fn download_one(
         }
     }
 
-    let file =
-        match NamedFile::open_async(&format!("{}/{}", bucket_data.path(), file_data.id())).await {
+    if query.data().is_some() {
+        Response::data(
+            &StatusCode::OK,
+            &None,
+            FileResJson::new(
+                file_data.id(),
+                file_data.created_by(),
+                file_data.created_at(),
+                file_data.updated_at(),
+                file_data.bucket_id(),
+                file_data.file_name(),
+                &file_data.content_type().to_string(),
+                file_data.size(),
+                file_data.public(),
+            ),
+        )
+    } else {
+        let file = match NamedFile::open_async(&format!(
+            "{}/{}",
+            bucket_data.path(),
+            file_data.id()
+        ))
+        .await
+        {
             Ok(file) => file,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
-    let mut res = file.into_response(&req);
-    res.headers_mut().insert(
-        header::CONTENT_DISPOSITION,
-        HeaderValue::from_str(&format!(
-            "attachment; filename=\"{}\"",
-            file_data.file_name()
-        ))
-        .unwrap(),
-    );
-    res
+        let mut res = file.into_response(&req);
+        res.headers_mut().insert(
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&format!(
+                "attachment; filename=\"{}\"",
+                file_data.file_name()
+            ))
+            .unwrap(),
+        );
+        res
+    }
 }
 
 async fn update_one(

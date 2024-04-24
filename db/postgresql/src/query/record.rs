@@ -122,7 +122,16 @@ pub fn select_many(
 ) -> String {
     let mut query = format!(
         "SELECT {} FROM \"{}\"",
-        columns.iter().map(|col| format!("\"{col}\"")).join(", "),
+        columns
+            .iter()
+            .map(|col| {
+                if *col == "COUNT(1)" {
+                    (*col).to_owned()
+                } else {
+                    format!("\"{col}\"")
+                }
+            })
+            .join(", "),
         record_table,
     );
     if filter.len() > 0 {
@@ -169,7 +178,7 @@ pub fn update(record_table: &str, columns: &Vec<&str>) -> String {
     )
 }
 
-pub fn delete(record_table: &str, columns: &HashSet<String>) -> String {
+pub fn delete(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
         "DELETE FROM \"{}\" WHERE {}",
         record_table,

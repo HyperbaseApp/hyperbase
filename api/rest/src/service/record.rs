@@ -507,7 +507,11 @@ async fn find_one(
         Some(origin_fields) => {
             let mut fields = HashSet::with_capacity(origin_fields.len());
             for field in origin_fields {
-                if collection_data.schema_fields().contains_key(field) || field == "_id" {
+                if collection_data.schema_fields().contains_key(field)
+                    || field == "_id"
+                    || field == "_created_by"
+                    || field == "_updated_at"
+                {
                     fields.insert(field.as_str());
                 } else {
                     return Response::error_raw(
@@ -1303,8 +1307,14 @@ async fn find_many(
         Some(origin_fields) => {
             let mut fields = HashSet::with_capacity(origin_fields.len());
             for field in origin_fields {
-                if collection_data.schema_fields().contains_key(field) || field == "_id" {
+                if collection_data.schema_fields().contains_key(field)
+                    || field == "_id"
+                    || field == "_created_by"
+                    || field == "_updated_at"
+                {
                     fields.insert(field.as_str());
+                } else if field == "$COUNT" {
+                    fields.insert(field);
                 } else {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -1327,7 +1337,11 @@ async fn find_many(
         Some(origin_groups) => {
             let mut groups = Vec::with_capacity(origin_groups.len());
             for field in origin_groups {
-                if collection_data.schema_fields().contains_key(field) || field == "_id" {
+                if collection_data.schema_fields().contains_key(field)
+                    || field == "_id"
+                    || field == "_created_by"
+                    || field == "_updated_at"
+                {
                     groups.push(field.as_str());
                 } else {
                     return Response::error_raw(

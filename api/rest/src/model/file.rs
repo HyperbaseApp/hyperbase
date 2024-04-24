@@ -61,6 +61,38 @@ impl InsertOneFileReqForm {
 }
 
 #[derive(Deserialize)]
+pub struct HeadFindOneFileReqPath {
+    project_id: Uuid,
+    bucket_id: Uuid,
+    file_id: Uuid,
+}
+
+impl HeadFindOneFileReqPath {
+    pub fn project_id(&self) -> &Uuid {
+        &self.project_id
+    }
+
+    pub fn bucket_id(&self) -> &Uuid {
+        &self.bucket_id
+    }
+
+    pub fn file_id(&self) -> &Uuid {
+        &self.file_id
+    }
+}
+
+#[derive(Deserialize)]
+pub struct HeadFindOneFileReqQuery {
+    token: Option<String>,
+}
+
+impl HeadFindOneFileReqQuery {
+    pub fn token(&self) -> &Option<String> {
+        &self.token
+    }
+}
+
+#[derive(Deserialize)]
 pub struct FindOneFileReqPath {
     project_id: Uuid,
     bucket_id: Uuid,
@@ -84,11 +116,16 @@ impl FindOneFileReqPath {
 #[derive(Deserialize)]
 pub struct FindOneFileReqQuery {
     token: Option<String>,
+    data: Option<u8>,
 }
 
 impl FindOneFileReqQuery {
     pub fn token(&self) -> &Option<String> {
         &self.token
+    }
+
+    pub fn data(&self) -> &Option<u8> {
+        &self.data
     }
 }
 

@@ -11,8 +11,7 @@ const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_
 const UPDATE: &str = "UPDATE \"collection_rules\" SET \"updated_at\" = $1, \"find_one\" = $2, \"find_many\" = $3, \"insert_one\" = $4, \"update_one\" = $5, \"delete_one\" = $6 WHERE \"id\" = $7";
 const DELETE: &str = "DELETE FROM \"collection_rules\" WHERE \"id\" = $1";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"token_id\" = $1";
-const DELETE_MANY_BY_COLLECTION_ID: &str =
-    "DELETE FROM \"collection_rules\" WHERE \"collection_id\" = $1";
+const DELETE_MANY_BY_COLLECTION_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"collection_id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "PostgreSQL: Setting up collection_rules table");
