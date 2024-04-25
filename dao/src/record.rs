@@ -1193,12 +1193,16 @@ impl RecordDao {
             }
         }
 
-        let mut values = filters.scylladb_values()?;
-        let mut total_values = filters.scylladb_values()?;
+        let mut values =
+            Vec::<Box<dyn SerializeCql + Send + Sync>>::with_capacity(filters.0.len() + 2);
+        let mut total_values =
+            Vec::<Box<dyn SerializeCql + Send + Sync>>::with_capacity(filters.0.len() + 1);
         if let Some(created_by) = created_by {
             values.insert(0, Box::new(created_by));
             total_values.insert(0, Box::new(created_by));
         }
+        values.append(&mut filters.scylladb_values()?);
+        total_values.append(&mut filters.scylladb_values()?);
         if let Some(limit) = pagination.limit() {
             values.push(Box::new(limit));
         }
@@ -1211,7 +1215,7 @@ impl RecordDao {
             &order,
             &pagination.limit().is_some(),
         );
-        let query_total = scylla_record::count(table_name, &filter);
+        let query_total = scylla_record::count(table_name, &filter, groups);
 
         let (data, total) = tokio::try_join!(
             db.execute(&query_select_many, &values),
@@ -1505,19 +1509,20 @@ impl RecordDao {
             &pagination.limit().is_some(),
             &argument_idx,
         );
+        let query_total = postgres_record::count(table_name, &filter, groups);
+
         let mut query_select_many = sqlx::query(&query_select_many);
-        let query_total = postgres_record::count(table_name, &filter);
         let mut query_total = sqlx::query_as(&query_total);
 
+        query_select_many = filters.postgresdb_values(query_select_many)?;
+        query_total = filters.postgresdb_values_as(query_total)?;
         if let Some(created_by) = created_by {
             query_select_many = query_select_many.bind(created_by);
             query_total = query_total.bind(created_by);
         }
-        query_select_many = filters.postgresdb_values(query_select_many)?;
         if let Some(limit) = pagination.limit() {
             query_select_many = query_select_many.bind(limit);
         }
-        query_total = filters.postgresdb_values_as(query_total)?;
 
         let (rows, total) = tokio::try_join!(
             db.fetch_all_rows(query_select_many),
@@ -1853,8 +1858,9 @@ impl RecordDao {
             &order,
             &pagination.limit().is_some(),
         );
+        let query_total = mysql_record::count(table_name, &filter, groups);
+
         let mut query_select_many = sqlx::query(&query_select_many);
-        let query_total = mysql_record::count(table_name, &filter);
         let mut query_total = sqlx::query_as(&query_total);
 
         if let Some(created_by) = created_by {
@@ -2149,8 +2155,9 @@ impl RecordDao {
             &order,
             &pagination.limit().is_some(),
         );
+        let query_total = sqlite_record::count(table_name, &filter, groups);
+
         let mut query_select_many = sqlx::query(&query_select_many);
-        let query_total = sqlite_record::count(table_name, &filter);
         let mut query_total = sqlx::query_as(&query_total);
 
         if let Some(created_by) = created_by {

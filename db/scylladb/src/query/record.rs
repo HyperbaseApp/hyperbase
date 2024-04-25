@@ -174,10 +174,26 @@ pub fn delete_expired(record_table: &str) -> String {
     format!("DELETE FROM \"hyperbase\".\"{record_table}\" WHERE _updated_at < ?")
 }
 
-pub fn count(record_table: &str, filter: &str) -> String {
-    let mut query = format!("SELECT COUNT(1) FROM \"hyperbase\".\"{}\"", record_table);
+pub fn count(record_table: &str, filter: &str, groups: &Vec<&str>) -> String {
+    let mut query = format!(
+        "SELECT COUNT(1) FROM (SELECT 1 FROM \"hyperbase\".\"{}\"",
+        record_table
+    );
     if filter.len() > 0 {
         query += &format!(" WHERE {filter}")
     }
-    query + " ALLOW FILTERING"
+    if groups.len() > 0 {
+        query += " GROUP BY";
+        let mut count = 0;
+        for group in groups {
+            if count > 0 {
+                query += ",";
+            }
+            query += &format!(" \"{group}\"");
+            count += 1;
+        }
+    }
+    query += " ALLOW FILTERING";
+    query += ")";
+    query
 }
