@@ -13,7 +13,7 @@ pub mod file;
 pub mod log;
 pub mod project;
 pub mod record;
-pub mod register;
+pub mod registration;
 pub mod token;
 mod util;
 pub mod value;

@@ -10,6 +10,14 @@ const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"update
 const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"opt_auth_column_id\" = ?, \"opt_ttl\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
 
+fn update_default_time_to_live(id: &Uuid, ttl: &i64) -> String {
+    format!(
+        "ALTER TABLE \"hyperbase\".\"record_{}\" WITH default_time_to_live = {}",
+        id.to_string().replace("-", ""),
+        ttl
+    )
+}
+
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up collections table");
 
@@ -89,6 +97,13 @@ impl ScyllaDb {
             ),
         )
         .await?;
+        if let Some(ttl) = value.opt_ttl() {
+            self.execute(&update_default_time_to_live(value.id(), ttl), &[])
+                .await?;
+        } else {
+            self.execute(&update_default_time_to_live(value.id(), &0), &[])
+                .await?;
+        }
         Ok(())
     }
 

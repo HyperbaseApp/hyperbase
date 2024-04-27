@@ -10,10 +10,10 @@ use tokio::sync::mpsc;
 pub struct ApiRestCtx {
     hash: ApiRestHashCtx,
     token: ApiRestTokenCtx,
-    mailer: ApiRestMailerCtx,
+    mailer: Option<ApiRestMailerCtx>,
     dao: ApiRestDaoCtx,
     websocket: ApiRestWsCtx,
-    mqtt_admin_credential: MqttAdminCredential,
+    mqtt_admin_credential: Option<MqttAdminCredential>,
     admin_registration: bool,
     access_token_length: usize,
     registration_ttl: u32,
@@ -25,10 +25,10 @@ impl ApiRestCtx {
     pub fn new(
         hash: ApiRestHashCtx,
         token: ApiRestTokenCtx,
-        mailer: ApiRestMailerCtx,
+        mailer: Option<ApiRestMailerCtx>,
         dao: ApiRestDaoCtx,
         websocket: ApiRestWsCtx,
-        mqtt_admin_credential: MqttAdminCredential,
+        mqtt_admin_credential: Option<MqttAdminCredential>,
         admin_registration: bool,
         access_token_length: usize,
         registration_ttl: u32,
@@ -58,7 +58,7 @@ impl ApiRestCtx {
         &self.token
     }
 
-    pub fn mailer(&self) -> &ApiRestMailerCtx {
+    pub fn mailer(&self) -> &Option<ApiRestMailerCtx> {
         &self.mailer
     }
 
@@ -70,7 +70,7 @@ impl ApiRestCtx {
         &self.websocket
     }
 
-    pub fn mqtt_admin_credential(&self) -> &MqttAdminCredential {
+    pub fn mqtt_admin_credential(&self) -> &Option<MqttAdminCredential> {
         &self.mqtt_admin_credential
     }
 

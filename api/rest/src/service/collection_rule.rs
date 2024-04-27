@@ -103,6 +103,19 @@ async fn insert_one(
         );
     }
 
+    if let Ok(_) = CollectionRuleDao::db_select_by_token_id_and_collection_id(
+        ctx.dao().db(),
+        token_data.id(),
+        collection_data.id(),
+    )
+    .await
+    {
+        return Response::error_raw(
+            &StatusCode::FORBIDDEN,
+            "This collection rule already exists",
+        );
+    }
+
     let rule_find_one = match CollectionPermission::from_str(data.find_one()) {
         Ok(rule) => rule,
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),

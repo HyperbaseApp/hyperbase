@@ -14,22 +14,14 @@ const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
-const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"updated_at\" < ? ALLOW FILTERING";
-const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"created_by\" = ?, \"updated_at\" = ?, \"file_name\" = ?, \"public\" = ? WHERE \"id\" = ?";
-const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
+const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"updated_at\" < ? ALLOW FILTERING";
+const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"created_by\" = ?, \"updated_at\" = ?, \"file_name\" = ?, \"public\" = ? WHERE \"bucket_id\" = ? AND \"id\" = ?";
+const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "ScyllaDB: Setting up files table");
 
-    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
-    cached_session
-        .get_session()
-        .query(
-            "CREATE INDEX IF NOT EXISTS ON \"hyperbase\".\"files\" (\"bucket_id\")",
-            &[],
-        )
-        .await
-        .unwrap();
+    cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"bucket_id\", \"id\")) WITH CLUSTERING ORDER BY (\"id\" DESC)", &[]).await.unwrap();
 
     cached_session
         .add_prepared_statement(&INSERT.into())
@@ -153,21 +145,24 @@ impl ScyllaDb {
 
     pub async fn select_many_expired_file(
         &self,
+        bucket_id: &Uuid,
         ttl_seconds: &i64,
     ) -> Result<TypedRowIter<FileModel>> {
         Ok(self
             .execute(
                 SELECT_MANY_EXPIRE,
-                [CqlTimestamp(
-                    Utc::now()
-                        .checked_sub_signed(
-                            Duration::try_seconds(*ttl_seconds)
-                                .ok_or_else(|| Error::msg("bucket ttl is out of range."))?,
-                        )
-                        .ok_or_else(|| Error::msg("bucket ttl is out of range."))?
-                        .timestamp_millis(),
-                )]
-                .as_ref(),
+                &(
+                    bucket_id,
+                    CqlTimestamp(
+                        Utc::now()
+                            .checked_sub_signed(
+                                Duration::try_seconds(*ttl_seconds)
+                                    .ok_or_else(|| Error::msg("bucket ttl is out of range."))?,
+                            )
+                            .ok_or_else(|| Error::msg("bucket ttl is out of range."))?
+                            .timestamp_millis(),
+                    ),
+                ),
             )
             .await?
             .rows_typed()?)
@@ -181,6 +176,7 @@ impl ScyllaDb {
                 value.updated_at(),
                 value.file_name(),
                 value.public(),
+                value.bucket_id(),
                 value.id(),
             ),
         )
@@ -188,8 +184,8 @@ impl ScyllaDb {
         Ok(())
     }
 
-    pub async fn delete_file(&self, id: &Uuid) -> Result<()> {
-        self.execute(DELETE, [id].as_ref()).await?;
+    pub async fn delete_file(&self, bucket_id: &Uuid, id: &Uuid) -> Result<()> {
+        self.execute(DELETE, [bucket_id, id].as_ref()).await?;
         Ok(())
     }
 }

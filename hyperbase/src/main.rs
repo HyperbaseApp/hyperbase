@@ -47,13 +47,19 @@ async fn main() {
         config.token().jwt().expiry_duration(),
     );
 
-    let (mailer, mailer_sender) = Mailer::new(
-        config.mailer().smtp_host(),
-        config.mailer().smtp_username(),
-        config.mailer().smtp_password(),
-        config.mailer().sender_name(),
-        config.mailer().sender_email(),
-    );
+    let (mailer, mailer_sender) = match config.mailer() {
+        Some(config_mailer) => {
+            let (mailer, mailer_sender) = Mailer::new(
+                config_mailer.smtp_host(),
+                config_mailer.smtp_username(),
+                config_mailer.smtp_password(),
+                config_mailer.sender_name(),
+                config_mailer.sender_email(),
+            );
+            (Some(mailer), Some(mailer_sender))
+        }
+        None => (None, None),
+    };
 
     let db = if let Some(scylla) = config.db().scylla() {
         Arc::new(Db::ScyllaDb(
@@ -122,20 +128,6 @@ async fn main() {
         config.api().websocket().client_timeout(),
     );
 
-    let api_mqtt_client = ApiMqttClient::new(
-        config.api().mqtt().host(),
-        config.api().mqtt().port(),
-        config.api().mqtt().topic(),
-        config.api().mqtt().username(),
-        config.api().mqtt().password(),
-        config.api().mqtt().channel_capacity(),
-        config.api().mqtt().timeout(),
-        ApiMqttCtx::new(
-            ApiMqttDaoCtx::new(db.clone()),
-            ApiMqttWsCtx::new(websocket_publisher),
-        ),
-    );
-
     let api_rest_server = ApiRestServer::new(
         config.app().mode(),
         config.api().rest().host(),
@@ -144,14 +136,20 @@ async fn main() {
         ApiRestCtx::new(
             ApiRestHashCtx::new(argon2_hash),
             ApiRestTokenCtx::new(jwt_token),
-            ApiRestMailerCtx::new(mailer_sender),
-            ApiRestDaoCtx::new(db),
+            match mailer_sender {
+                Some(mailer_sender) => Some(ApiRestMailerCtx::new(mailer_sender)),
+                None => None,
+            },
+            ApiRestDaoCtx::new(db.clone()),
             ApiRestWsCtx::new(websocket_handler),
-            MqttAdminCredential::new(
-                config.api().mqtt().username(),
-                config.api().mqtt().password(),
-                config.api().mqtt().topic(),
-            ),
+            match config.api().mqtt() {
+                Some(config_mqtt) => Some(MqttAdminCredential::new(
+                    config_mqtt.username(),
+                    config_mqtt.password(),
+                    config_mqtt.topic(),
+                )),
+                None => None,
+            },
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),
             *config.auth().registration_ttl(),
@@ -160,12 +158,35 @@ async fn main() {
         ),
     );
 
+    let api_mqtt_client = match config.api().mqtt() {
+        Some(config_mqtt) => Some(ApiMqttClient::new(
+            config_mqtt.host(),
+            config_mqtt.port(),
+            config_mqtt.topic(),
+            config_mqtt.username(),
+            config_mqtt.password(),
+            config_mqtt.channel_capacity(),
+            config_mqtt.timeout(),
+            ApiMqttCtx::new(
+                ApiMqttDaoCtx::new(db),
+                ApiMqttWsCtx::new(websocket_publisher),
+            ),
+        )),
+        None => None,
+    };
+
     let cancel_token = CancellationToken::new();
 
     match tokio::try_join!(
-        mailer.run(cancel_token.clone()),
-        api_mqtt_client.run(cancel_token.clone()),
+        match mailer {
+            Some(mailer) => mailer.run(cancel_token.clone()),
+            None => Mailer::run_none(),
+        },
         api_rest_server.run(cancel_token.clone()),
+        match api_mqtt_client {
+            Some(api_mqtt_client) => api_mqtt_client.run(cancel_token.clone()),
+            None => ApiMqttClient::run_none(),
+        },
         api_websocket_server.run(cancel_token.clone())
     ) {
         Ok(_) => hb_log::info(Some("👋"), "Hyperbase: Turned off"),

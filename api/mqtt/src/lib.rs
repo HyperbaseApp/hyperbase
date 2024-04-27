@@ -55,6 +55,12 @@ impl ApiMqttClient {
         }
     }
 
+    pub fn run_none() -> JoinHandle<()> {
+        hb_log::info(Some("⏩"), "ApiMqttClient: Skipping component");
+
+        tokio::spawn((|| async {})())
+    }
+
     pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
         hb_log::info(Some("💫"), "ApiMqttClient: Running component");
 

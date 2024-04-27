@@ -54,6 +54,12 @@ impl Mailer {
         Ok(())
     }
 
+    pub fn run_none() -> JoinHandle<()> {
+        hb_log::info(Some("⏩"), "Mailer: Skipping component");
+
+        tokio::spawn((|| async {})())
+    }
+
     pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
         hb_log::info(Some("💫"), "Mailer: Running component");
 

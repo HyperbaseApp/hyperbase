@@ -10,7 +10,7 @@ use hb_dao::{
     collection::CollectionDao,
     log::{LogDao, LogKind},
     record::{RecordDao, RecordFilter, RecordFilters, RecordPagination},
-    register::RegistrationDao,
+    registration::RegistrationDao,
     token::TokenDao,
     value::ColumnValue,
 };
@@ -160,21 +160,22 @@ async fn register(ctx: web::Data<ApiRestCtx>, data: web::Json<RegisterReqJson>) 
         }
     };
 
-    if let Err(err) = ctx
-        .mailer()
-        .sender()
-        .send(MailPayload::new(
-            &email,
-            "Registration Verification Code",
-            &format!(
+    if let Some(mailer) = ctx.mailer() {
+        if let Err(err) = mailer
+            .sender()
+            .send(MailPayload::new(
+                &email,
+                "Registration Verification Code",
+                &format!(
                 "Your registration verification code is {}. This code will expire in {} seconds",
                 registration_data.code(),
                 ctx.registration_ttl()
             ),
-        ))
-        .await
-    {
-        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+            ))
+            .await
+        {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        }
     }
 
     Response::data(
@@ -211,17 +212,18 @@ async fn verify_registration(
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    if let Err(err) = ctx
-        .mailer()
-        .sender()
-        .send(MailPayload::new(
-            admin_data.email(),
-            "Your Account Has Been Activated",
-            "Your account has been successfully activated",
-        ))
-        .await
-    {
-        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    if let Some(mailer) = ctx.mailer() {
+        if let Err(err) = mailer
+            .sender()
+            .send(MailPayload::new(
+                admin_data.email(),
+                "Your Account Has Been Activated",
+                "Your account has been successfully activated",
+            ))
+            .await
+        {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        }
     }
 
     Response::data(
@@ -406,7 +408,13 @@ async fn mqtt_authentication(
     ctx: web::Data<ApiRestCtx>,
     data: web::Json<MqttAuthenticationReqJson>,
 ) -> HttpResponse {
-    let mqtt_admin_credential = ctx.mqtt_admin_credential();
+    let mqtt_admin_credential = match ctx.mqtt_admin_credential() {
+        Some(cred) => cred,
+        None => {
+            return HttpResponseBuilder::new(StatusCode::OK)
+                .json(MqttAuthenticationResJson::new("allow", &true));
+        }
+    };
 
     if mqtt_admin_credential.username() == data.username() {
         if mqtt_admin_credential.password() == data.password() {
@@ -529,7 +537,13 @@ async fn mqtt_authorization(
     ctx: web::Data<ApiRestCtx>,
     data: web::Json<MqttAuthorizationReqJson>,
 ) -> HttpResponse {
-    let mqtt_admin_credential = ctx.mqtt_admin_credential();
+    let mqtt_admin_credential = match ctx.mqtt_admin_credential() {
+        Some(cred) => cred,
+        None => {
+            return HttpResponseBuilder::new(StatusCode::OK)
+                .json(MqttAuthorizationResJson::new("allow"));
+        }
+    };
 
     let mut is_allow = false;
 
@@ -649,7 +663,8 @@ async fn request_password_reset(
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    if let Err(err)= ctx.mailer()
+    if let Some(mailer) = ctx.mailer() {
+        if let Err(err)= mailer
         .sender()
         .send(MailPayload::new(
             &email,
@@ -663,6 +678,7 @@ async fn request_password_reset(
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
 
         }
+    }
 
     Response::data(
         &StatusCode::OK,
@@ -708,17 +724,18 @@ async fn confirm_password_reset(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    if let Err(err) = ctx
-        .mailer()
-        .sender()
-        .send(MailPayload::new(
-            admin_data.email(),
-            "Your Password Has Been Reset Successfully",
-            "Your account password has been successfully changed",
-        ))
-        .await
-    {
-        return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    if let Some(mailer) = ctx.mailer() {
+        if let Err(err) = mailer
+            .sender()
+            .send(MailPayload::new(
+                admin_data.email(),
+                "Your Password Has Been Reset Successfully",
+                "Your account password has been successfully changed",
+            ))
+            .await
+        {
+            return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+        }
     }
 
     Response::data(

@@ -157,7 +157,7 @@ impl BucketDao {
             FileDao::db_select_many_by_bucket_id(db, &bucket_data, &None, &None).await?;
         let mut delete_file_mut = Vec::with_capacity(files_data.len());
         for file_data in &files_data {
-            delete_file_mut.push(FileDao::delete(db, &bucket_data.path, file_data.id()));
+            delete_file_mut.push(FileDao::delete(db, &bucket_data, file_data.id()));
         }
         future::try_join_all(delete_file_mut).await?;
 

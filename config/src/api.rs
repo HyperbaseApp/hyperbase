@@ -7,7 +7,7 @@ use serde::Deserialize;
 pub struct ApiConfig {
     rest: ApiRestConfig,
     websocket: ApiWebSocketConfig,
-    mqtt: ApiMqttConfig,
+    mqtt: Option<ApiMqttConfig>,
 }
 
 impl ApiConfig {
@@ -19,7 +19,7 @@ impl ApiConfig {
         &self.websocket
     }
 
-    pub fn mqtt(&self) -> &ApiMqttConfig {
+    pub fn mqtt(&self) -> &Option<ApiMqttConfig> {
         &self.mqtt
     }
 }

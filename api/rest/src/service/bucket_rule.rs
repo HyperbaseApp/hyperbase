@@ -91,6 +91,16 @@ async fn insert_one(
         );
     }
 
+    if let Ok(_) = BucketRuleDao::db_select_by_token_id_and_bucket_id(
+        ctx.dao().db(),
+        token_data.id(),
+        bucket_data.id(),
+    )
+    .await
+    {
+        return Response::error_raw(&StatusCode::FORBIDDEN, "This bucket rule already exists");
+    }
+
     if token_data.project_id() != project_data.id() {
         return Response::error_raw(&StatusCode::FORBIDDEN, "This token does not belong to you");
     }

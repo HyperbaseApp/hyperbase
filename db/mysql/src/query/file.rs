@@ -11,7 +11,7 @@ const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`,
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM `files` WHERE `bucket_id` = ?";
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
-const SELECT_MANY_EXPIRE: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `updated_at` < ?";
+const SELECT_MANY_EXPIRE: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `bucket_id` = ? AND `updated_at` < ?";
 const UPDATE: &str = "UPDATE `files` SET `created_by` = ?, `updated_at` = ?, `file_name` = ?, `public` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `files` WHERE `id` = ?";
 
@@ -131,10 +131,14 @@ impl MysqlDb {
             .0)
     }
 
-    pub async fn select_many_expired_file(&self, ttl_seconds: &i64) -> Result<Vec<FileModel>> {
+    pub async fn select_many_expired_file(
+        &self,
+        bucket_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<Vec<FileModel>> {
         Ok(self
             .fetch_all(
-                sqlx::query_as(SELECT_MANY_EXPIRE).bind(
+                sqlx::query_as(SELECT_MANY_EXPIRE).bind(bucket_id).bind(
                     Utc::now()
                         .checked_sub_signed(
                             Duration::try_seconds(*ttl_seconds)

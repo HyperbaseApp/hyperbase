@@ -11,7 +11,7 @@ const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bucket_id\" = $1";
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
-const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"updated_at\" < $1";
+const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"bucket_id\" = $1 AND \"updated_at\" < $2";
 const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3, \"public\" = $4 WHERE \"id\" = $5";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
@@ -137,10 +137,14 @@ impl PostgresDb {
             .0)
     }
 
-    pub async fn select_many_expired_file(&self, ttl_seconds: &i64) -> Result<Vec<FileModel>> {
+    pub async fn select_many_expired_file(
+        &self,
+        bucket_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<Vec<FileModel>> {
         Ok(self
             .fetch_all(
-                sqlx::query_as(SELECT_MANY_EXPIRE).bind(
+                sqlx::query_as(SELECT_MANY_EXPIRE).bind(bucket_id).bind(
                     Utc::now()
                         .checked_sub_signed(
                             Duration::try_seconds(*ttl_seconds)

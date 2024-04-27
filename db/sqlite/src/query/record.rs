@@ -187,7 +187,7 @@ pub fn delete(record_table: &str, columns: &Vec<&str>) -> String {
 }
 
 pub fn delete_expired(record_table: &str) -> String {
-    format!("DELETE FROM \"{record_table}\" WHERE _updated_at < ?")
+    format!("DELETE FROM \"{record_table}\" WHERE \"_updated_at\" < ?")
 }
 
 pub fn count(record_table: &str, filter: &str, groups: &Vec<&str>) -> String {

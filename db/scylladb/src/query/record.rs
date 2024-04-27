@@ -8,7 +8,7 @@ pub fn create_table(
     columns: &HashMap<String, SchemaFieldPropsModel>,
 ) -> String {
     format!(
-        "CREATE TABLE IF NOT EXISTS \"hyperbase\".\"{}\" (\"_id\" uuid, \"_created_by\" uuid, \"_updated_at\" timestamp, {}PRIMARY KEY (\"_id\")) ",
+        "CREATE TABLE IF NOT EXISTS \"hyperbase\".\"{}\" (\"_collection_id\" uuid, \"_id\" uuid, \"_created_by\" uuid, \"_updated_at\" timestamp, {}PRIMARY KEY (\"_collection_id\", \"_id\")) WITH CLUSTERING ORDER BY (\"_id\" DESC)",
         record_table,
         columns
             .iter()
@@ -85,7 +85,7 @@ pub fn insert(record_table: &str, columns: &Vec<&str>) -> String {
 
 pub fn select(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
-        "SELECT {} FROM \"hyperbase\".\"{}\" WHERE \"_id\" = ?",
+        "SELECT {} FROM \"hyperbase\".\"{}\" WHERE \"_collection_id\" = ? AND \"_id\" = ?",
         columns.iter().map(|col| format!("\"{col}\"")).join(", "),
         record_table
     )
@@ -100,7 +100,6 @@ pub fn select_many(
     columns: &Vec<&str>,
     filter: &str,
     groups: &Vec<&str>,
-    orders: &Vec<(&str, &str)>,
     with_query_limit: &bool,
 ) -> String {
     let mut query = format!(
@@ -131,17 +130,6 @@ pub fn select_many(
             count += 1;
         }
     }
-    if orders.len() > 0 {
-        query += " ORDER BY";
-        let mut count = 0;
-        for (field, kind) in orders {
-            if count > 0 {
-                query += ","
-            }
-            query += &format!(" \"{field}\" {kind}");
-            count += 1;
-        }
-    }
     if *with_query_limit {
         query += " LIMIT ?"
     }
@@ -150,7 +138,7 @@ pub fn select_many(
 
 pub fn update(record_table: &str, columns: &Vec<&str>) -> String {
     format!(
-        "UPDATE \"hyperbase\".\"{}\" SET {} WHERE \"_id\" = ?",
+        "UPDATE \"hyperbase\".\"{}\" SET {} WHERE \"_collection_id\" = ? AND \"_id\" = ?",
         record_table,
         columns
             .iter()
@@ -170,15 +158,8 @@ pub fn delete(record_table: &str, columns: &Vec<&str>) -> String {
     )
 }
 
-pub fn delete_expired(record_table: &str) -> String {
-    format!("DELETE FROM \"hyperbase\".\"{record_table}\" WHERE _updated_at < ?")
-}
-
 pub fn count(record_table: &str, filter: &str, groups: &Vec<&str>) -> String {
-    let mut query = format!(
-        "SELECT COUNT(1) FROM (SELECT 1 FROM \"hyperbase\".\"{}\"",
-        record_table
-    );
+    let mut query = format!("SELECT COUNT(1) FROM \"hyperbase\".\"{}\"", record_table);
     if filter.len() > 0 {
         query += &format!(" WHERE {filter}")
     }
@@ -194,6 +175,5 @@ pub fn count(record_table: &str, filter: &str, groups: &Vec<&str>) -> String {
         }
     }
     query += " ALLOW FILTERING";
-    query += ")";
     query
 }

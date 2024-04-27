@@ -27,7 +27,7 @@ pub struct Config {
     log: LogConfig,
     hash: HashConfig,
     token: TokenConfig,
-    mailer: MailerConfig,
+    mailer: Option<MailerConfig>,
     db: DbConfig,
     bucket: BucketConfig,
     api: ApiConfig,
@@ -51,7 +51,7 @@ impl Config {
         &self.token
     }
 
-    pub fn mailer(&self) -> &MailerConfig {
+    pub fn mailer(&self) -> &Option<MailerConfig> {
         &self.mailer
     }
 

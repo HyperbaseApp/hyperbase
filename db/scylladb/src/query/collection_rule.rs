@@ -82,7 +82,10 @@ impl ScyllaDb {
         collection_id: &Uuid,
     ) -> Result<CollectionRuleModel> {
         Ok(self
-            .execute(SELECT, [token_id, collection_id].as_ref())
+            .execute(
+                SELECT_BY_TOKEN_ID_AND_COLLECTION_ID,
+                [token_id, collection_id].as_ref(),
+            )
             .await?
             .first_row_typed()?)
     }

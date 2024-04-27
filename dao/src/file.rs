@@ -104,18 +104,19 @@ impl FileDao {
         self.db_insert(db).await
     }
 
-    pub async fn delete(db: &Db, bucket_path: &str, id: &Uuid) -> Result<()> {
-        fs::remove_file(&format!("{}/{}", bucket_path, id)).await?;
+    pub async fn delete(db: &Db, bucket_data: &BucketDao, id: &Uuid) -> Result<()> {
+        fs::remove_file(&format!("{}/{}", bucket_data.path(), id)).await?;
 
-        Self::db_delete(db, id).await
+        Self::db_delete(db, bucket_data.id(), id).await
     }
 
     async fn delete_expired(db: &Db, bucket_data: &BucketDao) -> Result<()> {
         if let Some(ttl_seconds) = bucket_data.opt_ttl() {
-            let files_data = Self::db_select_many_expired(db, ttl_seconds).await?;
+            let files_data =
+                Self::db_select_many_expired(db, bucket_data.id(), ttl_seconds).await?;
             let mut delete_expired_mut = Vec::with_capacity(files_data.len());
             for file_data in &files_data {
-                delete_expired_mut.push(Self::delete(db, bucket_data.path(), &file_data.id));
+                delete_expired_mut.push(Self::delete(db, bucket_data, &file_data.id));
             }
             future::try_join_all(delete_expired_mut).await?;
         }
@@ -275,18 +276,22 @@ impl FileDao {
         }
     }
 
-    async fn db_select_many_expired(db: &Db, ttl_seconds: &i64) -> Result<Vec<Self>> {
+    async fn db_select_many_expired(
+        db: &Db,
+        bucket_id: &Uuid,
+        ttl_seconds: &i64,
+    ) -> Result<Vec<Self>> {
         match db {
             Db::ScyllaDb(db) => {
                 let mut files_data = Vec::new();
-                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let files = db.select_many_expired_file(bucket_id, ttl_seconds).await?;
                 for file in files {
                     files_data.push(Self::from_scylladb_model(&file?)?);
                 }
                 Ok(files_data)
             }
             Db::PostgresqlDb(db) => {
-                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let files = db.select_many_expired_file(bucket_id, ttl_seconds).await?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_postgresdb_model(file)?);
@@ -294,7 +299,7 @@ impl FileDao {
                 Ok(files_data)
             }
             Db::MysqlDb(db) => {
-                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let files = db.select_many_expired_file(bucket_id, ttl_seconds).await?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_mysqldb_model(file)?);
@@ -302,7 +307,7 @@ impl FileDao {
                 Ok(files_data)
             }
             Db::SqliteDb(db) => {
-                let files = db.select_many_expired_file(ttl_seconds).await?;
+                let files = db.select_many_expired_file(bucket_id, ttl_seconds).await?;
                 let mut files_data = Vec::with_capacity(files.len());
                 for file in &files {
                     files_data.push(Self::from_sqlitedb_model(file)?);
@@ -322,9 +327,9 @@ impl FileDao {
         }
     }
 
-    async fn db_delete(db: &Db, id: &Uuid) -> Result<()> {
+    async fn db_delete(db: &Db, bucket_id: &Uuid, id: &Uuid) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => db.delete_file(id).await,
+            Db::ScyllaDb(db) => db.delete_file(bucket_id, id).await,
             Db::PostgresqlDb(db) => db.delete_file(id).await,
             Db::MysqlDb(db) => db.delete_file(id).await,
             Db::SqliteDb(db) => db.delete_file(id).await,

@@ -1008,7 +1008,7 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
     }
 
-    if let Err(err) = FileDao::delete(ctx.dao().db(), bucket_data.path(), path.file_id()).await {
+    if let Err(err) = FileDao::delete(ctx.dao().db(), &bucket_data, path.file_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 

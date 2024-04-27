@@ -85,7 +85,7 @@ async fn insert_one(
         }
     }
 
-    let token_data: TokenDao = TokenDao::new(
+    let token_data = TokenDao::new(
         project_data.id(),
         &admin_id,
         data.name(),

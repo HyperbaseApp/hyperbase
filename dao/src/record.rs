@@ -31,7 +31,7 @@ use hb_db_scylladb::{
         collection::SchemaFieldPropsModel as SchemaFieldPropsScyllaModel,
         system::{
             COMPARISON_OPERATOR as SCYLLA_COMPARISON_OPERATOR,
-            LOGICAL_OPERATOR as SCYLLA_LOGICAL_OPERATOR, ORDER_TYPE as SCYLLA_ORDER_TYPE,
+            LOGICAL_OPERATOR as SCYLLA_LOGICAL_OPERATOR,
         },
     },
     query::{record as scylla_record, system::COUNT_TABLE as SCYLLA_COUNT_TABLE},
@@ -47,10 +47,7 @@ use hb_db_sqlite::{
     },
     query::{record as sqlite_record, system::COUNT_TABLE as SQLITE_COUNT_TABLE},
 };
-use scylla::{
-    frame::{response::result::CqlValue as ScyllaCqlValue, value::CqlTimestamp},
-    serialize::value::SerializeCql,
-};
+use scylla::{frame::response::result::CqlValue as ScyllaCqlValue, serialize::value::SerializeCql};
 use uuid::Uuid;
 
 use crate::{
@@ -61,6 +58,7 @@ use crate::{
 
 pub struct RecordDao {
     table_name: String,
+    collection_id: Uuid,
     data: HashMap<String, ColumnValue>,
 }
 
@@ -82,6 +80,7 @@ impl RecordDao {
 
         Self {
             table_name: Self::new_table_name(collection_id),
+            collection_id: *collection_id,
             data,
         }
     }
@@ -92,6 +91,10 @@ impl RecordDao {
 
     pub fn table_name(&self) -> &str {
         &self.table_name
+    }
+
+    pub fn collection_id(&self) -> &Uuid {
+        &self.collection_id
     }
 
     pub fn data(&self) -> &HashMap<String, ColumnValue> {
@@ -436,8 +439,15 @@ impl RecordDao {
                     }
                 }
 
-                let scylladb_data =
-                    Self::scylladb_select(db, &table_name, &columns, id, created_by).await?;
+                let scylladb_data = Self::scylladb_select(
+                    db,
+                    &table_name,
+                    &columns,
+                    collection_data.id(),
+                    id,
+                    created_by,
+                )
+                .await?;
 
                 let mut data = HashMap::with_capacity(scylladb_data.len());
                 for (idx, value) in scylladb_data.iter().enumerate() {
@@ -470,7 +480,11 @@ impl RecordDao {
                     };
                 }
 
-                Ok(Self { table_name, data })
+                Ok(Self {
+                    table_name,
+                    collection_id: *collection_data.id(),
+                    data,
+                })
             }
             Db::PostgresqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -520,7 +534,11 @@ impl RecordDao {
                     );
                 }
 
-                Ok(Self { table_name, data })
+                Ok(Self {
+                    table_name,
+                    collection_id: *collection_data.id(),
+                    data,
+                })
             }
             Db::MysqlDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -570,7 +588,11 @@ impl RecordDao {
                     );
                 }
 
-                Ok(Self { table_name, data })
+                Ok(Self {
+                    table_name,
+                    collection_id: *collection_data.id(),
+                    data,
+                })
             }
             Db::SqliteDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -620,7 +642,11 @@ impl RecordDao {
                     );
                 }
 
-                Ok(Self { table_name, data })
+                Ok(Self {
+                    table_name,
+                    collection_id: *collection_data.id(),
+                    data,
+                })
             }
         }
     }
@@ -639,6 +665,7 @@ impl RecordDao {
         if let Some(ttl_seconds) = collection_data.opt_ttl() {
             Self::db_delete_expired(db, collection_data.id(), ttl_seconds).await?;
         }
+
         match db {
             Db::ScyllaDb(db) => {
                 let table_name = Self::new_table_name(collection_data.id());
@@ -677,7 +704,6 @@ impl RecordDao {
                     created_by,
                     filters,
                     groups,
-                    orders,
                     pagination,
                 )
                 .await?;
@@ -735,6 +761,7 @@ impl RecordDao {
                     }
                     data_many.push(Self {
                         table_name: table_name.to_owned(),
+                        collection_id: *collection_data.id(),
                         data,
                     });
                 }
@@ -819,6 +846,7 @@ impl RecordDao {
                     }
                     data_many.push(Self {
                         table_name: table_name.to_owned(),
+                        collection_id: *collection_data.id(),
                         data,
                     })
                 }
@@ -903,6 +931,7 @@ impl RecordDao {
                     }
                     data_many.push(Self {
                         table_name: table_name.to_owned(),
+                        collection_id: *collection_data.id(),
                         data,
                     })
                 }
@@ -987,6 +1016,7 @@ impl RecordDao {
                     }
                     data_many.push(Self {
                         table_name: table_name.to_owned(),
+                        collection_id: *collection_data.id(),
                         data,
                     })
                 }
@@ -1027,7 +1057,7 @@ impl RecordDao {
 
     async fn db_delete_expired(db: &Db, collection_id: &Uuid, ttl_seconds: &i64) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_delete_expired(db, collection_id, ttl_seconds).await,
+            Db::ScyllaDb(_) => Ok(()),
             Db::PostgresqlDb(db) => {
                 Self::postgresdb_delete_expired(db, collection_id, ttl_seconds).await
             }
@@ -1128,9 +1158,14 @@ impl RecordDao {
     }
 
     async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
-        let mut columns = Vec::with_capacity(self.data.len());
-        let mut values = Vec::with_capacity(self.data.len());
-        for (col, val) in &self.data {
+        let mut data = self.data.to_owned();
+        data.insert(
+            "_collection_id".to_owned(),
+            ColumnValue::Uuid(Some(self.collection_id)),
+        );
+        let mut columns = Vec::with_capacity(data.len());
+        let mut values = Vec::with_capacity(data.len());
+        for (col, val) in &data {
             columns.push(col.as_str());
             values.push(val.to_scylladb_model()?);
         }
@@ -1143,22 +1178,26 @@ impl RecordDao {
         db: &ScyllaDb,
         table_name: &str,
         columns: &Vec<&str>,
+        collection_id: &Uuid,
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<Vec<Option<ScyllaCqlValue>>> {
         Ok(if let Some(created_by) = created_by {
             db.execute(
                 &scylla_record::select_by_id_and_created_by(table_name, columns),
-                [id, created_by].as_ref(),
+                [collection_id, id, created_by].as_ref(),
             )
             .await?
             .first_row()?
             .columns
         } else {
-            db.execute(&scylla_record::select(table_name, columns), [id].as_ref())
-                .await?
-                .first_row()?
-                .columns
+            db.execute(
+                &scylla_record::select(table_name, columns),
+                [collection_id, id].as_ref(),
+            )
+            .await?
+            .first_row()?
+            .columns
         })
     }
 
@@ -1169,7 +1208,6 @@ impl RecordDao {
         created_by: &Option<Uuid>,
         filters: &RecordFilters,
         groups: &Vec<&str>,
-        orders: &Vec<RecordOrder>,
         pagination: &RecordPagination,
     ) -> Result<(Vec<Vec<Option<ScyllaCqlValue>>>, i64)> {
         let mut filter = filters.scylladb_filter_query(&None, 0)?;
@@ -1178,18 +1216,6 @@ impl RecordDao {
                 filter = format!("\"_created_by\" = ? AND ({filter})");
             } else {
                 filter = format!("\"_created_by\" = ?");
-            }
-        }
-
-        let mut order = Vec::with_capacity(orders.len());
-        for o in orders {
-            if SCYLLA_ORDER_TYPE.contains(&o.kind.to_uppercase().as_str()) {
-                order.push((o.field.as_str(), o.kind.as_str()));
-            } else {
-                return Err(Error::msg(format!(
-                    "Order type '{}' is not supported",
-                    &o.kind
-                )));
             }
         }
 
@@ -1212,7 +1238,6 @@ impl RecordDao {
             columns,
             &filter,
             groups,
-            &order,
             &pagination.limit().is_some(),
         );
         let query_total = scylla_record::count(table_name, &filter, groups);
@@ -1247,6 +1272,7 @@ impl RecordDao {
             }
             None => return Err(Error::msg("_updated_at is undefined")),
         }
+        values.push(Box::new(self.collection_id));
         match self.data.get("_id") {
             Some(id) => values.push(id.to_scylladb_model()?),
             None => return Err(Error::msg("_id is undefined")),
@@ -1262,44 +1288,23 @@ impl RecordDao {
         id: &Uuid,
         created_by: &Option<Uuid>,
     ) -> Result<()> {
-        let mut column = Vec::with_capacity(2);
+        let mut column = Vec::with_capacity(3);
+        column.push("_collection_id");
         column.push("_id");
         if let Some(created_by) = created_by {
             column.push("_created_by");
             db.execute(
                 &scylla_record::delete(&Self::new_table_name(collection_id), &column),
-                [id, created_by].as_ref(),
+                [collection_id, id, created_by].as_ref(),
             )
             .await?;
         } else {
             db.execute(
                 &scylla_record::delete(&Self::new_table_name(collection_id), &column),
-                [id].as_ref(),
+                [collection_id, id].as_ref(),
             )
             .await?;
         }
-        Ok(())
-    }
-
-    async fn scylladb_delete_expired(
-        db: &ScyllaDb,
-        collection_id: &Uuid,
-        ttl_seconds: &i64,
-    ) -> Result<()> {
-        db.execute(
-            &scylla_record::delete_expired(&Self::new_table_name(collection_id)),
-            [CqlTimestamp(
-                Utc::now()
-                    .checked_sub_signed(
-                        Duration::try_seconds(*ttl_seconds)
-                            .ok_or_else(|| Error::msg("collection ttl is out of range."))?,
-                    )
-                    .ok_or_else(|| Error::msg("collection ttl is out of range."))?
-                    .timestamp_millis(),
-            )]
-            .as_ref(),
-        )
-        .await?;
         Ok(())
     }
 

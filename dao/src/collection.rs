@@ -196,7 +196,7 @@ impl CollectionDao {
                 let mut collections_data = Vec::new();
                 let collections = db.select_many_collections_by_project_id(project_id).await?;
                 for collection in collections {
-                    collections_data.push(Self::from_scylladb_model(&collection?)?)
+                    collections_data.push(Self::from_scylladb_model(&collection?)?);
                 }
                 Ok(collections_data)
             }
@@ -382,13 +382,16 @@ impl CollectionDao {
     }
 
     fn from_scylladb_model(model: &CollectionScyllaModel) -> Result<Self> {
-        let mut schema_fields = HashMap::with_capacity(model.schema_fields().len());
-        for (key, value) in model.schema_fields() {
-            let value = match SchemaFieldProps::from_scylladb_model(value) {
-                Ok(value) => value,
-                Err(err) => return Err(err),
-            };
-            schema_fields.insert(key.to_owned(), value);
+        let mut schema_fields = HashMap::new();
+        if let Some(model_schema_fields) = model.schema_fields() {
+            schema_fields = HashMap::with_capacity(model_schema_fields.len());
+            for (key, value) in model_schema_fields {
+                let value = match SchemaFieldProps::from_scylladb_model(value) {
+                    Ok(value) => value,
+                    Err(err) => return Err(err),
+                };
+                schema_fields.insert(key.to_owned(), value);
+            }
         }
         Ok(Self {
             id: *model.id(),
@@ -410,11 +413,12 @@ impl CollectionDao {
             &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
             &self.project_id,
             &self.name,
-            &self
-                .schema_fields
-                .iter()
-                .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
-                .collect(),
+            &Some(
+                self.schema_fields
+                    .iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_scylladb_model()))
+                    .collect(),
+            ),
             &self.opt_auth_column_id,
             &self.opt_ttl,
         )
