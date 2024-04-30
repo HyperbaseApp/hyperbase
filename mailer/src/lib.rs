@@ -21,7 +21,7 @@ impl Mailer {
         sender_name: &str,
         sender_email: &str,
     ) -> (Self, mpsc::Sender<MailPayload>) {
-        hb_log::info(Some("⚡"), "Mailer: Initializing component");
+        hb_log::info(Some("⚡"), "[Mailer] Initializing component");
 
         let (sender, receiver) = mpsc::channel::<MailPayload>(32);
 
@@ -55,13 +55,13 @@ impl Mailer {
     }
 
     pub fn run_none() -> JoinHandle<()> {
-        hb_log::info(Some("⏩"), "Mailer: Skipping component");
+        hb_log::info(Some("⏩"), "[Mailer] Skipping component");
 
         tokio::spawn((|| async {})())
     }
 
     pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
-        hb_log::info(Some("💫"), "Mailer: Running component");
+        hb_log::info(Some("💫"), "[Mailer] Running component");
 
         tokio::spawn((|| async move {
             loop {
@@ -109,7 +109,7 @@ impl Mailer {
                 }
             }
 
-            hb_log::info(None, "Mailer: Shutting down component");
+            hb_log::info(None, "[Mailer] Shutting down component");
         })())
     }
 }

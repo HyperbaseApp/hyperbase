@@ -28,7 +28,7 @@ impl MysqlDb {
         table_reset_password_ttl: &i64,
         table_log_ttl: &i64,
     ) -> Self {
-        hb_log::info(Some("⚡"), "MySQL: Initializing component");
+        hb_log::info(Some("⚡"), "[MySQL] Initializing component");
 
         let url = format!("mysql://{user}:{password}@{host}:{port}/{db_name}");
         let pool = MySqlPoolOptions::new()

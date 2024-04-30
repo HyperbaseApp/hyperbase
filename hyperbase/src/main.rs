@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use hb_api_internal_gossip::ApiInternalGossip;
 use hb_api_mqtt::{
     context::{ApiMqttCtx, ApiMqttDaoCtx, ApiMqttWsCtx},
     ApiMqttClient,
@@ -13,7 +14,7 @@ use hb_api_rest::{
 };
 use hb_api_websocket::{
     context::{ApiWebSocketCtx, ApiWebSocketDaoCtx},
-    server::ApiWebSocketServer,
+    ApiWebSocketServer,
 };
 use hb_dao::Db;
 use hb_db_mysql::db::MysqlDb;
@@ -34,7 +35,7 @@ async fn main() {
 
     hb_log::init(config.log().display_level(), config.log().level_filter());
 
-    hb_log::info(Some("🚀"), "Hyperbase: Starting");
+    hb_log::info(Some("🚀"), "[Hyperbase] Starting");
 
     let argon2_hash = Argon2Hash::new(
         config.hash().argon2().algorithm(),
@@ -118,8 +119,17 @@ async fn main() {
             .await,
         ))
     } else {
-        hb_log::panic(None, "Hyperbase: No database configuration is specified");
+        hb_log::panic(None, "[Hyperbase] No database configuration is specified");
         return;
+    };
+
+    let api_internal_gossip = match config.api().gossip() {
+        Some(config_gossip) => Some(ApiInternalGossip::new(
+            config_gossip.host(),
+            config_gossip.port(),
+            config_gossip.peers(),
+        )),
+        None => None,
     };
 
     let (api_websocket_server, websocket_handler, websocket_publisher) = ApiWebSocketServer::new(
@@ -178,6 +188,10 @@ async fn main() {
     let cancel_token = CancellationToken::new();
 
     match tokio::try_join!(
+        match api_internal_gossip {
+            Some(api_internal_gossip) => api_internal_gossip.run(cancel_token.clone()),
+            None => ApiInternalGossip::run_none(),
+        },
         match mailer {
             Some(mailer) => mailer.run(cancel_token.clone()),
             None => Mailer::run_none(),
@@ -189,13 +203,13 @@ async fn main() {
         },
         api_websocket_server.run(cancel_token.clone())
     ) {
-        Ok(_) => hb_log::info(Some("👋"), "Hyperbase: Turned off"),
+        Ok(_) => hb_log::info(Some("👋"), "[Hyperbase] Turned off"),
         Err(err) => {
-            hb_log::warn(None, "Hyperbase: Shutting down all running components");
+            hb_log::warn(None, "[Hyperbase] Shutting down all running components");
             cancel_token.cancel();
             hb_log::warn(
                 Some("👋"),
-                format!("Hyperbase: Turned off with error: {err}"),
+                format!("[Hyperbase] Turned off with error: {err}"),
             );
         }
     }

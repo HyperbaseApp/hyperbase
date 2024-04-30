@@ -14,7 +14,7 @@ const DELETE_EXPIRE: &str = "DELETE FROM \"admin_password_resets\" WHERE \"updat
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(
         Some("🔧"),
-        "PostgreSQL: Setting up admin_password_resets table",
+        "[PostgreSQL] Setting up admin_password_resets table",
     );
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"admin_password_resets\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"admin_id\" uuid, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();

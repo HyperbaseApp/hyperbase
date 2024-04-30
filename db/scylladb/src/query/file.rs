@@ -19,7 +19,7 @@ const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"created_by\" = ?, \"u
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
-    hb_log::info(Some("🔧"), "ScyllaDB: Setting up files table");
+    hb_log::info(Some("🔧"), "[ScyllaDB] Setting up files table");
 
     cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"bucket_id\", \"id\")) WITH CLUSTERING ORDER BY (\"id\" DESC)", &[]).await.unwrap();
 

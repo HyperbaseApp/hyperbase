@@ -24,7 +24,7 @@ impl SqliteDb {
         table_reset_password_ttl: &i64,
         table_log_ttl: &i64,
     ) -> Self {
-        hb_log::info(Some("⚡"), "SQLite: Initializing component");
+        hb_log::info(Some("⚡"), "[SQLite] Initializing component");
 
         let url = format!("sqlite:{path}?mode=rwc");
         let pool = SqlitePoolOptions::new()

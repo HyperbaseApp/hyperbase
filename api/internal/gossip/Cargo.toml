@@ -1,0 +1,22 @@
+[package]
+name = "hb_api_internal_gossip"
+version = "0.1.0"
+edition = "2021"
+authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
+
+
+[dependencies]
+hb_log = { workspace = true }
+
+ahash = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+rmp-serde = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+
+
+[lints]
+workspace = true

@@ -16,7 +16,7 @@ const UPDATE: &str = "UPDATE `files` SET `created_by` = ?, `updated_at` = ?, `fi
 const DELETE: &str = "DELETE FROM `files` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
-    hb_log::info(Some("🔧"), "MySQL: Setting up files table");
+    hb_log::info(Some("🔧"), "[MySQL] Setting up files table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS `files` (`id` binary(16), `created_by` binary(16), `created_at` timestamp, `updated_at` timestamp, `bucket_id` binary(16), `file_name` text, `content_type` text, `size` bigint, `public` boolean, PRIMARY KEY (`id`))").await.unwrap();
 

@@ -16,10 +16,12 @@ members = [
     "api/rest",
     "api/mqtt",
     "api/websocket",
+    "api/internal/gossip",
 ]
 
 
 [workspace.dependencies]
+hb_api_internal_gossip = { path = "./api/internal/gossip" }
 hb_api_mqtt = { path = "./api/mqtt" }
 hb_api_rest = { path = "./api/rest" }
 hb_api_websocket = { path = "./api/websocket" }
@@ -63,6 +65,7 @@ lettre = { version = "0.11", default-features = false, features = [
 mime = "0.3"
 num-bigint = { version = "0.4", features = ["serde"] }
 rand = "0.8"
+rmp-serde = "1"
 rumqttc = "0.24"
 scylla = { version = "0.12", features = ["num-bigint-04", "bigdecimal-04"] }
 serde = { version = "1" }

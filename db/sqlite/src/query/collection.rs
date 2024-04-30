@@ -11,7 +11,7 @@ const UPDATE: &str = "UPDATE \"collections\" SET \"updated_at\" = ?, \"name\" = 
 const DELETE: &str = "DELETE FROM \"collections\" WHERE \"id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
-    hb_log::info(Some("🔧"), "SQLite: Setting up collections table");
+    hb_log::info(Some("🔧"), "[SQLite] Setting up collections table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"collections\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"name\" text, \"schema_fields\" blob, \"opt_auth_column_id\" boolean, \"opt_ttl\" bigint, PRIMARY KEY (\"id\"))").await.unwrap();
 

@@ -11,7 +11,7 @@ const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, 
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 
 pub async fn init(cached_session: &CachingSession) {
-    hb_log::info(Some("🔧"), "ScyllaDB: Setting up projects table");
+    hb_log::info(Some("🔧"), "[ScyllaDB] Setting up projects table");
 
     cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"projects\" (\"id\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"admin_id\" uuid, \"name\" text, PRIMARY KEY (\"id\"))", &[]).await.unwrap();
     cached_session

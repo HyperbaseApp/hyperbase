@@ -12,7 +12,7 @@ const UPDATE: &str = "UPDATE \"tokens\" SET \"updated_at\" = ?, \"admin_id\" = ?
 const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
-    hb_log::info(Some("🔧"), "SQLite: Setting up tokens table");
+    hb_log::info(Some("🔧"), "[SQLite] Setting up tokens table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"admin_id\" blob, \"name\" text, \"token\" text, \"allow_anonymous\" boolean, \"expired_at\" timestamp, PRIMARY KEY (\"id\"))").await.unwrap();
 

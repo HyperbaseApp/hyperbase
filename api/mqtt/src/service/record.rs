@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
-use hb_api_websocket::server::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
+use hb_api_websocket::message::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
     collection::CollectionDao,
     log::{LogDao, LogKind},
@@ -26,11 +26,11 @@ pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
                 "Successfully insert one payload to collection id {}",
                 payload.collection_id()
             );
-            hb_log::info(None, &format!("ApiMqttClient: {msg}"));
+            hb_log::info(None, &format!("[ApiMqttClient] {msg}"));
             (LogKind::Info, msg)
         }
         Err(err) => {
-            hb_log::error(None, &format!("ApiMqttClient: {err}"));
+            hb_log::error(None, &format!("[ApiMqttClient] {err}"));
             (LogKind::Error, err.to_string())
         }
     };
@@ -45,7 +45,7 @@ pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
         Err(err) => {
             hb_log::error(
                 None,
-                &format!("ApiMqttClient: Failed to get token data: {err}"),
+                &format!("[ApiMqttClient] Failed to get token data: {err}"),
             );
             return;
         }
@@ -61,13 +61,13 @@ pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
             ) {
                 hb_log::error(
                     None,
-                    &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                    &format!("[ApiMqttClient] Error when serializing websocket data: {err}"),
                 );
             }
         }
         Err(err) => hb_log::error(
             None,
-            &format!("ApiMqttClient: Error when inserting log data: {err}"),
+            &format!("[ApiMqttClient] Error when inserting log data: {err}"),
         ),
     }
 }
@@ -167,11 +167,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
         )));
     };
 
-    let mut record_data = RecordDao::new(
-        &created_by,
-        collection_data.id(),
-        &Some(payload.data().len()),
-    );
+    let mut record_data = RecordDao::new(&created_by, collection_data.id(), &payload.data().len());
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = payload.data().get(field_name) {
             if !value.is_null() {
@@ -206,7 +202,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
                 Err(err) => {
                     hb_log::error(
                         None,
-                        &format!("ApiMqttClient: Error when serializing record: {err}"),
+                        &format!("[ApiMqttClient] Error when serializing record: {err}"),
                     );
                     return;
                 }
@@ -226,7 +222,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
             hb_log::error(
                 None,
                 &format!(
-                    "ApiMqttClient: Error when broadcasting insert_one record to websocket: {err}"
+                    "[ApiMqttClient] Error when broadcasting insert_one record to websocket: {err}"
                 ),
             );
             return;

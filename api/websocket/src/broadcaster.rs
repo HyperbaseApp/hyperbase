@@ -1,7 +1,7 @@
 use anyhow::{Error, Result};
 use tokio::sync::mpsc;
 
-use crate::server::Message;
+use crate::message::Message;
 
 #[derive(Clone)]
 pub struct WebSocketBroadcaster {
@@ -16,7 +16,7 @@ impl WebSocketBroadcaster {
     pub fn broadcast(&self, message: Message) -> Result<()> {
         self.broadcast_tx
             .send(message)
-            .map_err(|err| Error::msg(err.to_string()))?;
+            .map_err(|err| Error::from(err))?;
         Ok(())
     }
 }

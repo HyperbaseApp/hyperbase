@@ -1,7 +1,7 @@
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt};
-use hb_api_websocket::server::{Target, UserSession};
+use hb_api_websocket::{message::Target, session::UserSession};
 use hb_dao::{
     admin::AdminDao,
     collection::{CollectionDao, SchemaFieldProps},

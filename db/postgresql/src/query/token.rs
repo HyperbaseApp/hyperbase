@@ -12,7 +12,7 @@ const UPDATE: &str = "UPDATE \"tokens\" SET \"updated_at\" = $1, \"admin_id\" = 
 const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
-    hb_log::info(Some("🔧"), "PostgreSQL: Setting up tokens table");
+    hb_log::info(Some("🔧"), "[PostgreSQL] Setting up tokens table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"admin_id\" uuid, \"name\" text, \"token\" text, \"allow_anonymous\" boolean, \"expired_at\" timestamptz, PRIMARY KEY (\"id\"))").await.unwrap();
 

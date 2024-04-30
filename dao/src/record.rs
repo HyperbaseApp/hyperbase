@@ -63,11 +63,8 @@ pub struct RecordDao {
 }
 
 impl RecordDao {
-    pub fn new(created_by: &Uuid, collection_id: &Uuid, capacity: &Option<usize>) -> Self {
-        let mut data = HashMap::with_capacity(match capacity {
-            Some(capacity) => capacity + 3,
-            None => 3,
-        });
+    pub fn new(created_by: &Uuid, collection_id: &Uuid, capacity: &usize) -> Self {
+        let mut data = HashMap::with_capacity(capacity + 3);
         data.insert("_id".to_owned(), ColumnValue::Uuid(Some(Uuid::now_v7())));
         data.insert(
             "_created_by".to_owned(),

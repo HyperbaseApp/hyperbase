@@ -6,6 +6,7 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 
 [dependencies]
+hb_api_internal_gossip = { workspace = true }
 hb_api_mqtt = { workspace = true }
 hb_api_rest = { workspace = true }
 hb_api_websocket = { workspace = true }

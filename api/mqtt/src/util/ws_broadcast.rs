@@ -1,7 +1,7 @@
 use anyhow::Result;
 use hb_api_websocket::{
     broadcaster::WebSocketBroadcaster,
-    server::{Message, MessageKind, Target},
+    message::{Message, MessageKind, Target},
 };
 use serde::Serialize;
 use uuid::Uuid;

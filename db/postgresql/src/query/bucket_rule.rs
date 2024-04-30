@@ -14,7 +14,7 @@ const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"toke
 const DELETE_MANY_BY_BUCKET_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"bucket_id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
-    hb_log::info(Some("🔧"), "PostgreSQL: Setting up bucket_rules table");
+    hb_log::info(Some("🔧"), "[PostgreSQL] Setting up bucket_rules table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"bucket_rules\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"token_id\" uuid, \"bucket_id\" uuid, \"find_one\" text, \"find_many\" text, \"insert_one\" boolean, \"update_one\" text, \"delete_one\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 

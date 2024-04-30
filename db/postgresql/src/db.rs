@@ -28,7 +28,7 @@ impl PostgresDb {
         table_reset_password_ttl: &i64,
         table_log_ttl: &i64,
     ) -> Self {
-        hb_log::info(Some("⚡"), "PostgreSQL: Initializing component");
+        hb_log::info(Some("⚡"), "[PostgreSQL] Initializing component");
 
         let url = format!("postgres://{user}:{password}@{host}:{port}/{db_name}");
         let pool = PgPoolOptions::new()

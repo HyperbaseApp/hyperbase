@@ -19,7 +19,7 @@ fn update_default_time_to_live(id: &Uuid, ttl: &i64) -> String {
 }
 
 pub async fn init(cached_session: &CachingSession) {
-    hb_log::info(Some("🔧"), "ScyllaDB: Setting up collections table");
+    hb_log::info(Some("🔧"), "[ScyllaDB] Setting up collections table");
 
     cached_session
         .get_session()

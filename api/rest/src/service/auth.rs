@@ -3,7 +3,7 @@ use std::str::FromStr;
 use actix_web::{http::StatusCode, web, HttpResponse, HttpResponseBuilder};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashSet, HashSetExt};
-use hb_api_websocket::server::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
+use hb_api_websocket::message::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
     admin::AdminDao,
     admin_password_reset::AdminPasswordResetDao,
@@ -441,7 +441,7 @@ async fn mqtt_authentication(
     let token_data = match TokenDao::db_select(ctx.dao().db(), &token_id).await {
         Ok(data) => data,
         Err(err) => {
-            hb_log::error(None, err);
+            hb_log::error(None, &format!("Failed to get token data: {err}"));
             return HttpResponseBuilder::new(StatusCode::BAD_REQUEST)
                 .json(MqttAuthenticationResJson::new("deny", &false));
         }
@@ -477,13 +477,15 @@ async fn mqtt_authentication(
                     ) {
                         hb_log::error(
                             None,
-                            &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                            &format!(
+                                "[ApiMqttClient] Error when serializing websocket data: {err}"
+                            ),
                         );
                     }
                 }
                 Err(err) => hb_log::error(
                     None,
-                    &format!("ApiMqttClient: Error when inserting log data: {err}"),
+                    &format!("[ApiMqttClient] Error when inserting log data: {err}"),
                 ),
             }
         })());
@@ -519,13 +521,13 @@ async fn mqtt_authentication(
                 ) {
                     hb_log::error(
                         None,
-                        &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                        &format!("[ApiMqttClient] Error when serializing websocket data: {err}"),
                     );
                 }
             }
             Err(err) => hb_log::error(
                 None,
-                &format!("ApiMqttClient: Error when inserting log data: {err}"),
+                &format!("[ApiMqttClient] Error when inserting log data: {err}"),
             ),
         }
     })());
@@ -624,13 +626,13 @@ async fn mqtt_authorization(
                 ) {
                     hb_log::error(
                         None,
-                        &format!("ApiMqttClient: Error when serializing websocket data: {err}"),
+                        &format!("[ApiMqttClient] Error when serializing websocket data: {err}"),
                     );
                 }
             }
             Err(err) => hb_log::error(
                 None,
-                &format!("ApiMqttClient: Error when inserting log data: {err}"),
+                &format!("[ApiMqttClient] Error when inserting log data: {err}"),
             ),
         }
     })());

@@ -3,7 +3,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Error;
 use context::ApiMqttCtx;
 use model::payload::Payload;
 use rumqttc::v5::{
@@ -39,7 +38,7 @@ impl ApiMqttClient {
         timeout: &Duration,
         ctx: ApiMqttCtx,
     ) -> Self {
-        hb_log::info(Some("⚡"), "ApiMqttClient: Initializing component");
+        hb_log::info(Some("⚡"), "[ApiMqttClient] Initializing component");
 
         let mut mqtt_opts = MqttOptions::new(format!("hyperbase-{}", Uuid::now_v7()), host, *port);
         mqtt_opts.set_credentials(username, password);
@@ -56,13 +55,13 @@ impl ApiMqttClient {
     }
 
     pub fn run_none() -> JoinHandle<()> {
-        hb_log::info(Some("⏩"), "ApiMqttClient: Skipping component");
+        hb_log::info(Some("⏩"), "[ApiMqttClient] Skipping component");
 
         tokio::spawn((|| async {})())
     }
 
     pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
-        hb_log::info(Some("💫"), "ApiMqttClient: Running component");
+        hb_log::info(Some("💫"), "[ApiMqttClient] Running component");
 
         tokio::spawn((|| async move {
             self.client
@@ -93,7 +92,7 @@ impl ApiMqttClient {
                                                 record_service(&ctx, &payload).await;
                                             })());
                                         }
-                                        Err(err) => hb_log::error(None, err),
+                                        Err(err) => hb_log::error(None, &format!("[ApiMqttClient] {err}")),
                                     };
                                 }
                             }
@@ -102,15 +101,17 @@ impl ApiMqttClient {
                     }
                 }
                 if Instant::now().duration_since(now) > self.timeout {
-                    let err = Error::msg(format!(
-                        "Failed to connect to MQTT broker {:?}",
-                        self.eventloop.options.broker_address()
-                    ));
-                    hb_log::panic(None, &format!("ApiMqttClient: {err}"));
+                    hb_log::panic(
+                        None,
+                        &format!(
+                            "[ApiMqttClient] Failed to connect to MQTT broker {:?}",
+                            self.eventloop.options.broker_address()
+                        ),
+                    );
                 }
             }
 
-            hb_log::info(None, "ApiMqttClient: Shutting down component");
+            hb_log::info(None, "[ApiMqttClient] Shutting down component");
             let _ = self.client.disconnect().await;
         })())
     }

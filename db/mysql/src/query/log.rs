@@ -11,7 +11,7 @@ const COUNT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT COUNT(1) FROM `logs`
 const DELETE_EXPIRE: &str = "DELETE FROM `logs` WHERE `created_at` < ?";
 
 pub async fn init(pool: &Pool<MySql>) {
-    hb_log::info(Some("🔧"), "MySQL: Setting up logs table");
+    hb_log::info(Some("🔧"), "[MySQL] Setting up logs table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS `logs` (`id` binary(16), `created_at` timestamp, `admin_id` binary(16), `project_id` binary(16), `kind` text, `message` text, PRIMARY KEY (`id`))").await.unwrap();
 

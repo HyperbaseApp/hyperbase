@@ -11,7 +11,7 @@ const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = $1, \"admin_id\" 
 const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
-    hb_log::info(Some("🔧"), "PostgreSQL: Setting up projects table");
+    hb_log::info(Some("🔧"), "[PostgreSQL] Setting up projects table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"projects\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"admin_id\" uuid, \"name\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 

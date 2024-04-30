@@ -1,7 +1,11 @@
 use anyhow::{Error, Result};
 use tokio::sync::mpsc;
 
-use crate::server::{ConnectionId, Message, Target, UserSession};
+use crate::{
+    message::{Message, Target},
+    session::UserSession,
+    ConnectionId,
+};
 
 pub enum Connection {
     Connect {
@@ -37,14 +41,14 @@ impl WebSocketConnection {
                 connection_id,
                 connection_tx,
             })
-            .map_err(|err| Error::msg(err.to_string()))?;
+            .map_err(|err| Error::from(err))?;
         Ok(())
     }
 
     pub fn disconnect(&self, connection_id: ConnectionId) -> Result<()> {
         self.tx
             .send(Connection::Disconnect(connection_id))
-            .map_err(|err| Error::msg(err.to_string()))?;
+            .map_err(|err| Error::from(err))?;
         Ok(())
     }
 }

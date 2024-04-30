@@ -14,7 +14,7 @@ const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"
 const DELETE_MANY_BY_COLLECTION_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"collection_id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
-    hb_log::info(Some("🔧"), "MySQL: Setting up collection_rules table");
+    hb_log::info(Some("🔧"), "[SQLite] Setting up collection_rules table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"collection_rules\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"token_id\" blob, \"collection_id\" blob, \"find_one\" text, \"find_many\" text, \"insert_one\" boolean, \"update_one\" text, \"delete_one\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 

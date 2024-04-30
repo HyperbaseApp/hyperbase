@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use backtrace::Backtrace;
-use tracing::{debug, error, info, level_filters::LevelFilter, warn};
+use tracing::{debug, error, info, level_filters::LevelFilter, trace, warn};
 
 pub fn init(display_level: &bool, level_filter: &str) {
     let level_filter = match LevelFilter::from_str(level_filter) {
@@ -13,6 +13,13 @@ pub fn init(display_level: &bool, level_filter: &str) {
         .with_level(*display_level)
         .with_max_level(level_filter)
         .init();
+}
+
+pub fn trace<T: Display>(prefix: Option<&str>, msg: T) {
+    match prefix {
+        Some(prefix) => trace!("{prefix} {msg}"),
+        None => trace!("🐾 {msg}"),
+    }
 }
 
 pub fn debug<T: Display>(prefix: Option<&str>, msg: T) {

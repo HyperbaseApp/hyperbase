@@ -12,7 +12,7 @@ const UPDATE: &str = "UPDATE `tokens` SET `updated_at` = ?, `admin_id` = ?, `nam
 const DELETE: &str = "DELETE FROM `tokens` WHERE `id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
-    hb_log::info(Some("🔧"), "MySQL: Setting up tokens table");
+    hb_log::info(Some("🔧"), "[MySQL] Setting up tokens table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS `tokens` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `admin_id` binary(16), `name` text, `token` text, `allow_anonymous` boolean, `expired_at` timestamp, PRIMARY KEY (`id`))").await.unwrap();
 

@@ -8,7 +8,8 @@ use uuid::Uuid;
 use crate::{
     broadcaster::WebSocketBroadcaster,
     connection::WebSocketConnection,
-    server::{Message, Target, UserSession},
+    message::{Message, Target},
+    session::UserSession,
 };
 
 #[derive(Clone)]
@@ -59,7 +60,7 @@ impl WebSocketHandler {
                         hb_log::info(
                             None,
                             &format!(
-                                "ApiWebSocketServer: Disconnecting connection '{}' because client has not sent hearbeat in over {:?}",
+                                "[ApiWebSocketServer] Disconnecting connection '{}' because client has not sent hearbeat in over {:?}",
                                 connection_id, self.client_timeout
                             ),
                         );
@@ -69,7 +70,7 @@ impl WebSocketHandler {
                         hb_log::info(
                             None,
                             &format!(
-                                "ApiWebSocketServer: Session with connection '{connection_id}' is closed"
+                                "[ApiWebSocketServer] Session with connection '{connection_id}' is closed"
                             ),
                         );
                         break None;
@@ -91,7 +92,7 @@ impl WebSocketHandler {
                         hb_log::warn(
                             None,
                             format!(
-                                "ApiWebSocketServer: Message stream of connection '{connection_id}' throws error {err}",
+                                "[ApiWebSocketServer] Message stream of connection '{connection_id}' throws error {err}",
                             ),
                         );
                         break None;
@@ -106,7 +107,7 @@ impl WebSocketHandler {
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiWebSocketServer: Error when serializing message: {err}",
+                                    "[ApiWebSocketServer] Error when serializing message: {err}",
                                 ),
                             );
                             continue;
@@ -116,7 +117,7 @@ impl WebSocketHandler {
                         hb_log::info(
                             None,
                             &format!(
-                                "ApiWebSocketServer: Session with connection '{connection_id}' is closed"
+                                "[ApiWebSocketServer] Session with connection '{connection_id}' is closed"
                             ),
                         );
                         break None;

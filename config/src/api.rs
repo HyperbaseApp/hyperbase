@@ -1,16 +1,21 @@
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use duration_str::deserialize_duration;
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ApiConfig {
+    gossip: Option<ApiGossipConfig>,
     rest: ApiRestConfig,
     websocket: ApiWebSocketConfig,
     mqtt: Option<ApiMqttConfig>,
 }
 
 impl ApiConfig {
+    pub fn gossip(&self) -> &Option<ApiGossipConfig> {
+        &self.gossip
+    }
+
     pub fn rest(&self) -> &ApiRestConfig {
         &self.rest
     }
@@ -21,6 +26,27 @@ impl ApiConfig {
 
     pub fn mqtt(&self) -> &Option<ApiMqttConfig> {
         &self.mqtt
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ApiGossipConfig {
+    host: String,
+    port: u16,
+    peers: Option<Vec<SocketAddr>>,
+}
+
+impl ApiGossipConfig {
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn port(&self) -> &u16 {
+        &self.port
+    }
+
+    pub fn peers(&self) -> &Option<Vec<SocketAddr>> {
+        &self.peers
     }
 }
 

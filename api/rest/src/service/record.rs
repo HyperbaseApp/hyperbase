@@ -1,7 +1,7 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use hb_api_websocket::server::{
+use hb_api_websocket::message::{
     Message as WebSocketMessage, MessageKind as WebSocketMessageKind, Target as WebSocketTarget,
 };
 use hb_dao::{
@@ -125,14 +125,14 @@ async fn insert_one(
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                    "[ApiRestServer] Error when broadcasting websocket data: {err}"
                                 ),
                             );
                         }
                     }
                     Err(err) => hb_log::error(
                         None,
-                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                        &format!("[ApiRestServer] Error when inserting log data: {err}"),
                     ),
                 }
             })());
@@ -236,7 +236,7 @@ async fn insert_one(
         );
     };
 
-    let mut record_data = RecordDao::new(&created_by, collection_data.id(), &Some(data.len()));
+    let mut record_data = RecordDao::new(&created_by, collection_data.id(), &data.len());
     for (field_name, field_props) in collection_data.schema_fields() {
         if let Some(value) = data.get(field_name) {
             if !value.is_null() {
@@ -293,7 +293,7 @@ async fn insert_one(
             Err(err) => {
                 hb_log::error(
                     None,
-                    &format!("ApiRestServer: Error when serializing record {record_id}: {err}"),
+                    &format!("[ApiRestServer] Error when serializing record {record_id}: {err}"),
                 );
                 return;
             }
@@ -308,7 +308,7 @@ async fn insert_one(
             hb_log::error(
                 None,
                 &format!(
-                    "ApiRestServer: Error when broadcasting insert_one record {} to websocket: {}",
+                    "[ApiRestServer] Error when broadcasting insert_one record {} to websocket: {}",
                     record_pub["_id"], err
                 ),
             );
@@ -392,14 +392,14 @@ async fn find_one(
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                    "[ApiRestServer] Error when broadcasting websocket data: {err}"
                                 ),
                             );
                         }
                     }
                     Err(err) => hb_log::error(
                         None,
-                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                        &format!("[ApiRestServer] Error when inserting log data: {err}"),
                     ),
                 }
             })());
@@ -626,14 +626,14 @@ async fn update_one(
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                    "[ApiRestServer] Error when broadcasting websocket data: {err}"
                                 ),
                             );
                         }
                     }
                     Err(err) => hb_log::error(
                         None,
-                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                        &format!("[ApiRestServer] Error when inserting log data: {err}"),
                     ),
                 }
             })());
@@ -837,7 +837,7 @@ async fn update_one(
             Err(err) => {
                 hb_log::error(
                     None,
-                    &format!("ApiRestServer: Error when serializing record {record_id}: {err}"),
+                    &format!("[ApiRestServer] Error when serializing record {record_id}: {err}"),
                 );
                 return;
             }
@@ -852,7 +852,7 @@ async fn update_one(
             hb_log::error(
                 None,
                 &format!(
-                    "ApiRestServer: Error when broadcasting update_one record {} to websocket: {}",
+                    "[ApiRestServer] Error when broadcasting update_one record {} to websocket: {}",
                     record_pub["_id"], err
                 ),
             );
@@ -935,14 +935,14 @@ async fn delete_one(
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                    "[ApiRestServer] Error when broadcasting websocket data: {err}"
                                 ),
                             );
                         }
                     }
                     Err(err) => hb_log::error(
                         None,
-                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                        &format!("[ApiRestServer] Error when inserting log data: {err}"),
                     ),
                 }
             })());
@@ -1090,7 +1090,7 @@ async fn delete_one(
             Err(err) => {
                 hb_log::error(
                     None,
-                    &format!("ApiRestServer: Error when serializing record {record_id}: {err}"),
+                    &format!("[ApiRestServer] Error when serializing record {record_id}: {err}"),
                 );
                 return;
             }
@@ -1105,7 +1105,7 @@ async fn delete_one(
             hb_log::error(
                 None,
                 &format!(
-                    "ApiRestServer: Error when broadcasting delete_one record {record_id} to websocket: {err}"
+                    "[ApiRestServer] Error when broadcasting delete_one record {record_id} to websocket: {err}"
                 ),
             );
             return;
@@ -1192,14 +1192,14 @@ async fn find_many(
                             hb_log::error(
                                 None,
                                 &format!(
-                                    "ApiRestServer: Error when broadcasting websocket data: {err}"
+                                    "[ApiRestServer] Error when broadcasting websocket data: {err}"
                                 ),
                             );
                         }
                     }
                     Err(err) => hb_log::error(
                         None,
-                        &format!("ApiRestServer: Error when inserting log data: {err}"),
+                        &format!("[ApiRestServer] Error when inserting log data: {err}"),
                     ),
                 }
             })());

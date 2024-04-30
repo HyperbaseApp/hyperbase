@@ -25,7 +25,7 @@ impl ScyllaDb {
         table_reset_password_ttl: &u32,
         table_log_ttl: &u32,
     ) -> Self {
-        hb_log::info(Some("⚡"), "ScyllaDB: Initializing component");
+        hb_log::info(Some("⚡"), "[ScyllaDB] Initializing component");
 
         let hostname = format!("{host}:{port}");
         let cached_session: CachingSession = CachingSession::from(

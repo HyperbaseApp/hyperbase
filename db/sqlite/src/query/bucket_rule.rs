@@ -14,7 +14,7 @@ const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"toke
 const DELETE_MANY_BY_BUCKET_ID: &str = "DELETE FROM \"bucket_rules\" WHERE \"bucket_id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
-    hb_log::info(Some("🔧"), "SQLite: Setting up bucket_rules table");
+    hb_log::info(Some("🔧"), "[SQLite] Setting up bucket_rules table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"bucket_rules\" (\"id\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"project_id\" blob, \"token_id\" blob, \"bucket_id\" blob, \"find_one\" text, \"find_many\" text, \"insert_one\" boolean, \"update_one\" text, \"delete_one\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 

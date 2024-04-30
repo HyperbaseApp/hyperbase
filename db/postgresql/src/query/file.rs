@@ -16,7 +16,7 @@ const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" =
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
-    hb_log::info(Some("🔧"), "PostgreSQL: Setting up files table");
+    hb_log::info(Some("🔧"), "[PostgreSQL] Setting up files table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
 

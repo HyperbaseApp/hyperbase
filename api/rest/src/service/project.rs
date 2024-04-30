@@ -468,11 +468,8 @@ async fn duplicate_one(
                         )
                     }
                 };
-                let new_record_data = RecordDao::new(
-                    created_by,
-                    new_collection_data.id(),
-                    &Some(record_data.len()),
-                );
+                let new_record_data =
+                    RecordDao::new(created_by, new_collection_data.id(), &record_data.len());
                 if let Err(err) = new_record_data.db_insert(ctx.dao().db()).await {
                     return Response::error_raw(
                         &StatusCode::INTERNAL_SERVER_ERROR,

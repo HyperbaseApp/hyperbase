@@ -16,7 +16,7 @@ const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = ?, \"updated_at\" = 
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
-    hb_log::info(Some("🔧"), "SQLite: Setting up files table");
+    hb_log::info(Some("🔧"), "[SQLite] Setting up files table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" blob, \"created_by\" blob, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" blob, \"file_name\" text, \"content_type\" text, \"size\" integer, \"public\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
 

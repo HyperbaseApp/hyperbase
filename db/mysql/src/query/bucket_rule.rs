@@ -14,7 +14,7 @@ const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM `bucket_rules` WHERE `token_i
 const DELETE_MANY_BY_BUCKET_ID: &str = "DELETE FROM `bucket_rules` WHERE `bucket_id` = ?";
 
 pub async fn init(pool: &Pool<MySql>) {
-    hb_log::info(Some("🔧"), "MySQL: Setting up bucket_rules table");
+    hb_log::info(Some("🔧"), "[MySQL] Setting up bucket_rules table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS `bucket_rules` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `token_id` binary(16), `bucket_id` binary(16), `find_one` text, `find_many` text, `insert_one` boolean, `update_one` text, `delete_one` text, PRIMARY KEY (`id`))").await.unwrap();
 

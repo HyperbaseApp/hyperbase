@@ -13,7 +13,7 @@ const DELETE: &str = "DELETE FROM \"registrations\" WHERE \"id\" = $1";
 const DELETE_EXPIRE: &str = "DELETE FROM \"registrations\" WHERE \"updated_at\" < $1";
 
 pub async fn init(pool: &Pool<Postgres>) {
-    hb_log::info(Some("🔧"), "PostgreSQL: Setting up registrations table");
+    hb_log::info(Some("🔧"), "[PostgreSQL] Setting up registrations table");
 
     pool.execute("CREATE TABLE IF NOT EXISTS \"registrations\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 

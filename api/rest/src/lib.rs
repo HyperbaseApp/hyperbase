@@ -1,9 +1,10 @@
+use std::net::SocketAddr;
+
 use actix_cors::Cors;
 use actix_web::{
     middleware::{ErrorHandlers, Logger},
     web, App, HttpServer,
 };
-use anyhow::Result;
 use configure::configure;
 use context::ApiRestCtx;
 use error_handler::default_error_handler;
@@ -22,7 +23,7 @@ mod util;
 
 pub struct ApiRestServer {
     app_mode: AppConfigMode,
-    address: String,
+    address: SocketAddr,
     allowed_origin: Option<String>,
     context: web::Data<ApiRestCtx>,
 }
@@ -35,9 +36,9 @@ impl ApiRestServer {
         allowed_origin: &Option<String>,
         ctx: ApiRestCtx,
     ) -> Self {
-        hb_log::info(Some("⚡"), "ApiRestServer: Initializing component");
+        hb_log::info(Some("⚡"), "[ApiRestServer] Initializing component");
 
-        let address = format!("{host}:{port}");
+        let address = format!("{host}:{port}").parse().unwrap();
         let context = web::Data::new(ctx);
 
         Self {
@@ -48,8 +49,8 @@ impl ApiRestServer {
         }
     }
 
-    pub fn run(self, cancel_token: CancellationToken) -> JoinHandle<Result<()>> {
-        hb_log::info(Some("💫"), "ApiRestServer: Running component");
+    pub fn run(self, cancel_token: CancellationToken) -> JoinHandle<()> {
+        hb_log::info(Some("💫"), "[ApiRestServer] Running component");
 
         tokio::spawn((|| async move {
             let server = HttpServer::new(move || {
@@ -79,13 +80,15 @@ impl ApiRestServer {
 
             tokio::select! {
                 _ = cancel_token.cancelled() => {}
-                _ = server => {}
+                s = server => {
+                    if let Err(err) = s {
+                        hb_log::panic(None, &format!("[ApiRestServer] {err}"));
+                    }
+                }
             }
 
-            hb_log::info(None, "ApiRestServer: Shutting down component");
+            hb_log::info(None, "[ApiRestServer] Shutting down component");
             server_handle.stop(true).await;
-
-            Ok(())
         })())
     }
 }
