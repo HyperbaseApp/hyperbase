@@ -54,6 +54,13 @@ bucket:
   path: "/app/hyperbase-bucket"
 
 api:
+  internal:
+    gossip:
+      host: "0.0.0.0"
+      port: 7472
+      peers:
+        - "0.0.0.0:7473"
+        - "0.0.0.0:7474"
   rest:
     host: "0.0.0.0"
     port: 8080

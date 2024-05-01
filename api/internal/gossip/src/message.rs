@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{handler::MessageHandler, peer::PeerDescriptor};
 
+pub mod database_action;
+
 #[derive(Deserialize, Serialize)]
 pub struct Message {
     sender: SocketAddr,

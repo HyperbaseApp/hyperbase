@@ -1110,6 +1110,7 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-util",
+ "uuid",
 ]
 
 [[package]]

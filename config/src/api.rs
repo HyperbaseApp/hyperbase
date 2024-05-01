@@ -5,15 +5,15 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ApiConfig {
-    gossip: Option<ApiGossipConfig>,
+    internal: Option<ApiInternalConfig>,
     rest: ApiRestConfig,
     websocket: ApiWebSocketConfig,
     mqtt: Option<ApiMqttConfig>,
 }
 
 impl ApiConfig {
-    pub fn gossip(&self) -> &Option<ApiGossipConfig> {
-        &self.gossip
+    pub fn internal(&self) -> &Option<ApiInternalConfig> {
+        &self.internal
     }
 
     pub fn rest(&self) -> &ApiRestConfig {
@@ -26,6 +26,17 @@ impl ApiConfig {
 
     pub fn mqtt(&self) -> &Option<ApiMqttConfig> {
         &self.mqtt
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ApiInternalConfig {
+    gossip: Option<ApiGossipConfig>,
+}
+
+impl ApiInternalConfig {
+    pub fn gossip(&self) -> &Option<ApiGossipConfig> {
+        &self.gossip
     }
 }
 

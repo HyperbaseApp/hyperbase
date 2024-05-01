@@ -16,6 +16,7 @@ rmp-serde = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+uuid = { workspace = true }
 
 
 [lints]

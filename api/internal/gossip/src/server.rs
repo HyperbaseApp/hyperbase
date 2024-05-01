@@ -5,10 +5,7 @@ use futures::future::BoxFuture;
 use tokio::{
     io::AsyncReadExt,
     net::TcpListener,
-    sync::{
-        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-        oneshot,
-    },
+    sync::{mpsc, oneshot},
     time::timeout,
 };
 
@@ -20,7 +17,7 @@ pub struct GossipServer {
 
 impl GossipServer {
     pub fn new(address: SocketAddr, handler: MessageHandler) -> Self {
-        let (cmd_tx, cmd_rx) = unbounded_channel();
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
 
         Self {
             builder: GossipServerBuilder::new(address, handler, cmd_tx, cmd_rx),
@@ -35,16 +32,16 @@ impl GossipServer {
 struct GossipServerBuilder {
     address: SocketAddr,
     handler: MessageHandler,
-    cmd_tx: UnboundedSender<GossipServerCommand>,
-    cmd_rx: UnboundedReceiver<GossipServerCommand>,
+    cmd_tx: mpsc::UnboundedSender<GossipServerCommand>,
+    cmd_rx: mpsc::UnboundedReceiver<GossipServerCommand>,
 }
 
 impl GossipServerBuilder {
     fn new(
         address: SocketAddr,
         handler: MessageHandler,
-        cmd_tx: UnboundedSender<GossipServerCommand>,
-        cmd_rx: UnboundedReceiver<GossipServerCommand>,
+        cmd_tx: mpsc::UnboundedSender<GossipServerCommand>,
+        cmd_rx: mpsc::UnboundedReceiver<GossipServerCommand>,
     ) -> Self {
         Self {
             address,
@@ -166,11 +163,11 @@ impl Future for GossipServerRunner {
 
 #[derive(Clone)]
 pub struct GossipServerHandle {
-    cmd_tx: UnboundedSender<GossipServerCommand>,
+    cmd_tx: mpsc::UnboundedSender<GossipServerCommand>,
 }
 
 impl GossipServerHandle {
-    fn new(cmd_tx: UnboundedSender<GossipServerCommand>) -> Self {
+    fn new(cmd_tx: mpsc::UnboundedSender<GossipServerCommand>) -> Self {
         Self { cmd_tx }
     }
 

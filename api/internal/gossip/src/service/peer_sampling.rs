@@ -2,9 +2,9 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use ahash::{HashSet, HashSetExt};
 use rand::{prelude::SliceRandom, Rng};
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender},
-    Mutex,
+use tokio::{
+    sync::{mpsc, Mutex},
+    task::JoinHandle,
 };
 
 use crate::{
@@ -19,7 +19,7 @@ pub struct PeerSamplingService {
     config: PeerSamplingConfig,
     view: Arc<Mutex<View>>,
 
-    rx: UnboundedReceiver<(SocketAddr, MessageKind, Option<Vec<PeerDescriptor>>)>,
+    rx: mpsc::UnboundedReceiver<(SocketAddr, MessageKind, Option<Vec<PeerDescriptor>>)>,
 }
 
 impl PeerSamplingService {
@@ -29,9 +29,9 @@ impl PeerSamplingService {
         peers: Vec<PeerDescriptor>,
     ) -> (
         Self,
-        UnboundedSender<(SocketAddr, MessageKind, Option<Vec<PeerDescriptor>>)>,
+        mpsc::UnboundedSender<(SocketAddr, MessageKind, Option<Vec<PeerDescriptor>>)>,
     ) {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::unbounded_channel();
         (
             Self {
                 local_address,
@@ -43,23 +43,34 @@ impl PeerSamplingService {
         )
     }
 
-    pub async fn run(self) {
+    pub fn run(self) -> JoinHandle<()> {
         hb_log::info(
             Some("🧩"),
             "[ApiInternalGossip] Running peer sampling service",
         );
 
-        tokio::join!(
-            Self::run_receiver_task(self.local_address, self.config, self.view.clone(), self.rx),
-            Self::run_sender_task(self.local_address, self.config, self.view)
-        );
+        tokio::spawn((|| async move {
+            tokio::join!(
+                Self::run_receiver_task(
+                    self.local_address,
+                    self.config,
+                    self.view.clone(),
+                    self.rx
+                ),
+                Self::run_sender_task(self.local_address, self.config, self.view)
+            );
+        })())
     }
 
     async fn run_receiver_task(
         local_address: SocketAddr,
         config: PeerSamplingConfig,
         view: Arc<Mutex<View>>,
-        mut receiver: UnboundedReceiver<(SocketAddr, MessageKind, Option<Vec<PeerDescriptor>>)>,
+        mut receiver: mpsc::UnboundedReceiver<(
+            SocketAddr,
+            MessageKind,
+            Option<Vec<PeerDescriptor>>,
+        )>,
     ) {
         while let Some((sender_address, kind, peers)) = receiver.recv().await {
             let view = view.clone();
@@ -117,7 +128,6 @@ impl PeerSamplingService {
     ) {
         loop {
             let mut view = view.lock().await;
-
             if let Some(peer) = view.select_peer() {
                 if *config.push() {
                     let buffer = Self::build_local_view_buffer(&local_address, &config, &mut view);

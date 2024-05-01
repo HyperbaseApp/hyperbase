@@ -123,14 +123,17 @@ async fn main() {
         return;
     };
 
-    let api_internal_gossip = match config.api().gossip() {
-        Some(config_gossip) => Some(ApiInternalGossip::new(
-            config_gossip.host(),
-            config_gossip.port(),
-            config_gossip.peers(),
-        )),
-        None => None,
-    };
+    let mut api_internal_gossip = None;
+
+    if let Some(config_internal) = config.api().internal() {
+        if let Some(config_gossip) = config_internal.gossip() {
+            api_internal_gossip = Some(ApiInternalGossip::new(
+                config_gossip.host(),
+                config_gossip.port(),
+                config_gossip.peers(),
+            ));
+        }
+    }
 
     let (api_websocket_server, websocket_handler, websocket_publisher) = ApiWebSocketServer::new(
         ApiWebSocketCtx::new(ApiWebSocketDaoCtx::new(db.clone())),
