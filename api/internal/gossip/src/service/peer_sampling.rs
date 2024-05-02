@@ -10,12 +10,11 @@ use tokio::{
 use crate::{
     client,
     config::peer_sampling::PeerSamplingConfig,
-    message::{Message, MessageBody, MessageKind},
+    message::{Message, MessageKind},
     peer::PeerDescriptor,
 };
 
 pub struct PeerSamplingService {
-    local_address: SocketAddr,
     config: PeerSamplingConfig,
     view: Arc<Mutex<View>>,
 
@@ -34,7 +33,6 @@ impl PeerSamplingService {
         let (tx, rx) = mpsc::unbounded_channel();
         (
             Self {
-                local_address,
                 config,
                 view: Arc::new(Mutex::new(View::new(local_address, peers))),
                 rx,
@@ -51,19 +49,13 @@ impl PeerSamplingService {
 
         tokio::spawn((|| async move {
             tokio::join!(
-                Self::run_receiver_task(
-                    self.local_address,
-                    self.config,
-                    self.view.clone(),
-                    self.rx
-                ),
-                Self::run_sender_task(self.local_address, self.config, self.view)
+                Self::run_receiver_task(self.config, self.view.clone(), self.rx),
+                Self::run_sender_task(self.config, self.view)
             );
         })())
     }
 
     async fn run_receiver_task(
-        local_address: SocketAddr,
         config: PeerSamplingConfig,
         view: Arc<Mutex<View>>,
         mut receiver: mpsc::UnboundedReceiver<(
@@ -77,16 +69,10 @@ impl PeerSamplingService {
             tokio::spawn((|| async move {
                 let mut view = view.lock().await;
                 if kind == MessageKind::Request && *config.pull() {
-                    let buffer = Self::build_local_view_buffer(&local_address, &config, &mut view);
+                    let buffer = Self::build_local_view_buffer(&config, &mut view);
                     match client::send(
                                 &sender_address,
-                                Message::new(
-                                    local_address,
-                                    MessageBody::Sampling {
-                                        kind: MessageKind::Response,
-                                        value: Some(buffer),
-                                    },
-                                ),
+                                Message::Sampling { kind: MessageKind::Response, value: Some(buffer) },
                             )
                             .await
                             {
@@ -121,22 +107,15 @@ impl PeerSamplingService {
         }
     }
 
-    async fn run_sender_task(
-        local_address: SocketAddr,
-        config: PeerSamplingConfig,
-        view: Arc<Mutex<View>>,
-    ) {
+    async fn run_sender_task(config: PeerSamplingConfig, view: Arc<Mutex<View>>) {
         loop {
             let mut view = view.lock().await;
             if let Some(peer) = view.select_peer() {
                 if *config.push() {
-                    let buffer = Self::build_local_view_buffer(&local_address, &config, &mut view);
+                    let buffer = Self::build_local_view_buffer(&config, &mut view);
                     match client::send(
                             peer.address(),
-                            Message::new(
-                                local_address,
-                                MessageBody::Sampling { kind: MessageKind::Request, value: Some(buffer) },
-                            ),
+                            Message::Sampling { kind: MessageKind::Request, value: Some(buffer) },
                         )
                         .await
                         {
@@ -146,10 +125,7 @@ impl PeerSamplingService {
                 } else {
                     match client::send(
                             peer.address(),
-                            Message::new(
-                                local_address,
-                                MessageBody::Sampling { kind: MessageKind::Request, value: None },
-                            ),
+                            Message::Sampling { kind: MessageKind::Request, value: None },
                         ).await {
                             Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Peer sampling with empty view request sent successfully to {} ({} bytes)", peer.address(), written)),
                             Err(err) => hb_log::error(None, &format!("[ApiInternalGossip] Peer sampling with empty view request failed to send to {} due to error: {}", peer.address(), err)),
@@ -178,16 +154,12 @@ impl PeerSamplingService {
     }
 
     fn build_local_view_buffer(
-        local_address: &SocketAddr,
         config: &PeerSamplingConfig,
         view: &mut View,
     ) -> Vec<PeerDescriptor> {
-        let mut buffer = vec![PeerDescriptor::new(*local_address)];
         view.permute();
         view.move_oldest_to_end();
-        let mut view_head = view.head(config.view_size());
-        buffer.append(&mut view_head);
-        buffer
+        view.head(config.view_size())
     }
 }
 

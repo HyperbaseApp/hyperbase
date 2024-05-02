@@ -4,7 +4,6 @@ use hb_db_mysql::model::log::LogModel as LogMysqlModel;
 use hb_db_postgresql::model::log::LogModel as LogPostgresModel;
 use hb_db_scylladb::model::log::LogModel as LogScyllaModel;
 use hb_db_sqlite::model::log::LogModel as LogSqliteModel;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -140,7 +139,7 @@ impl LogDao {
     fn to_scylladb_model(&self) -> LogScyllaModel {
         LogScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
             &self.admin_id,
             &self.project_id,
             self.kind.to_str(),

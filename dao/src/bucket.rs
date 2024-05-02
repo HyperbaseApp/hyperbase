@@ -5,7 +5,6 @@ use hb_db_mysql::model::bucket::BucketModel as BucketMysqlModel;
 use hb_db_postgresql::model::bucket::BucketModel as BucketPostgresModel;
 use hb_db_scylladb::model::bucket::BucketModel as BucketScyllaModel;
 use hb_db_sqlite::model::bucket::BucketModel as BucketSqliteModel;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use tokio::fs;
 use uuid::Uuid;
 
@@ -186,8 +185,8 @@ impl BucketDao {
     fn to_scylladb_model(&self) -> BucketScyllaModel {
         BucketScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.project_id,
             &self.name,
             &self.path,

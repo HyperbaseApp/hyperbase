@@ -5,7 +5,6 @@ use hb_db_mysql::model::project::ProjectModel as ProjectMysqlModel;
 use hb_db_postgresql::model::project::ProjectModel as ProjectPostgresModel;
 use hb_db_scylladb::model::project::ProjectModel as ProjectScyllaModel;
 use hb_db_sqlite::model::project::ProjectModel as ProjectSqliteModel;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{bucket::BucketDao, collection::CollectionDao, token::TokenDao, util::conversion, Db};
@@ -113,6 +112,55 @@ impl ProjectDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut projects_data = Vec::new();
+                let projects = db
+                    .select_many_projects_after_id_with_limit(after_id, limit)
+                    .await?;
+                for project in projects {
+                    projects_data.push(Self::from_scylladb_model(&project?)?);
+                }
+                Ok(projects_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let projects = db
+                    .select_many_projects_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut projects_data = Vec::with_capacity(projects.len());
+                for project in &projects {
+                    projects_data.push(Self::from_postgresdb_model(project));
+                }
+                Ok(projects_data)
+            }
+            Db::MysqlDb(db) => {
+                let projects = db
+                    .select_many_projects_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut projects_data = Vec::with_capacity(projects.len());
+                for project in &projects {
+                    projects_data.push(Self::from_mysqldb_model(project));
+                }
+                Ok(projects_data)
+            }
+            Db::SqliteDb(db) => {
+                let projects = db
+                    .select_many_projects_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut projects_data = Vec::with_capacity(projects.len());
+                for project in &projects {
+                    projects_data.push(Self::from_sqlitedb_model(project));
+                }
+                Ok(projects_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
@@ -169,8 +217,8 @@ impl ProjectDao {
     fn to_scylladb_model(&self) -> ProjectScyllaModel {
         ProjectScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.admin_id,
             &self.name,
         )

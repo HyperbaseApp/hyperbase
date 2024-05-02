@@ -7,6 +7,7 @@ use crate::{db::SqliteDb, model::project::ProjectModel};
 const INSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = ? ORDER BY \"id\" DESC";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\"";
 const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = ?";
 
@@ -50,6 +51,29 @@ impl SqliteDb {
         Ok(self
             .fetch_all(sqlx::query_as(SELECT_MANY_BY_ADMIN_ID).bind(admin_id))
             .await?)
+    }
+
+    pub async fn select_many_projects_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<ProjectModel>> {
+        let mut query = SELECT_ALL.to_owned();
+
+        if after_id.is_some() {
+            query += " WHERE \"id\" > ?";
+        }
+
+        query += " LIMIT ? ORDER BY \"id\" ASC";
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_project(&self, value: &ProjectModel) -> Result<()> {

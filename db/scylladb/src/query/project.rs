@@ -1,5 +1,5 @@
 use anyhow::Result;
-use scylla::{transport::session::TypedRowIter, CachingSession};
+use scylla::{serialize::value::SerializeCql, transport::session::TypedRowIter, CachingSession};
 use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::project::ProjectModel};
@@ -7,6 +7,7 @@ use crate::{db::ScyllaDb, model::project::ProjectModel};
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\" WHERE \"admin_id\" = ?";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"hyperbase\".\"projects\"";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"projects\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"projects\" WHERE \"id\" = ?";
 
@@ -66,6 +67,25 @@ impl ScyllaDb {
             .execute(SELECT_MANY_BY_ADMIN_ID, [admin_id].as_ref())
             .await?
             .rows_typed()?)
+    }
+
+    pub async fn select_many_projects_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<TypedRowIter<ProjectModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values: Vec<Box<dyn SerializeCql>> = Vec::with_capacity(2);
+
+        if let Some(after_id) = after_id {
+            values.push(Box::new(after_id));
+            query += " WHERE \"id\" > ?";
+        }
+
+        values.push(Box::new(limit));
+        query += " LIMIT ? ORDER BY \"id\" ASC";
+
+        Ok(self.execute(&query, values).await?.rows_typed()?)
     }
 
     pub async fn update_project(&self, value: &ProjectModel) -> Result<()> {

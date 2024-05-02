@@ -6,7 +6,7 @@ use scylla::{
 
 use crate::query::{
     admin, admin_password_reset, bucket, bucket_rule, change, collection, collection_rule, file,
-    keyspace, log, project, registration, token,
+    keyspace, log, project, registration, remote_sync, token,
 };
 
 pub struct ScyllaDb {
@@ -98,16 +98,17 @@ impl ScyllaDb {
         // Create tables
         tokio::join!(
             admin::init(cached_session),
-            token::init(cached_session),
             project::init(cached_session),
             collection::init(cached_session),
-            collection_rule::init(cached_session),
             bucket::init(cached_session),
-            bucket_rule::init(cached_session),
             file::init(cached_session),
+            token::init(cached_session),
+            collection_rule::init(cached_session),
+            bucket_rule::init(cached_session),
             registration::init(cached_session, table_registration_ttl),
             admin_password_reset::init(cached_session, table_reset_password_ttl),
             log::init(cached_session, table_log_ttl),
+            remote_sync::init(cached_session),
             change::init(cached_session),
         );
     }

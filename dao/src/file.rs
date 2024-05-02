@@ -8,7 +8,6 @@ use hb_db_postgresql::model::file::FileModel as FilePostgresModel;
 use hb_db_scylladb::model::file::FileModel as FileScyllaModel;
 use hb_db_sqlite::model::file::FileModel as FileSqliteModel;
 use mime::Mime;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use tokio::fs;
 use uuid::Uuid;
 
@@ -354,8 +353,8 @@ impl FileDao {
         FileScyllaModel::new(
             &self.id,
             &self.created_by,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.bucket_id,
             &self.file_name,
             &self.content_type.to_string(),

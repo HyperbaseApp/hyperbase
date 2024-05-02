@@ -4,7 +4,6 @@ use hb_db_mysql::model::bucket_rule::BucketRuleModel as BucketRuleMysqlModel;
 use hb_db_postgresql::model::bucket_rule::BucketRuleModel as BucketRulePostgresModel;
 use hb_db_scylladb::model::bucket_rule::BucketRuleModel as BucketRuleScyllaModel;
 use hb_db_sqlite::model::bucket_rule::BucketRuleModel as BucketRuleSqliteModel;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -251,8 +250,8 @@ impl BucketRuleDao {
     fn to_scylladb_model(&self) -> BucketRuleScyllaModel {
         BucketRuleScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.project_id,
             &self.token_id,
             &self.bucket_id,

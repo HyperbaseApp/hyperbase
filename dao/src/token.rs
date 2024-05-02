@@ -5,7 +5,6 @@ use hb_db_postgresql::model::token::TokenModel as TokenPostgresModel;
 use hb_db_scylladb::model::token::TokenModel as TokenScyllaModel;
 use hb_db_sqlite::model::token::TokenModel as TokenSqliteModel;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{
@@ -374,15 +373,17 @@ impl TokenDao {
     fn to_scylladb_model(&self) -> TokenScyllaModel {
         TokenScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.project_id,
             &self.admin_id,
             &self.name,
             &self.token,
             &self.allow_anonymous,
             &match &self.expired_at {
-                Some(expired_at) => Some(ScyllaCqlTimestamp(expired_at.timestamp_millis())),
+                Some(expired_at) => {
+                    Some(conversion::datetime_utc_to_scylla_cql_timestamp(expired_at))
+                }
                 None => None,
             },
         )

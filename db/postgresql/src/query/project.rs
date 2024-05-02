@@ -7,6 +7,7 @@ use crate::{db::PostgresDb, model::project::ProjectModel};
 const INSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES ($1, $2, $3, $4, $5)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"id\" = $1";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = $1 ORDER BY \"id\" DESC";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\"";
 const UPDATE: &str = "UPDATE \"projects\" SET \"updated_at\" = $1, \"admin_id\" = $2, \"name\" = $3 WHERE \"id\" = $4";
 const DELETE: &str = "DELETE FROM \"projects\" WHERE \"id\" = $1";
 
@@ -50,6 +51,32 @@ impl PostgresDb {
         Ok(self
             .fetch_all(sqlx::query_as(SELECT_MANY_BY_ADMIN_ID).bind(admin_id))
             .await?)
+    }
+
+    pub async fn select_many_projects_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<ProjectModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values_count = 0;
+
+        if after_id.is_some() {
+            values_count += 1;
+            query += &format!(" WHERE \"id\" > ${values_count}");
+        }
+
+        values_count += 1;
+        query += &format!(" LIMIT ${values_count} ORDER BY \"id\" ASC");
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_project(&self, value: &ProjectModel) -> Result<()> {

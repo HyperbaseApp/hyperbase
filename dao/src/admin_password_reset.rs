@@ -5,7 +5,6 @@ use hb_db_postgresql::model::admin_password_reset::AdminPasswordResetModel as Ad
 use hb_db_scylladb::model::admin_password_reset::AdminPasswordResetModel as AdminPasswordResetScyllaModel;
 use hb_db_sqlite::model::admin_password_reset::AdminPasswordResetModel as AdminPasswordResetSqliteModel;
 use rand::{thread_rng, Rng};
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -101,8 +100,8 @@ impl AdminPasswordResetDao {
     fn to_scylladb_model(&self) -> AdminPasswordResetScyllaModel {
         AdminPasswordResetScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.admin_id,
             &self.code,
         )

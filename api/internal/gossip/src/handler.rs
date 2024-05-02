@@ -3,11 +3,15 @@ use std::net::SocketAddr;
 use anyhow::Result;
 use tokio::sync::mpsc;
 
-use crate::{message::MessageKind, peer::PeerDescriptor};
+use crate::{
+    message::{database_action::DatabaseActionMessage, MessageKind},
+    peer::PeerDescriptor,
+};
 
 #[derive(Clone)]
 pub struct MessageHandler {
     peer_sampling_tx: mpsc::UnboundedSender<(SocketAddr, MessageKind, Option<Vec<PeerDescriptor>>)>,
+    database_messaging_tx: mpsc::UnboundedSender<(SocketAddr, MessageKind, DatabaseActionMessage)>,
 }
 
 impl MessageHandler {
@@ -17,8 +21,16 @@ impl MessageHandler {
             MessageKind,
             Option<Vec<PeerDescriptor>>,
         )>,
+        database_messaging_tx: mpsc::UnboundedSender<(
+            SocketAddr,
+            MessageKind,
+            DatabaseActionMessage,
+        )>,
     ) -> Self {
-        Self { peer_sampling_tx }
+        Self {
+            peer_sampling_tx,
+            database_messaging_tx,
+        }
     }
 
     pub fn send_sampling(

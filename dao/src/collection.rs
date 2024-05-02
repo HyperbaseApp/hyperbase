@@ -15,7 +15,6 @@ use hb_db_scylladb::model::collection::{
 use hb_db_sqlite::model::collection::{
     CollectionModel as CollectionSqliteModel, SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
 };
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -409,8 +408,8 @@ impl CollectionDao {
     fn to_scylladb_model(&self) -> CollectionScyllaModel {
         CollectionScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.project_id,
             &self.name,
             &Some(

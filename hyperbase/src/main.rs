@@ -122,6 +122,12 @@ async fn main() {
         hb_log::panic(None, "[Hyperbase] No database configuration is specified");
         return;
     };
+    if let Err(err) = db.init().await {
+        hb_log::panic(
+            None,
+            format!("[Hyperbase] Initilizing database failed: {err}"),
+        );
+    }
 
     let mut api_internal_gossip = None;
 

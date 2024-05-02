@@ -6,7 +6,7 @@ use sqlx::{
 
 use crate::query::{
     admin, admin_password_reset, bucket, bucket_rule, change, collection, collection_rule, file,
-    log, project, registration, token,
+    log, project, registration, remote_sync, token,
 };
 
 pub struct SqliteDb {
@@ -110,16 +110,17 @@ impl SqliteDb {
     async fn init(pool: &Pool<Sqlite>) {
         tokio::join!(
             admin::init(pool),
-            token::init(pool),
             project::init(pool),
             collection::init(pool),
-            collection_rule::init(pool),
             bucket::init(pool),
-            bucket_rule::init(pool),
             file::init(pool),
+            token::init(pool),
+            collection_rule::init(pool),
+            bucket_rule::init(pool),
             registration::init(pool),
             admin_password_reset::init(pool),
             log::init(pool),
+            remote_sync::init(pool),
             change::init(pool),
         );
     }

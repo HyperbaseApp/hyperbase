@@ -5,7 +5,6 @@ use hb_db_postgresql::model::registration::RegistrationModel as RegistrationPost
 use hb_db_scylladb::model::registration::RegistrationModel as RegistrationScyllaModel;
 use hb_db_sqlite::model::registration::RegistrationModel as RegistrationSqliteModel;
 use rand::{thread_rng, Rng};
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -132,8 +131,8 @@ impl RegistrationDao {
     fn to_scylladb_model(&self) -> RegistrationScyllaModel {
         RegistrationScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.email,
             &self.password_hash,
             &self.code,

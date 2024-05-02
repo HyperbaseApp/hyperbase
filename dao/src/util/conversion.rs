@@ -14,6 +14,10 @@ pub fn scylla_cql_timestamp_to_datetime_utc(
     Ok(DateTime::from_timestamp(secs, nsecs).ok_or_else(||Error::msg("Can't convert value with type 'timestamp' from ScyllaDB to 'datetime'. Value is out of range."))?)
 }
 
+pub fn datetime_utc_to_scylla_cql_timestamp(datetime: &DateTime<Utc>) -> ScyllaCqlTimestamp {
+    ScyllaCqlTimestamp(datetime.timestamp_millis())
+}
+
 pub fn scylla_cql_time_to_naivetime(time: &ScyllaCqlTime) -> Result<NaiveTime> {
     let nanoseconds_since_midnight = time.0;
     let secs = nanoseconds_since_midnight / 10_i64.pow(9);

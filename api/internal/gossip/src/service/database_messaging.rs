@@ -1,20 +1,23 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{
     sync::{mpsc, Mutex},
     task::JoinHandle,
 };
 
-use crate::message::database_action::DatabaseActionMessage;
+use crate::message::{database_action::DatabaseActionMessage, MessageKind};
 
 pub struct DatabaseMessagingService {
     actions: Arc<Mutex<Vec<DatabaseActionMessage>>>,
 
-    rx: mpsc::UnboundedReceiver<DatabaseActionMessage>,
+    rx: mpsc::UnboundedReceiver<(SocketAddr, MessageKind, DatabaseActionMessage)>,
 }
 
 impl DatabaseMessagingService {
-    pub fn new() -> (Self, mpsc::UnboundedSender<DatabaseActionMessage>) {
+    pub fn new() -> (
+        Self,
+        mpsc::UnboundedSender<(SocketAddr, MessageKind, DatabaseActionMessage)>,
+    ) {
         let (tx, rx) = mpsc::unbounded_channel();
         (
             Self {
@@ -36,9 +39,9 @@ impl DatabaseMessagingService {
 
     async fn run_receiver_task(
         actions: Arc<Mutex<Vec<DatabaseActionMessage>>>,
-        mut receiver: mpsc::UnboundedReceiver<DatabaseActionMessage>,
+        mut receiver: mpsc::UnboundedReceiver<(SocketAddr, MessageKind, DatabaseActionMessage)>,
     ) {
-        while let Some(message) = receiver.recv().await {
+        while let Some((sender_address, kind, message)) = receiver.recv().await {
             let actions = actions.clone();
             tokio::spawn((|| async move {
                 let actions = actions.lock().await;

@@ -6,8 +6,9 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    config::peer_sampling::PeerSamplingConfig, handler::MessageHandler,
-    service::peer_sampling::PeerSamplingService,
+    config::peer_sampling::PeerSamplingConfig,
+    handler::MessageHandler,
+    service::{database_messaging::DatabaseMessagingService, peer_sampling::PeerSamplingService},
 };
 
 mod client;
@@ -49,11 +50,18 @@ impl ApiInternalGossip {
             let (peer_sampling_service, peer_sampling_tx) =
                 PeerSamplingService::new(self.address, PeerSamplingConfig::default(), self.peers);
 
-            let server =
-                GossipServer::new(self.address, MessageHandler::new(peer_sampling_tx)).run();
+            let (database_messaging_service, database_messaging_tx) =
+                DatabaseMessagingService::new();
+
+            let server = GossipServer::new(
+                self.address,
+                MessageHandler::new(peer_sampling_tx, database_messaging_tx),
+            )
+            .run();
             let server_handle = server.handle();
 
             let peer_sampling_service = peer_sampling_service.run();
+            let database_messaging_service = database_messaging_service.run();
 
             tokio::select! {
                 _ = cancel_token.cancelled() => {}
@@ -63,6 +71,7 @@ impl ApiInternalGossip {
                     }
                 }
                 _ = peer_sampling_service => {}
+                _ = database_messaging_service => {}
             }
 
             hb_log::info(None, "[ApiInternalGossip] Shutting down component");

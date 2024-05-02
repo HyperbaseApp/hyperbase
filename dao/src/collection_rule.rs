@@ -4,7 +4,6 @@ use hb_db_mysql::model::collection_rule::CollectionRuleModel as CollectionRuleMy
 use hb_db_postgresql::model::collection_rule::CollectionRuleModel as CollectionRulePostgresModel;
 use hb_db_scylladb::model::collection_rule::CollectionRuleModel as CollectionRuleScyllaModel;
 use hb_db_sqlite::model::collection_rule::CollectionRuleModel as CollectionRuleSqliteModel;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -273,8 +272,8 @@ impl CollectionRuleDao {
     fn to_scylladb_model(&self) -> CollectionRuleScyllaModel {
         CollectionRuleScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.project_id,
             &self.token_id,
             &self.collection_id,

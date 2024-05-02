@@ -1203,6 +1203,7 @@ dependencies = [
  "hb_db_postgresql",
  "hb_db_scylladb",
  "hb_db_sqlite",
+ "hb_log",
  "mime",
  "num-bigint",
  "rand",

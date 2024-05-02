@@ -4,7 +4,6 @@ use hb_db_mysql::model::admin::AdminModel as AdminMysqlModel;
 use hb_db_postgresql::model::admin::AdminModel as AdminPostgresModel;
 use hb_db_scylladb::model::admin::AdminModel as AdminScyllaModel;
 use hb_db_sqlite::model::admin::AdminModel as AdminSqliteModel;
-use scylla::frame::value::CqlTimestamp as ScyllaCqlTimestamp;
 use uuid::Uuid;
 
 use crate::{project::ProjectDao, util::conversion, Db};
@@ -90,6 +89,55 @@ impl AdminDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut admins_data = Vec::new();
+                let admins = db
+                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .await?;
+                for admin in admins {
+                    admins_data.push(Self::from_scylladb_model(&admin?)?);
+                }
+                Ok(admins_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let admins = db
+                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut admins_data = Vec::with_capacity(admins.len());
+                for admin in &admins {
+                    admins_data.push(Self::from_postgresdb_model(admin));
+                }
+                Ok(admins_data)
+            }
+            Db::MysqlDb(db) => {
+                let admins = db
+                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut admins_data = Vec::with_capacity(admins.len());
+                for admin in &admins {
+                    admins_data.push(Self::from_mysqldb_model(admin));
+                }
+                Ok(admins_data)
+            }
+            Db::SqliteDb(db) => {
+                let admins = db
+                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut admins_data = Vec::with_capacity(admins.len());
+                for admin in &admins {
+                    admins_data.push(Self::from_sqlitedb_model(admin));
+                }
+                Ok(admins_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {
@@ -127,8 +175,8 @@ impl AdminDao {
     fn to_scylladb_model(&self) -> AdminScyllaModel {
         AdminScyllaModel::new(
             &self.id,
-            &ScyllaCqlTimestamp(self.created_at.timestamp_millis()),
-            &ScyllaCqlTimestamp(self.updated_at.timestamp_millis()),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.created_at),
+            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
             &self.email,
             &self.password_hash,
         )

@@ -9,9 +9,7 @@ use hb_db_scylladb::model::value::ColumnKind as ColumnKindScylla;
 use hb_db_sqlite::model::value::ColumnKind as ColumnKindSqlite;
 use num_bigint::BigInt;
 use scylla::{
-    frame::{
-        response::result::CqlValue as ScyllaCqlValue, value::CqlTimestamp as ScyllaCqlTimestamp,
-    },
+    frame::response::result::CqlValue as ScyllaCqlValue,
     serialize::value::SerializeCql as ScyllaSerializeCql,
 };
 use serde::Serialize;
@@ -596,7 +594,7 @@ impl ColumnValue {
                 None => None,
             })),
             Self::Timestamp(data) => Ok(Box::new(match data {
-                Some(data) => Some(ScyllaCqlTimestamp(data.timestamp_millis())),
+                Some(data) => Some(conversion::datetime_utc_to_scylla_cql_timestamp(data)),
                 None => None,
             })),
             Self::Json(data) => Ok(Box::new(match data {

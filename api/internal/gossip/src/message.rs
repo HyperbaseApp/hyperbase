@@ -9,28 +9,34 @@ use crate::{handler::MessageHandler, peer::PeerDescriptor};
 pub mod database_action;
 
 #[derive(Deserialize, Serialize)]
-pub struct Message {
-    sender: SocketAddr,
-    body: MessageBody,
+pub enum Message {
+    Sampling {
+        kind: MessageKind,
+        value: Option<Vec<PeerDescriptor>>,
+    },
+    Header {
+        kind: MessageKind,
+        value: Vec<String>,
+    },
+    Content {
+        kind: MessageKind,
+        value: HashMap<String, Vec<u8>>,
+    },
 }
 
 impl Message {
-    pub fn new(sender: SocketAddr, body: MessageBody) -> Self {
-        Self { sender, body }
-    }
-
-    pub fn handle(self, handler: MessageHandler) {
-        match self.body {
-            MessageBody::Sampling { kind, value } => {
-                if let Err(err) = handler.send_sampling(self.sender, kind, value) {
+    pub fn handle(self, sender_address: &SocketAddr, handler: MessageHandler) {
+        match self {
+            Message::Sampling { kind, value } => {
+                if let Err(err) = handler.send_sampling(*sender_address, kind, value) {
                     hb_log::error(
                         None,
                         &format!("[ApiInternalGossip] Error sending sample to its handler: {err}"),
                     )
                 }
             }
-            MessageBody::Header { kind, value } => todo!(),
-            MessageBody::Content { kind, value } => todo!(),
+            Message::Header { kind, value } => todo!(),
+            Message::Content { kind, value } => todo!(),
         }
     }
 
@@ -49,22 +55,6 @@ impl Message {
         let msg = rmp_serde::from_slice(bytes)?;
         Ok(msg)
     }
-}
-
-#[derive(Deserialize, Serialize)]
-pub enum MessageBody {
-    Sampling {
-        kind: MessageKind,
-        value: Option<Vec<PeerDescriptor>>,
-    },
-    Header {
-        kind: MessageKind,
-        value: Vec<String>,
-    },
-    Content {
-        kind: MessageKind,
-        value: HashMap<String, Vec<u8>>,
-    },
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]
