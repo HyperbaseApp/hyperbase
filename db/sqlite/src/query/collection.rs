@@ -7,6 +7,7 @@ use crate::{db::SqliteDb, model::collection::CollectionModel};
 const INSERT: &str = "INSERT INTO \"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"collections\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"collections\" WHERE \"project_id\" = ? ORDER BY \"id\" DESC";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"collections\"";
 const UPDATE: &str = "UPDATE \"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"opt_auth_column_id\" = ?, \"opt_ttl\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"collections\" WHERE \"id\" = ?";
 
@@ -53,6 +54,29 @@ impl SqliteDb {
         Ok(self
             .fetch_all(sqlx::query_as(SELECT_MANY_BY_PROJECT_ID).bind(project_id))
             .await?)
+    }
+
+    pub async fn select_many_collections_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<CollectionModel>> {
+        let mut query = SELECT_ALL.to_owned();
+
+        if after_id.is_some() {
+            query += " WHERE \"id\" > ?";
+        }
+
+        query += " ORDER BY \"id\" ASC LIMIT ?";
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_collection(&self, value: &CollectionModel) -> Result<()> {

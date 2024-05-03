@@ -17,12 +17,17 @@ pub struct ChangeDao {
 }
 
 impl ChangeDao {
-    pub fn new(table: &ChangeTable, id: &Uuid, state: &ChangeState) -> Self {
+    pub fn new(
+        table: &ChangeTable,
+        id: &Uuid,
+        state: &ChangeState,
+        updated_at: &DateTime<Utc>,
+    ) -> Self {
         Self {
             table: *table,
             id: *id,
             state: *state,
-            updated_at: Utc::now(),
+            updated_at: *updated_at,
             change_id: Uuid::now_v7(),
         }
     }
@@ -273,7 +278,6 @@ pub enum ChangeTable {
     Token,
     CollectionRule,
     BucketRule,
-    Log,
 }
 
 impl ChangeTable {
@@ -288,7 +292,6 @@ impl ChangeTable {
             Self::Token => "tokens",
             Self::CollectionRule => "collection_rules",
             Self::BucketRule => "bucket_rules",
-            Self::Log => "logs",
         }
     }
 
@@ -303,7 +306,6 @@ impl ChangeTable {
             "tokens" => Ok(Self::Token),
             "collection_rules" => Ok(Self::CollectionRule),
             "bucket_rules" => Ok(Self::BucketRule),
-            "logs" => Ok(Self::Log),
             _ => Err(Error::msg(format!("Unknown change table '{str}'"))),
         }
     }

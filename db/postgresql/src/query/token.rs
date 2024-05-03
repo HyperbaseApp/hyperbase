@@ -8,6 +8,7 @@ const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = $1";
 const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = $1 AND \"project_id\" = $2 ORDER BY \"id\" DESC";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"project_id\" = $1 ORDER BY \"id\" DESC";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\"";
 const UPDATE: &str = "UPDATE \"tokens\" SET \"updated_at\" = $1, \"admin_id\" = $2, \"name\" = $3, \"allow_anonymous\" = $4, \"expired_at\" = $5 WHERE \"id\" = $6";
 const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = $1";
 
@@ -70,6 +71,32 @@ impl PostgresDb {
         Ok(self
             .fetch_all(sqlx::query_as(SELECT_MANY_BY_PROJECT_ID).bind(project_id))
             .await?)
+    }
+
+    pub async fn select_many_tokens_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<TokenModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values_count = 0;
+
+        if after_id.is_some() {
+            values_count += 1;
+            query += &format!(" WHERE \"id\" > ${values_count}");
+        }
+
+        values_count += 1;
+        query += &format!(" ORDER BY \"id\" ASC LIMIT ${values_count}");
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_token(&self, value: &TokenModel) -> Result<()> {

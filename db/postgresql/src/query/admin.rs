@@ -64,7 +64,7 @@ impl PostgresDb {
         }
 
         values_count += 1;
-        query += &format!(" LIMIT ${values_count} ORDER BY \"id\" ASC");
+        query += &format!(" ORDER BY \"id\" ASC LIMIT ${values_count}");
 
         let mut query = sqlx::query_as(&query);
         if let Some(after_id) = after_id {

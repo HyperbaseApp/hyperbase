@@ -7,6 +7,7 @@ use crate::{db::PostgresDb, model::bucket::BucketModel};
 const INSERT: &str = "INSERT INTO \"buckets\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\") VALUES ($1, $2, $3, $4, $5, $6, $7)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"buckets\" WHERE \"id\" = $1";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"buckets\" WHERE \"project_id\" = $1 ORDER BY \"id\" DESC";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"buckets\"";
 const UPDATE: &str = "UPDATE \"buckets\" SET \"updated_at\" = $1, \"name\" = $2, \"opt_ttl\" = $3 WHERE \"id\" = $4";
 const DELETE: &str = "DELETE FROM \"buckets\" WHERE \"id\" = $1";
 
@@ -52,6 +53,32 @@ impl PostgresDb {
         Ok(self
             .fetch_all(sqlx::query_as(SELECT_MANY_BY_PROJECT_ID).bind(project_id))
             .await?)
+    }
+
+    pub async fn select_many_buckets_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<BucketModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values_count = 0;
+
+        if after_id.is_some() {
+            values_count += 1;
+            query += &format!(" WHERE \"id\" > ${values_count}");
+        }
+
+        values_count += 1;
+        query += &format!(" ORDER BY \"id\" ASC LIMIT ${values_count}");
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_bucket(&self, value: &BucketModel) -> Result<()> {

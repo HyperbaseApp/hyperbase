@@ -194,6 +194,55 @@ impl BucketRuleDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut bucket_rules_data = Vec::new();
+                let bucket_rules = db
+                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                for bucket_rule in bucket_rules {
+                    bucket_rules_data.push(Self::from_scylladb_model(&bucket_rule?)?);
+                }
+                Ok(bucket_rules_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let bucket_rules = db
+                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
+                for bucket_rule in &bucket_rules {
+                    bucket_rules_data.push(Self::from_postgresdb_model(bucket_rule)?);
+                }
+                Ok(bucket_rules_data)
+            }
+            Db::MysqlDb(db) => {
+                let bucket_rules = db
+                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
+                for bucket_rule in &bucket_rules {
+                    bucket_rules_data.push(Self::from_mysqldb_model(bucket_rule)?);
+                }
+                Ok(bucket_rules_data)
+            }
+            Db::SqliteDb(db) => {
+                let bucket_rules = db
+                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
+                for bucket_rule in &bucket_rules {
+                    bucket_rules_data.push(Self::from_sqlitedb_model(bucket_rule)?);
+                }
+                Ok(bucket_rules_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {

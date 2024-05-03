@@ -139,6 +139,55 @@ impl BucketDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut buckets_data = Vec::new();
+                let buckets = db
+                    .select_many_buckets_after_id_with_limit(after_id, limit)
+                    .await?;
+                for bucket in buckets {
+                    buckets_data.push(Self::from_scylladb_model(&bucket?)?);
+                }
+                Ok(buckets_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let buckets = db
+                    .select_many_buckets_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut buckets_data = Vec::with_capacity(buckets.len());
+                for bucket in &buckets {
+                    buckets_data.push(Self::from_postgresdb_model(bucket));
+                }
+                Ok(buckets_data)
+            }
+            Db::MysqlDb(db) => {
+                let buckets = db
+                    .select_many_buckets_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut buckets_data = Vec::with_capacity(buckets.len());
+                for bucket in &buckets {
+                    buckets_data.push(Self::from_mysqldb_model(bucket));
+                }
+                Ok(buckets_data)
+            }
+            Db::SqliteDb(db) => {
+                let buckets = db
+                    .select_many_buckets_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut buckets_data = Vec::with_capacity(buckets.len());
+                for bucket in &buckets {
+                    buckets_data.push(Self::from_sqlitedb_model(bucket));
+                }
+                Ok(buckets_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {

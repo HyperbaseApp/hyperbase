@@ -12,6 +12,7 @@ const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bu
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"bucket_id\" = $1 AND \"updated_at\" < $2";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\"";
 const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3, \"public\" = $4 WHERE \"id\" = $5";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
@@ -154,6 +155,32 @@ impl PostgresDb {
                 ),
             )
             .await?)
+    }
+
+    pub async fn select_many_files_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<FileModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values_count = 0;
+
+        if after_id.is_some() {
+            values_count += 1;
+            query += &format!(" WHERE \"id\" > ${values_count}");
+        }
+
+        values_count += 1;
+        query += &format!(" ORDER BY \"id\" ASC LIMIT ${values_count}");
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

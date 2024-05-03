@@ -1,5 +1,5 @@
 use anyhow::Result;
-use scylla::{transport::session::TypedRowIter, CachingSession};
+use scylla::{serialize::value::SerializeCql, transport::session::TypedRowIter, CachingSession};
 use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::bucket::BucketModel};
@@ -7,6 +7,7 @@ use crate::{db::ScyllaDb, model::bucket::BucketModel};
 pub const INSERT: &str = "INSERT INTO \"hyperbase\".\"buckets\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\") VALUES (?, ?, ?, ?, ?, ?, ?)";
 pub const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"hyperbase\".\"buckets\" WHERE \"id\" = ?";
 pub const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"hyperbase\".\"buckets\" WHERE \"project_id\" = ?";
+pub const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"hyperbase\".\"buckets\"";
 pub const UPDATE: &str = "UPDATE \"hyperbase\".\"buckets\" SET \"updated_at\" = ?, \"name\" = ?, \"opt_ttl\" = ? WHERE \"id\" = ?";
 pub const DELETE: &str = "DELETE FROM \"hyperbase\".\"buckets\" WHERE \"id\" = ?";
 
@@ -66,6 +67,25 @@ impl ScyllaDb {
             .execute(SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
             .await?
             .rows_typed()?)
+    }
+
+    pub async fn select_many_buckets_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<TypedRowIter<BucketModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values: Vec<Box<dyn SerializeCql>> = Vec::with_capacity(2);
+
+        if let Some(after_id) = after_id {
+            values.push(Box::new(after_id));
+            query += " WHERE \"id\" > ?";
+        }
+
+        values.push(Box::new(limit));
+        query += " ORDER BY \"id\" ASC LIMIT ?";
+
+        Ok(self.execute(&query, values).await?.rows_typed()?)
     }
 
     pub async fn update_bucket(&self, value: &BucketModel) -> Result<()> {

@@ -12,6 +12,7 @@ const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bu
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ?";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ?";
 const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"bucket_id\" = ? AND \"updated_at\" < ?";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\"";
 const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = ?, \"updated_at\" = ?, \"file_name\" = ?, \"public\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = ?";
 
@@ -148,6 +149,29 @@ impl SqliteDb {
                 ),
             )
             .await?)
+    }
+
+    pub async fn select_many_files_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<FileModel>> {
+        let mut query = SELECT_ALL.to_owned();
+
+        if after_id.is_some() {
+            query += " WHERE \"id\" > ?";
+        }
+
+        query += " ORDER BY \"id\" ASC LIMIT ?";
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

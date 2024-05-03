@@ -204,6 +204,55 @@ impl CollectionRuleDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut collection_rules_data = Vec::new();
+                let collection_rules = db
+                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                for collection_rule in collection_rules {
+                    collection_rules_data.push(Self::from_scylladb_model(&collection_rule?)?);
+                }
+                Ok(collection_rules_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let collection_rules = db
+                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
+                for collection_rule in &collection_rules {
+                    collection_rules_data.push(Self::from_postgresdb_model(collection_rule)?);
+                }
+                Ok(collection_rules_data)
+            }
+            Db::MysqlDb(db) => {
+                let collection_rules = db
+                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
+                for collection_rule in &collection_rules {
+                    collection_rules_data.push(Self::from_mysqldb_model(collection_rule)?);
+                }
+                Ok(collection_rules_data)
+            }
+            Db::SqliteDb(db) => {
+                let collection_rules = db
+                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
+                for collection_rule in &collection_rules {
+                    collection_rules_data.push(Self::from_sqlitedb_model(collection_rule)?);
+                }
+                Ok(collection_rules_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {

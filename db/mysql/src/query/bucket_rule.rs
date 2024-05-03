@@ -8,6 +8,7 @@ const INSERT: &str = "INSERT INTO `bucket_rules` (`id`, `created_at`, `updated_a
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `id` = ?";
 const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? AND `bucket_id` = ?";
 const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? ORDER BY `id` DESC";
+const SELECT_ALL: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules`";
 const UPDATE: &str = "UPDATE `bucket_rules` SET `updated_at` = ?, `find_one` = ?, `find_many` = ?, `insert_one` = ?, `update_one` = ?, `delete_one` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `bucket_rules` WHERE `id` = ?";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM `bucket_rules` WHERE `token_id` = ?";
@@ -76,6 +77,29 @@ impl MysqlDb {
         Ok(self
             .fetch_all(sqlx::query_as(SELECT_MANY_BY_TOKEN_ID).bind(token_id))
             .await?)
+    }
+
+    pub async fn select_many_bucket_rules_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<BucketRuleModel>> {
+        let mut query = SELECT_ALL.to_owned();
+
+        if after_id.is_some() {
+            query += " WHERE `id` > ?";
+        }
+
+        query += " ORDER BY `id` ASC LIMIT ?";
+
+        let mut query = sqlx::query_as(&query);
+        if let Some(after_id) = after_id {
+            query = query.bind(after_id);
+        }
+
+        query = query.bind(limit);
+
+        Ok(self.fetch_all(query).await?)
     }
 
     pub async fn update_bucket_rule(&self, value: &BucketRuleModel) -> Result<()> {

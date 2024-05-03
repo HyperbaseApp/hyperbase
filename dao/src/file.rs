@@ -316,6 +316,55 @@ impl FileDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut files_data = Vec::new();
+                let files = db
+                    .select_many_files_after_id_with_limit(after_id, limit)
+                    .await?;
+                for file in files {
+                    files_data.push(Self::from_scylladb_model(&file?)?);
+                }
+                Ok(files_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let files = db
+                    .select_many_files_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_postgresdb_model(file)?);
+                }
+                Ok(files_data)
+            }
+            Db::MysqlDb(db) => {
+                let files = db
+                    .select_many_files_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_mysqldb_model(file)?);
+                }
+                Ok(files_data)
+            }
+            Db::SqliteDb(db) => {
+                let files = db
+                    .select_many_files_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut files_data = Vec::with_capacity(files.len());
+                for file in &files {
+                    files_data.push(Self::from_sqlitedb_model(file)?);
+                }
+                Ok(files_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         self.updated_at = Utc::now();
         match db {

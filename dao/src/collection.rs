@@ -226,6 +226,55 @@ impl CollectionDao {
         }
     }
 
+    pub async fn db_select_many_after_id_with_limit(
+        db: &Db,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(db) => {
+                let mut collections_data = Vec::new();
+                let collections = db
+                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .await?;
+                for collection in collections {
+                    collections_data.push(Self::from_scylladb_model(&collection?)?);
+                }
+                Ok(collections_data)
+            }
+            Db::PostgresqlDb(db) => {
+                let collections = db
+                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut collections_data = Vec::with_capacity(collections.len());
+                for collection in &collections {
+                    collections_data.push(Self::from_postgresdb_model(collection)?);
+                }
+                Ok(collections_data)
+            }
+            Db::MysqlDb(db) => {
+                let collections = db
+                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut collections_data = Vec::with_capacity(collections.len());
+                for collection in &collections {
+                    collections_data.push(Self::from_mysqldb_model(collection)?);
+                }
+                Ok(collections_data)
+            }
+            Db::SqliteDb(db) => {
+                let collections = db
+                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .await?;
+                let mut collections_data = Vec::with_capacity(collections.len());
+                for collection in &collections {
+                    collections_data.push(Self::from_sqlitedb_model(collection)?);
+                }
+                Ok(collections_data)
+            }
+        }
+    }
+
     pub async fn db_update(&mut self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(_) => {

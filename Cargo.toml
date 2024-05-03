@@ -91,7 +91,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 uuid = { version = "1", features = ["v7", "fast-rng", "serde"] }
 validator = { version = "0.18", features = ["derive"] }
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 
 [workspace.lints.rust]

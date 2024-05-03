@@ -1,5 +1,5 @@
 use anyhow::Result;
-use scylla::{transport::session::TypedRowIter, CachingSession};
+use scylla::{serialize::value::SerializeCql, transport::session::TypedRowIter, CachingSession};
 use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::token::TokenModel};
@@ -8,6 +8,7 @@ const INSERT: &str = "INSERT INTO \"hyperbase\".\"tokens\" (\"id\", \"created_at
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"admin_id\" = ? AND \"project_id\" = ? ALLOW FILTERING";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\" WHERE \"project_id\" = ?";
+const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"hyperbase\".\"tokens\"";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"tokens\" SET \"updated_at\" = ?, \"admin_id\" = ?, \"name\" = ?, \"allow_anonymous\" = ?, \"expired_at\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"tokens\" WHERE \"id\" = ?";
 
@@ -85,6 +86,25 @@ impl ScyllaDb {
             .execute(SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
             .await?
             .rows_typed()?)
+    }
+
+    pub async fn select_many_tokens_after_id_with_limit(
+        &self,
+        after_id: &Option<Uuid>,
+        limit: &i32,
+    ) -> Result<TypedRowIter<TokenModel>> {
+        let mut query = SELECT_ALL.to_owned();
+        let mut values: Vec<Box<dyn SerializeCql>> = Vec::with_capacity(2);
+
+        if let Some(after_id) = after_id {
+            values.push(Box::new(after_id));
+            query += " WHERE \"id\" > ?";
+        }
+
+        values.push(Box::new(limit));
+        query += " ORDER BY \"id\" ASC LIMIT ?";
+
+        Ok(self.execute(&query, values).await?.rows_typed()?)
     }
 
     pub async fn update_token(&self, value: &TokenModel) -> Result<()> {

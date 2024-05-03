@@ -80,7 +80,7 @@ impl ScyllaDb {
         }
 
         values.push(Box::new(limit));
-        query += " LIMIT ? ORDER BY \"id\" ASC";
+        query += " ORDER BY \"id\" ASC LIMIT ?";
 
         Ok(self.execute(&query, values).await?.rows_typed()?)
     }

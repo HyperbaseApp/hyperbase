@@ -64,7 +64,7 @@ impl SqliteDb {
             query += " WHERE \"id\" > ?";
         }
 
-        query += " LIMIT ? ORDER BY \"id\" ASC";
+        query += " ORDER BY \"id\" ASC LIMIT ?";
 
         let mut query = sqlx::query_as(&query);
         if let Some(after_id) = after_id {
