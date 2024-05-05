@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
@@ -8,7 +9,7 @@ const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = $1";
 const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = $1 AND \"project_id\" = $2 ORDER BY \"id\" DESC";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"project_id\" = $1 ORDER BY \"id\" DESC";
-const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\"";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"updated_at\" > $1 OR (\"updated_at\" = $1 AND \"id\" > $2) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT $3";
 const UPDATE: &str = "UPDATE \"tokens\" SET \"updated_at\" = $1, \"admin_id\" = $2, \"name\" = $3, \"allow_anonymous\" = $4, \"expired_at\" = $5 WHERE \"id\" = $6";
 const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = $1";
 
@@ -22,6 +23,7 @@ pub async fn init(pool: &Pool<Postgres>) {
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID),
         pool.prepare(SELECT_MANY_BY_PROJECT_ID),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -73,30 +75,20 @@ impl PostgresDb {
             .await?)
     }
 
-    pub async fn select_many_tokens_after_id_with_limit(
+    pub async fn select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<TokenModel>> {
-        let mut query = SELECT_ALL.to_owned();
-        let mut values_count = 0;
-
-        if after_id.is_some() {
-            values_count += 1;
-            query += &format!(" WHERE \"id\" > ${values_count}");
-        }
-
-        values_count += 1;
-        query += &format!(" ORDER BY \"id\" ASC LIMIT ${values_count}");
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_token(&self, value: &TokenModel) -> Result<()> {

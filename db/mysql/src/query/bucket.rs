@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, MySql, Pool};
 use uuid::Uuid;
 
@@ -7,7 +8,7 @@ use crate::{db::MysqlDb, model::bucket::BucketModel};
 const INSERT: &str = "INSERT INTO `buckets` (`id`, `created_at`, `updated_at`, `project_id`, `name`, `path`, `opt_ttl`) VALUES (?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path`, `opt_ttl` FROM `buckets` WHERE `id` = ?";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path`, `opt_ttl` FROM `buckets` WHERE `project_id` = ? ORDER BY `id` DESC";
-const SELECT_ALL: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path`, `opt_ttl` FROM `buckets`";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `path`, `opt_ttl` FROM `buckets` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
 const UPDATE: &str = "UPDATE `buckets` SET `updated_at` = ?, `name` = ?, `opt_ttl` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `buckets` WHERE `id` = ?";
 
@@ -20,6 +21,7 @@ pub async fn init(pool: &Pool<MySql>) {
         pool.prepare(INSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_PROJECT_ID),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -55,27 +57,21 @@ impl MysqlDb {
             .await?)
     }
 
-    pub async fn select_many_buckets_after_id_with_limit(
+    pub async fn select_many_buckets_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<BucketModel>> {
-        let mut query = SELECT_ALL.to_owned();
-
-        if after_id.is_some() {
-            query += " WHERE `id` > ?";
-        }
-
-        query += " ORDER BY `id` ASC LIMIT ?";
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_bucket(&self, value: &BucketModel) -> Result<()> {

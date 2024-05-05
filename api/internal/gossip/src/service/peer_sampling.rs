@@ -77,7 +77,7 @@ impl PeerSamplingService {
                             .await
                             {
                                 Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Peer sampling with local view response sent successfully to {sender_address} ({written} bytes)")),
-                                Err(err) => hb_log::error(None, &format!("[ApiInternalGossip] Peer sampling with local view response failed to send to {sender_address} due to error: {err}")),
+                                Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Peer sampling with local view response failed to send to {sender_address} due to error: {err}")),
                         }
                 }
 
@@ -120,7 +120,7 @@ impl PeerSamplingService {
                         .await
                         {
                             Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Peer sampling with local view request sent successfully to {} ({} bytes)", peer.address(), written)),
-                            Err(err) => hb_log::error(None, &format!("[ApiInternalGossip] Peer sampling with local view request failed to send to {} due to error: {}", peer.address(), err)),
+                            Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Peer sampling with local view request failed to send to {} due to error: {}", peer.address(), err)),
                         }
                 } else {
                     match client::send(
@@ -128,7 +128,7 @@ impl PeerSamplingService {
                             Message::Sampling { kind: MessageKind::Request, value: None },
                         ).await {
                             Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Peer sampling with empty view request sent successfully to {} ({} bytes)", peer.address(), written)),
-                            Err(err) => hb_log::error(None, &format!("[ApiInternalGossip] Peer sampling with empty view request failed to send to {} due to error: {}", peer.address(), err)),
+                            Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Peer sampling with empty view request failed to send to {} due to error: {}", peer.address(), err)),
                         }
                 }
                 view.increase_age();

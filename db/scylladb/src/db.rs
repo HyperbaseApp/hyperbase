@@ -5,8 +5,8 @@ use scylla::{
 };
 
 use crate::query::{
-    admin, admin_password_reset, bucket, bucket_rule, change, collection, collection_rule, file,
-    keyspace, log, project, registration, remote_sync, token,
+    admin, admin_password_reset, bucket, bucket_rule, collection, collection_rule, file, keyspace,
+    log, project, registration, remote_sync, token,
 };
 
 pub struct ScyllaDb {
@@ -109,7 +109,6 @@ impl ScyllaDb {
             admin_password_reset::init(cached_session, table_reset_password_ttl),
             log::init(cached_session, table_log_ttl),
             remote_sync::init(cached_session),
-            change::init(cached_session),
         );
     }
 }

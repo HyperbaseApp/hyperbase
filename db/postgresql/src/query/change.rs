@@ -1,14 +1,11 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use sqlx::{Executor, Pool, Postgres};
 
 use crate::{db::PostgresDb, model::change::ChangeModel};
 
-const INSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES ($1, $2, $3, $4, $5)";
-const SELECT_LAST: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" ORDER BY \"updated_at\" DESC LIMIT 1";
-const SELECT_MANY: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" ORDER BY \"updated_at\" DESC";
-const SELECT_MANY_FROM_TIME: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"updated_at\" >= $1 ORDER BY \"updated_at\" DESC";
-const UPDATE: &str = "UPDATE \"changes\" SET \"updated_at\" = $1, \"state\" = $2, \"change_id\" = $3 WHERE \"table\" = $4 AND \"id\" = $5";
+const INSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (\"table\", \"id\") DO NOTHING";
+const UPSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (\"table\", \"id\") DO UPDATE SET \"state\" = $3, \"updated_at\" = $4, \"change_id\" = $5";
+const SELECT_LAST_BY_TABLE: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"table\" = $1 ORDER BY \"updated_at\" DESC, \"change_id\" DESC LIMIT 1";
 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up changes table");
@@ -17,9 +14,8 @@ pub async fn init(pool: &Pool<Postgres>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
-        pool.prepare(SELECT_MANY),
-        pool.prepare(SELECT_MANY_FROM_TIME),
-        pool.prepare(UPDATE),
+        pool.prepare(UPSERT),
+        pool.prepare(SELECT_LAST_BY_TABLE),
     )
     .unwrap();
 }
@@ -37,9 +33,23 @@ impl PostgresDb {
         .await?;
         Ok(())
     }
+    pub async fn upsert_change(&self, value: &ChangeModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
+                .bind(value.table())
+                .bind(value.id())
+                .bind(value.state())
+                .bind(value.updated_at())
+                .bind(value.change_id()),
+        )
+        .await?;
+        Ok(())
+    }
 
-    pub async fn select_last_change(&self) -> Result<Option<ChangeModel>> {
-        let data = self.fetch_one(sqlx::query_as(SELECT_LAST)).await;
+    pub async fn select_last_change_by_table(&self, table: &str) -> Result<Option<ChangeModel>> {
+        let data = self
+            .fetch_one(sqlx::query_as(SELECT_LAST_BY_TABLE).bind(table))
+            .await;
         match data {
             Ok(data) => Ok(Some(data)),
             Err(err) => {
@@ -50,31 +60,5 @@ impl PostgresDb {
                 }
             }
         }
-    }
-
-    pub async fn select_many_changes(&self) -> Result<Vec<ChangeModel>> {
-        Ok(self.fetch_all(sqlx::query_as(SELECT_MANY)).await?)
-    }
-
-    pub async fn select_many_changes_from_time(
-        &self,
-        time: &DateTime<Utc>,
-    ) -> Result<Vec<ChangeModel>> {
-        Ok(self
-            .fetch_all(sqlx::query_as(SELECT_MANY_FROM_TIME).bind(time))
-            .await?)
-    }
-
-    pub async fn update_change(&self, value: &ChangeModel) -> Result<()> {
-        self.execute(
-            sqlx::query(UPDATE)
-                .bind(value.updated_at())
-                .bind(value.state())
-                .bind(value.change_id())
-                .bind(value.table())
-                .bind(value.id()),
-        )
-        .await?;
-        Ok(())
     }
 }

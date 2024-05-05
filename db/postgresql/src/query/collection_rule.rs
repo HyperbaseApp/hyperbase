@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
@@ -8,7 +9,7 @@ const INSERT: &str = "INSERT INTO \"collection_rules\" (\"id\", \"created_at\", 
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"id\" = $1";
 const SELECT_BY_TOKEN_ID_AND_COLLECTION_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = $1 AND \"collection_id\" = $2";
 const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"token_id\" = $1 ORDER BY \"id\" DESC";
-const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\"";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"collection_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"collection_rules\" WHERE \"updated_at\" > $1 OR (\"updated_at\" = $1 AND \"id\" > $2) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT $3";
 const UPDATE: &str = "UPDATE \"collection_rules\" SET \"updated_at\" = $1, \"find_one\" = $2, \"find_many\" = $3, \"insert_one\" = $4, \"update_one\" = $5, \"delete_one\" = $6 WHERE \"id\" = $7";
 const DELETE: &str = "DELETE FROM \"collection_rules\" WHERE \"id\" = $1";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM \"collection_rules\" WHERE \"token_id\" = $1";
@@ -24,6 +25,7 @@ pub async fn init(pool: &Pool<Postgres>) {
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_TOKEN_ID_AND_COLLECTION_ID),
         pool.prepare(SELECT_MANY_BY_TOKEN_ID),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
         pool.prepare(DELETE_MANY_BY_TOKEN_ID),
@@ -79,30 +81,20 @@ impl PostgresDb {
             .await?)
     }
 
-    pub async fn select_many_collection_rules_after_id_with_limit(
+    pub async fn select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<CollectionRuleModel>> {
-        let mut query = SELECT_ALL.to_owned();
-        let mut values_count = 0;
-
-        if after_id.is_some() {
-            values_count += 1;
-            query += &format!(" WHERE \"id\" > ${values_count}");
-        }
-
-        values_count += 1;
-        query += &format!(" ORDER BY \"id\" ASC LIMIT ${values_count}");
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_collection_rule(&self, value: &CollectionRuleModel) -> Result<()> {

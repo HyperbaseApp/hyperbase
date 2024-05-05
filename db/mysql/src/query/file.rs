@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use sqlx::{Executor, MySql, Pool};
 use uuid::Uuid;
 
@@ -12,7 +12,7 @@ const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM `files` WHERE `bucke
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM `files` WHERE `created_by` = ? AND `bucket_id` = ?";
 const SELECT_MANY_EXPIRE: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `bucket_id` = ? AND `updated_at` < ?";
-const SELECT_ALL: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files`";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_by`, `created_at`, `updated_at`, `bucket_id`, `file_name`, `content_type`, `size`, `public` FROM `files` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
 const UPDATE: &str = "UPDATE `files` SET `created_by` = ?, `updated_at` = ?, `file_name` = ?, `public` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `files` WHERE `id` = ?";
 
@@ -29,6 +29,7 @@ pub async fn init(pool: &Pool<MySql>) {
         pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
         pool.prepare(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
         pool.prepare(SELECT_MANY_EXPIRE),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -151,27 +152,21 @@ impl MysqlDb {
             .await?)
     }
 
-    pub async fn select_many_files_after_id_with_limit(
+    pub async fn select_many_files_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<FileModel>> {
-        let mut query = SELECT_ALL.to_owned();
-
-        if after_id.is_some() {
-            query += " WHERE `id` > ?";
-        }
-
-        query += " ORDER BY `id` ASC LIMIT ?";
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

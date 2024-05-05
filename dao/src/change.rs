@@ -1,12 +1,13 @@
+use std::str::FromStr;
+
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::change::ChangeModel as ChangeMysqlModel;
 use hb_db_postgresql::model::change::ChangeModel as ChangePostgresModel;
-use hb_db_scylladb::model::change::ChangeModel as ChangeScyllaModel;
 use hb_db_sqlite::model::change::ChangeModel as ChangeSqliteModel;
 use uuid::Uuid;
 
-use crate::{util::conversion, Db};
+use crate::Db;
 
 pub struct ChangeDao {
     table: ChangeTable,
@@ -24,7 +25,7 @@ impl ChangeDao {
         updated_at: &DateTime<Utc>,
     ) -> Self {
         Self {
-            table: *table,
+            table: table.to_owned(),
             id: *id,
             state: *state,
             updated_at: *updated_at,
@@ -54,156 +55,47 @@ impl ChangeDao {
 
     pub async fn db_insert(&self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => db.insert_change(&self.to_scylladb_model()).await,
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => db.insert_change(&self.to_postgresdb_model()).await,
             Db::MysqlDb(db) => db.insert_change(&self.to_mysqldb_model()).await,
             Db::SqliteDb(db) => db.insert_change(&self.to_sqlitedb_model()).await,
         }
     }
 
-    pub async fn db_select_last(db: &Db) -> Result<Option<Self>> {
+    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => {
-                if let Some(model) = db.select_last_change().await? {
-                    Ok(Some(Self::from_scylladb_model(&model)?))
-                } else {
-                    Ok(None)
-                }
-            }
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => db.upsert_change(&self.to_postgresdb_model()).await,
+            Db::MysqlDb(db) => db.upsert_change(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.upsert_change(&self.to_sqlitedb_model()).await,
+        }
+    }
+
+    pub async fn db_select_last_by_table(db: &Db, table: &ChangeTable) -> Result<Option<Self>> {
+        match db {
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
-                if let Some(model) = db.select_last_change().await? {
+                if let Some(model) = db.select_last_change_by_table(&table.to_string()).await? {
                     Ok(Some(Self::from_postgresdb_model(&model)?))
                 } else {
                     Ok(None)
                 }
             }
             Db::MysqlDb(db) => {
-                if let Some(model) = db.select_last_change().await? {
+                if let Some(model) = db.select_last_change_by_table(&table.to_string()).await? {
                     Ok(Some(Self::from_mysqldb_model(&model)?))
                 } else {
                     Ok(None)
                 }
             }
             Db::SqliteDb(db) => {
-                if let Some(model) = db.select_last_change().await? {
+                if let Some(model) = db.select_last_change_by_table(&table.to_string()).await? {
                     Ok(Some(Self::from_sqlitedb_model(&model)?))
                 } else {
                     Ok(None)
                 }
             }
         }
-    }
-
-    pub async fn db_select_many(db: &Db) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(db) => {
-                let mut changes_data = Vec::new();
-                let changes = db.select_many_changes().await?;
-                for change in changes {
-                    changes_data.push(Self::from_scylladb_model(&change?)?);
-                }
-                Ok(changes_data)
-            }
-            Db::PostgresqlDb(db) => {
-                let changes = db.select_many_changes().await?;
-                let mut changes_data = Vec::with_capacity(changes.len());
-                for change in &changes {
-                    changes_data.push(Self::from_postgresdb_model(change)?);
-                }
-                Ok(changes_data)
-            }
-            Db::MysqlDb(db) => {
-                let changes = db.select_many_changes().await?;
-                let mut changes_data = Vec::with_capacity(changes.len());
-                for change in &changes {
-                    changes_data.push(Self::from_mysqldb_model(change)?);
-                }
-                Ok(changes_data)
-            }
-            Db::SqliteDb(db) => {
-                let changes = db.select_many_changes().await?;
-                let mut changes_data = Vec::with_capacity(changes.len());
-                for change in &changes {
-                    changes_data.push(Self::from_sqlitedb_model(change)?);
-                }
-                Ok(changes_data)
-            }
-        }
-    }
-
-    pub async fn db_select_many_from_time(db: &Db, time: &DateTime<Utc>) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(db) => {
-                let mut changes_data = Vec::new();
-                let changes = db
-                    .select_many_changes_from_time(
-                        &conversion::datetime_utc_to_scylla_cql_timestamp(time),
-                    )
-                    .await?;
-                for change in changes {
-                    changes_data.push(Self::from_scylladb_model(&change?)?);
-                }
-                Ok(changes_data)
-            }
-            Db::PostgresqlDb(db) => {
-                let changes = db.select_many_changes().await?;
-                let mut changes_data = Vec::with_capacity(changes.len());
-                for change in &changes {
-                    changes_data.push(Self::from_postgresdb_model(change)?);
-                }
-                Ok(changes_data)
-            }
-            Db::MysqlDb(db) => {
-                let changes = db.select_many_changes().await?;
-                let mut changes_data = Vec::with_capacity(changes.len());
-                for change in &changes {
-                    changes_data.push(Self::from_mysqldb_model(change)?);
-                }
-                Ok(changes_data)
-            }
-            Db::SqliteDb(db) => {
-                let changes = db.select_many_changes().await?;
-                let mut changes_data = Vec::with_capacity(changes.len());
-                for change in &changes {
-                    changes_data.push(Self::from_sqlitedb_model(change)?);
-                }
-                Ok(changes_data)
-            }
-        }
-    }
-
-    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
-        self.updated_at = Utc::now();
-        self.change_id = Uuid::now_v7();
-        match db {
-            Db::ScyllaDb(db) => {
-                db.delete_change(self.table.to_str(), &self.id).await?;
-                db.insert_change(&self.to_scylladb_model()).await
-            }
-            Db::PostgresqlDb(db) => db.update_change(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.update_change(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.update_change(&self.to_sqlitedb_model()).await,
-        }
-    }
-
-    fn from_scylladb_model(model: &ChangeScyllaModel) -> Result<Self> {
-        Ok(Self {
-            table: ChangeTable::from_str(model.table())?,
-            id: *model.id(),
-            state: ChangeState::from_str(model.state())?,
-            updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
-            change_id: *model.change_id(),
-        })
-    }
-
-    fn to_scylladb_model(&self) -> ChangeScyllaModel {
-        ChangeScyllaModel::new(
-            self.table.to_str(),
-            &self.id,
-            self.state.to_str(),
-            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.updated_at),
-            &self.change_id,
-        )
     }
 
     fn from_postgresdb_model(model: &ChangePostgresModel) -> Result<Self> {
@@ -218,7 +110,7 @@ impl ChangeDao {
 
     fn to_postgresdb_model(&self) -> ChangePostgresModel {
         ChangePostgresModel::new(
-            self.table.to_str(),
+            &self.table.to_string(),
             &self.id,
             self.state.to_str(),
             &self.updated_at,
@@ -238,7 +130,7 @@ impl ChangeDao {
 
     fn to_mysqldb_model(&self) -> ChangeMysqlModel {
         ChangeMysqlModel::new(
-            self.table.to_str(),
+            &self.table.to_string(),
             &self.id,
             self.state.to_str(),
             &self.updated_at,
@@ -258,7 +150,7 @@ impl ChangeDao {
 
     fn to_sqlitedb_model(&self) -> ChangeSqliteModel {
         ChangeSqliteModel::new(
-            self.table.to_str(),
+            &self.table.to_string(),
             &self.id,
             self.state.to_str(),
             &self.updated_at,
@@ -272,7 +164,7 @@ pub enum ChangeTable {
     Admin,
     Project,
     Collection,
-    Record,
+    Record(Uuid),
     Bucket,
     File,
     Token,
@@ -281,17 +173,17 @@ pub enum ChangeTable {
 }
 
 impl ChangeTable {
-    pub fn to_str(&self) -> &str {
+    pub fn to_string(&self) -> String {
         match self {
-            Self::Admin => "admins",
-            Self::Project => "projects",
-            Self::Collection => "collections",
-            Self::Record => "record",
-            Self::Bucket => "buckets",
-            Self::File => "files",
-            Self::Token => "tokens",
-            Self::CollectionRule => "collection_rules",
-            Self::BucketRule => "bucket_rules",
+            Self::Admin => "admins".to_owned(),
+            Self::Project => "projects".to_owned(),
+            Self::Collection => "collections".to_owned(),
+            Self::Record(collection_id) => format!("record_{collection_id}"),
+            Self::Bucket => "buckets".to_owned(),
+            Self::File => "files".to_owned(),
+            Self::Token => "tokens".to_owned(),
+            Self::CollectionRule => "collection_rules".to_owned(),
+            Self::BucketRule => "bucket_rules".to_owned(),
         }
     }
 
@@ -300,13 +192,22 @@ impl ChangeTable {
             "admins" => Ok(Self::Admin),
             "projects" => Ok(Self::Project),
             "collections" => Ok(Self::Collection),
-            "records" => Ok(Self::Record),
             "buckets" => Ok(Self::Bucket),
             "files" => Ok(Self::File),
             "tokens" => Ok(Self::Token),
             "collection_rules" => Ok(Self::CollectionRule),
             "bucket_rules" => Ok(Self::BucketRule),
-            _ => Err(Error::msg(format!("Unknown change table '{str}'"))),
+            str => {
+                if str.starts_with("record_") {
+                    let collection_id = match Uuid::from_str(&str["record_".len()..]) {
+                        Ok(id) => id,
+                        Err(err) => return Err(err.into()),
+                    };
+                    Ok(Self::Record(collection_id))
+                } else {
+                    Err(Error::msg(format!("Unknown change table '{str}'")))
+                }
+            }
         }
     }
 }

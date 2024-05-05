@@ -194,25 +194,19 @@ impl BucketRuleDao {
         }
     }
 
-    pub async fn db_select_many_after_id_with_limit(
+    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
         db: &Db,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<Self>> {
         match db {
-            Db::ScyllaDb(db) => {
-                let mut bucket_rules_data = Vec::new();
-                let bucket_rules = db
-                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
-                    .await?;
-                for bucket_rule in bucket_rules {
-                    bucket_rules_data.push(Self::from_scylladb_model(&bucket_rule?)?);
-                }
-                Ok(bucket_rules_data)
-            }
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
                 let bucket_rules = db
-                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {
@@ -222,7 +216,9 @@ impl BucketRuleDao {
             }
             Db::MysqlDb(db) => {
                 let bucket_rules = db
-                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {
@@ -232,7 +228,9 @@ impl BucketRuleDao {
             }
             Db::SqliteDb(db) => {
                 let bucket_rules = db
-                    .select_many_bucket_rules_after_id_with_limit(after_id, limit)
+                    .select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {

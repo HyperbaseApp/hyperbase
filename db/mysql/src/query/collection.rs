@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, MySql, Pool};
 use uuid::Uuid;
 
@@ -7,7 +8,7 @@ use crate::{db::MysqlDb, model::collection::CollectionModel};
 const INSERT: &str = "INSERT INTO `collections` (`id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields`, `opt_auth_column_id`, `opt_ttl`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields`, `opt_auth_column_id`, `opt_ttl` FROM `collections` WHERE `id` = ?";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields`, `opt_auth_column_id`, `opt_ttl` FROM `collections` WHERE `project_id` = ? ORDER BY `id` DESC";
-const SELECT_ALL: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields`, `opt_auth_column_id`, `opt_ttl` FROM `collections`";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `name`, `schema_fields`, `opt_auth_column_id`, `opt_ttl` FROM `collections` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
 const UPDATE: &str = "UPDATE `collections` SET `updated_at` = ?, `name` = ?, `schema_fields` = ?, `opt_auth_column_id` = ?, `opt_ttl` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `collections` WHERE `id` = ?";
 
@@ -20,6 +21,7 @@ pub async fn init(pool: &Pool<MySql>) {
         pool.prepare(INSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_PROJECT_ID),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -56,27 +58,21 @@ impl MysqlDb {
             .await?)
     }
 
-    pub async fn select_many_collections_after_id_with_limit(
+    pub async fn select_many_collections_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<CollectionModel>> {
-        let mut query = SELECT_ALL.to_owned();
-
-        if after_id.is_some() {
-            query += " WHERE `id` > ?";
-        }
-
-        query += " ORDER BY `id` ASC LIMIT ?";
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_collection(&self, value: &CollectionModel) -> Result<()> {

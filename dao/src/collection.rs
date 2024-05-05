@@ -226,25 +226,19 @@ impl CollectionDao {
         }
     }
 
-    pub async fn db_select_many_after_id_with_limit(
+    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
         db: &Db,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<Self>> {
         match db {
-            Db::ScyllaDb(db) => {
-                let mut collections_data = Vec::new();
-                let collections = db
-                    .select_many_collections_after_id_with_limit(after_id, limit)
-                    .await?;
-                for collection in collections {
-                    collections_data.push(Self::from_scylladb_model(&collection?)?);
-                }
-                Ok(collections_data)
-            }
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
                 let collections = db
-                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .select_many_collections_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut collections_data = Vec::with_capacity(collections.len());
                 for collection in &collections {
@@ -254,7 +248,9 @@ impl CollectionDao {
             }
             Db::MysqlDb(db) => {
                 let collections = db
-                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .select_many_collections_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut collections_data = Vec::with_capacity(collections.len());
                 for collection in &collections {
@@ -264,7 +260,9 @@ impl CollectionDao {
             }
             Db::SqliteDb(db) => {
                 let collections = db
-                    .select_many_collections_after_id_with_limit(after_id, limit)
+                    .select_many_collections_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut collections_data = Vec::with_capacity(collections.len());
                 for collection in &collections {

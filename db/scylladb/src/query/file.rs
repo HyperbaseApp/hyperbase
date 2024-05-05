@@ -15,7 +15,6 @@ const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"file
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
 const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"updated_at\" < ? ALLOW FILTERING";
-const SELECT_ALL: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\"";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"created_by\" = ?, \"updated_at\" = ?, \"file_name\" = ?, \"public\" = ? WHERE \"bucket_id\" = ? AND \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"id\" = ?";
 
@@ -167,25 +166,6 @@ impl ScyllaDb {
             )
             .await?
             .rows_typed()?)
-    }
-
-    pub async fn select_many_files_after_id_with_limit(
-        &self,
-        after_id: &Option<Uuid>,
-        limit: &i32,
-    ) -> Result<TypedRowIter<FileModel>> {
-        let mut query = SELECT_ALL.to_owned();
-        let mut values: Vec<Box<dyn SerializeCql>> = Vec::with_capacity(2);
-
-        if let Some(after_id) = after_id {
-            values.push(Box::new(after_id));
-            query += " WHERE \"id\" > ?";
-        }
-
-        values.push(Box::new(limit));
-        query += " ORDER BY \"id\" ASC LIMIT ?";
-
-        Ok(self.execute(&query, values).await?.rows_typed()?)
     }
 
     pub async fn update_file(&self, value: &FileModel) -> Result<()> {

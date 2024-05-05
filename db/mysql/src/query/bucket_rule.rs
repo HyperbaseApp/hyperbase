@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, MySql, Pool};
 use uuid::Uuid;
 
@@ -8,7 +9,7 @@ const INSERT: &str = "INSERT INTO `bucket_rules` (`id`, `created_at`, `updated_a
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `id` = ?";
 const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? AND `bucket_id` = ?";
 const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `token_id` = ? ORDER BY `id` DESC";
-const SELECT_ALL: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules`";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_at`, `updated_at`, `project_id`, `token_id`, `bucket_id`, `find_one`, `find_many`, `insert_one`, `update_one`, `delete_one` FROM `bucket_rules` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
 const UPDATE: &str = "UPDATE `bucket_rules` SET `updated_at` = ?, `find_one` = ?, `find_many` = ?, `insert_one` = ?, `update_one` = ?, `delete_one` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `bucket_rules` WHERE `id` = ?";
 const DELETE_MANY_BY_TOKEN_ID: &str = "DELETE FROM `bucket_rules` WHERE `token_id` = ?";
@@ -24,6 +25,7 @@ pub async fn init(pool: &Pool<MySql>) {
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_TOKEN_ID_AND_BUCKET_ID),
         pool.prepare(SELECT_MANY_BY_TOKEN_ID),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
         pool.prepare(DELETE_MANY_BY_TOKEN_ID),
@@ -79,27 +81,21 @@ impl MysqlDb {
             .await?)
     }
 
-    pub async fn select_many_bucket_rules_after_id_with_limit(
+    pub async fn select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<BucketRuleModel>> {
-        let mut query = SELECT_ALL.to_owned();
-
-        if after_id.is_some() {
-            query += " WHERE `id` > ?";
-        }
-
-        query += " ORDER BY `id` ASC LIMIT ?";
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_bucket_rule(&self, value: &BucketRuleModel) -> Result<()> {

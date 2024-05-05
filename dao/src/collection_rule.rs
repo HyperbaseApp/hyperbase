@@ -204,25 +204,19 @@ impl CollectionRuleDao {
         }
     }
 
-    pub async fn db_select_many_after_id_with_limit(
+    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
         db: &Db,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<Self>> {
         match db {
-            Db::ScyllaDb(db) => {
-                let mut collection_rules_data = Vec::new();
-                let collection_rules = db
-                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
-                    .await?;
-                for collection_rule in collection_rules {
-                    collection_rules_data.push(Self::from_scylladb_model(&collection_rule?)?);
-                }
-                Ok(collection_rules_data)
-            }
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
                 let collection_rules = db
-                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {
@@ -232,7 +226,9 @@ impl CollectionRuleDao {
             }
             Db::MysqlDb(db) => {
                 let collection_rules = db
-                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {
@@ -242,7 +238,9 @@ impl CollectionRuleDao {
             }
             Db::SqliteDb(db) => {
                 let collection_rules = db
-                    .select_many_collection_rules_after_id_with_limit(after_id, limit)
+                    .select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {

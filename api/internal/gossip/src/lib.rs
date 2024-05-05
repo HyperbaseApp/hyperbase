@@ -71,7 +71,7 @@ impl ApiInternalGossip {
                     }
                 }
                 _ = peer_sampling_service => {}
-                _ = database_messaging_service => {}
+                // _ = database_messaging_service => {}
             }
 
             hb_log::info(None, "[ApiInternalGossip] Shutting down component");

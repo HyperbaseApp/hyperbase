@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, MySql, Pool};
 use uuid::Uuid;
 
@@ -7,7 +8,7 @@ use crate::{db::MysqlDb, model::project::ProjectModel};
 const INSERT: &str = "INSERT INTO `projects` (`id`, `created_at`, `updated_at`, `admin_id`, `name`) VALUES (?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects` WHERE `id` = ?";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects` WHERE `admin_id` = ? ORDER BY `id` DESC";
-const SELECT_ALL: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects`";
+const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
 const UPDATE: &str = "UPDATE `projects` SET `updated_at` = ?, `admin_id` = ?, `name` = ? WHERE `id` = ?";
 const DELETE: &str = "DELETE FROM `projects` WHERE `id` = ?";
 
@@ -20,6 +21,7 @@ pub async fn init(pool: &Pool<MySql>) {
         pool.prepare(INSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_ADMIN_ID),
+        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -53,27 +55,21 @@ impl MysqlDb {
             .await?)
     }
 
-    pub async fn select_many_projects_after_id_with_limit(
+    pub async fn select_many_projects_from_updated_at_and_after_id_with_limit_asc(
         &self,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<ProjectModel>> {
-        let mut query = SELECT_ALL.to_owned();
-
-        if after_id.is_some() {
-            query += " WHERE `id` > ?";
-        }
-
-        query += " ORDER BY `id` ASC LIMIT ?";
-
-        let mut query = sqlx::query_as(&query);
-        if let Some(after_id) = after_id {
-            query = query.bind(after_id);
-        }
-
-        query = query.bind(limit);
-
-        Ok(self.fetch_all(query).await?)
+        Ok(self
+            .fetch_all(
+                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
+                    .bind(updated_at)
+                    .bind(updated_at)
+                    .bind(id)
+                    .bind(limit),
+            )
+            .await?)
     }
 
     pub async fn update_project(&self, value: &ProjectModel) -> Result<()> {

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::token::TokenModel as TokenMysqlModel;
 use hb_db_postgresql::model::token::TokenModel as TokenPostgresModel;
@@ -327,25 +327,19 @@ impl TokenDao {
         }
     }
 
-    pub async fn db_select_many_after_id_with_limit(
+    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
         db: &Db,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<Self>> {
         match db {
-            Db::ScyllaDb(db) => {
-                let mut tokens_data = Vec::new();
-                let tokens = db
-                    .select_many_tokens_after_id_with_limit(after_id, limit)
-                    .await?;
-                for token in tokens {
-                    tokens_data.push(Self::from_scylladb_model(&token?)?);
-                }
-                Ok(tokens_data)
-            }
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
                 let tokens = db
-                    .select_many_tokens_after_id_with_limit(after_id, limit)
+                    .select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut tokens_data = Vec::with_capacity(tokens.len());
                 for token in &tokens {
@@ -355,7 +349,9 @@ impl TokenDao {
             }
             Db::MysqlDb(db) => {
                 let tokens = db
-                    .select_many_tokens_after_id_with_limit(after_id, limit)
+                    .select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut tokens_data = Vec::with_capacity(tokens.len());
                 for token in &tokens {
@@ -365,7 +361,9 @@ impl TokenDao {
             }
             Db::SqliteDb(db) => {
                 let tokens = db
-                    .select_many_tokens_after_id_with_limit(after_id, limit)
+                    .select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut tokens_data = Vec::with_capacity(tokens.len());
                 for token in &tokens {

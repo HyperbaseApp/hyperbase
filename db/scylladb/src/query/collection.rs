@@ -1,5 +1,5 @@
 use anyhow::Result;
-use scylla::{serialize::value::SerializeCql, transport::session::TypedRowIter, CachingSession};
+use scylla::{transport::session::TypedRowIter, CachingSession};
 use uuid::Uuid;
 
 use crate::{db::ScyllaDb, model::collection::CollectionModel};
@@ -7,7 +7,6 @@ use crate::{db::ScyllaDb, model::collection::CollectionModel};
 const INSERT: &str = "INSERT INTO \"hyperbase\".\"collections\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"hyperbase\".\"collections\" WHERE \"project_id\" = ?";
-const SELECT_ALL: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"schema_fields\", \"opt_auth_column_id\", \"opt_ttl\" FROM \"hyperbase\".\"collections\"";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"collections\" SET \"updated_at\" = ?, \"name\" = ?, \"schema_fields\" = ?, \"opt_auth_column_id\" = ?, \"opt_ttl\" = ? WHERE \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?";
 
@@ -83,25 +82,6 @@ impl ScyllaDb {
             .execute(SELECT_MANY_BY_PROJECT_ID, [project_id].as_ref())
             .await?
             .rows_typed()?)
-    }
-
-    pub async fn select_many_collections_after_id_with_limit(
-        &self,
-        after_id: &Option<Uuid>,
-        limit: &i32,
-    ) -> Result<TypedRowIter<CollectionModel>> {
-        let mut query = SELECT_ALL.to_owned();
-        let mut values: Vec<Box<dyn SerializeCql>> = Vec::with_capacity(2);
-
-        if let Some(after_id) = after_id {
-            values.push(Box::new(after_id));
-            query += " WHERE \"id\" > ?";
-        }
-
-        values.push(Box::new(limit));
-        query += " ORDER BY \"id\" ASC LIMIT ?";
-
-        Ok(self.execute(&query, values).await?.rows_typed()?)
     }
 
     pub async fn update_collection(&self, value: &CollectionModel) -> Result<()> {

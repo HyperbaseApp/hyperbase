@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::admin::AdminModel as AdminMysqlModel;
 use hb_db_postgresql::model::admin::AdminModel as AdminPostgresModel;
@@ -89,25 +89,19 @@ impl AdminDao {
         }
     }
 
-    pub async fn db_select_many_after_id_with_limit(
+    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
         db: &Db,
-        after_id: &Option<Uuid>,
+        updated_at: &DateTime<Utc>,
+        id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<Self>> {
         match db {
-            Db::ScyllaDb(db) => {
-                let mut admins_data = Vec::new();
-                let admins = db
-                    .select_many_admins_after_id_with_limit(after_id, limit)
-                    .await?;
-                for admin in admins {
-                    admins_data.push(Self::from_scylladb_model(&admin?)?);
-                }
-                Ok(admins_data)
-            }
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
                 let admins = db
-                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .select_many_admins_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut admins_data = Vec::with_capacity(admins.len());
                 for admin in &admins {
@@ -117,7 +111,9 @@ impl AdminDao {
             }
             Db::MysqlDb(db) => {
                 let admins = db
-                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .select_many_admins_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut admins_data = Vec::with_capacity(admins.len());
                 for admin in &admins {
@@ -127,7 +123,9 @@ impl AdminDao {
             }
             Db::SqliteDb(db) => {
                 let admins = db
-                    .select_many_admins_after_id_with_limit(after_id, limit)
+                    .select_many_admins_from_updated_at_and_after_id_with_limit_asc(
+                        updated_at, id, limit,
+                    )
                     .await?;
                 let mut admins_data = Vec::with_capacity(admins.len());
                 for admin in &admins {
