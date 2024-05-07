@@ -5,11 +5,13 @@ use hb_db_mysql::model::bucket::BucketModel as BucketMysqlModel;
 use hb_db_postgresql::model::bucket::BucketModel as BucketPostgresModel;
 use hb_db_scylladb::model::bucket::BucketModel as BucketScyllaModel;
 use hb_db_sqlite::model::bucket::BucketModel as BucketSqliteModel;
+use serde::{Deserialize, Serialize};
 use tokio::fs;
 use uuid::Uuid;
 
 use crate::{bucket_rule::BucketRuleDao, file::FileDao, util::conversion, Db};
 
+#[derive(Deserialize, Serialize)]
 pub struct BucketDao {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -40,6 +42,17 @@ impl BucketDao {
             path: path.to_owned(),
             opt_ttl: *opt_ttl,
         })
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {

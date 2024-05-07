@@ -98,7 +98,7 @@ impl GossipServerRunner {
                 result = listener.accept() => {
                     match result {
                         Ok(result) => {
-                            let (mut tcp_stream, sender_address) = result;
+                            let (mut tcp_stream, _) = result;
                             let message_handler = builder.handler.clone();
                             tokio::spawn((|| async move {
                                 let mut buf = Vec::new();
@@ -114,7 +114,7 @@ impl GossipServerRunner {
                                     Ok(read) => {
                                         if read > 0 {
                                             match Message::from_bytes(&buf) {
-                                                Ok(message) => message.handle(&sender_address,message_handler),
+                                                Ok(message) => message.handle(message_handler),
                                                 Err(err) => {
                                                     hb_log::error(None, &format!("[ApiInternalGossip] {err}"));
                                                     return;

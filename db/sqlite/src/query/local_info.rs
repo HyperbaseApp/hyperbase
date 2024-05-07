@@ -13,12 +13,10 @@ pub async fn init(pool: &Pool<Sqlite>) {
         .await
         .unwrap();
     pool.execute(
-        r#"CREATE TRIGGER only_one_row_insert BEFORE INSERT ON "local_info"
-    FOR EACH ROW
+        r#"CREATE TRIGGER IF NOT EXISTS only_one_row_insert BEFORE INSERT ON "local_info"
+    FOR EACH ROW WHEN (SELECT COUNT(1) FROM "local_info") >= 1
     BEGIN
-      IF (SELECT COUNT(*) FROM "local_info") >= 1 THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Table can only have one row';
-      END IF;
+      SELECT RAISE(ABORT, 'Table can only have one row');
     END;"#,
     )
     .await

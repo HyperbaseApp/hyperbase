@@ -519,16 +519,12 @@ async fn duplicate_one(
                     file_data.created_by(),
                     new_bucket_data.id(),
                     file_data.file_name(),
-                    file_data.content_type(),
+                    &file_data.content_type(),
                     file_data.size(),
                     file_data.public(),
                 );
                 if let Err(err) = new_file_data
-                    .save(
-                        ctx.dao().db(),
-                        new_bucket_data.path(),
-                        &format!("{}/{}", bucket_data.path(), file_data.id()),
-                    )
+                    .save(ctx.dao().db(), new_bucket_data.path(), bucket_data.path())
                     .await
                 {
                     return Response::error_raw(

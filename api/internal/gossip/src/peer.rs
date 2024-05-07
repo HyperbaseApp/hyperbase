@@ -4,16 +4,22 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 pub struct Peer {
+    id: Option<Uuid>,
     address: SocketAddr,
     age: u16,
 }
 
 impl Peer {
-    pub fn new(address: SocketAddr) -> Peer {
-        Peer { address, age: 0 }
+    pub fn new(id: Option<Uuid>, address: SocketAddr) -> Peer {
+        Peer {
+            id,
+            address,
+            age: 0,
+        }
     }
 
     pub fn increment_age(&mut self) {

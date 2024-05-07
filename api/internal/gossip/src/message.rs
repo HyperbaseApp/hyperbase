@@ -12,36 +12,43 @@ pub mod content;
 pub mod header;
 
 #[derive(Deserialize, Serialize)]
-pub enum Message {
-    Sampling {
-        kind: MessageKind,
-        value: Option<Vec<Peer>>,
-    },
-    Header {
-        from: Uuid,
-        to: Uuid,
-        value: HeaderMessage,
-    },
-    Content {
-        from: Uuid,
-        to: Uuid,
-        value: ContentMessage,
-    },
+
+pub struct Message {
+    sender: SocketAddr,
+    msg: MessageV,
 }
 
 impl Message {
-    pub fn handle(self, sender_address: &SocketAddr, handler: MessageHandler) {
-        match self {
-            Message::Sampling { kind, value } => {
-                if let Err(err) = handler.send_sampling(*sender_address, kind, value) {
+    pub fn new(sender: SocketAddr, msg: MessageV) -> Self {
+        Self { sender, msg }
+    }
+
+    pub fn handle(self, handler: MessageHandler) {
+        match self.msg {
+            MessageV::Sampling { kind, data } => {
+                if let Err(err) = handler.send_sampling(self.sender, kind, data) {
                     hb_log::error(
                         None,
-                        &format!("[ApiInternalGossip] Error sending sample to its handler: {err}"),
+                        &format!("[ApiInternalGossip] Error sending sample message to its handler: {err}"),
                     )
                 }
             }
-            Message::Header { from, to, value } => todo!(),
-            Message::Content { from, to, value } => todo!(),
+            MessageV::Header { from, to, data } => {
+                if let Err(err) = handler.send_header(self.sender, from, to, data) {
+                    hb_log::error(
+                        None,
+                        &format!("[ApiInternalGossip] Error sending header message to its handler: {err}"),
+                    )
+                }
+            }
+            MessageV::Content { from, to, data } => {
+                if let Err(err) = handler.send_content(self.sender, from, to, data) {
+                    hb_log::error(
+                    None,
+                    &format!("[ApiInternalGossip] Error sending content message to its handler: {err}"),
+                )
+                }
+            }
         }
     }
 
@@ -57,9 +64,26 @@ impl Message {
     where
         Self: Deserialize<'a>,
     {
-        let msg = rmp_serde::from_slice(bytes)?;
-        Ok(msg)
+        Ok(rmp_serde::from_slice(bytes)?)
     }
+}
+
+#[derive(Deserialize, Serialize)]
+pub enum MessageV {
+    Sampling {
+        kind: MessageKind,
+        data: Option<Vec<Peer>>,
+    },
+    Header {
+        from: Uuid,
+        to: Uuid,
+        data: HeaderMessage,
+    },
+    Content {
+        from: Uuid,
+        to: Uuid,
+        data: ContentMessage,
+    },
 }
 
 #[derive(Deserialize, Serialize, PartialEq)]

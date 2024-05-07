@@ -262,7 +262,7 @@ pub enum ChangeTable {
     Collection,
     Record(Uuid),
     Bucket,
-    File,
+    File(Uuid),
     Token,
     CollectionRule,
     BucketRule,
@@ -274,9 +274,9 @@ impl ChangeTable {
             Self::Admin => "admins".to_owned(),
             Self::Project => "projects".to_owned(),
             Self::Collection => "collections".to_owned(),
-            Self::Record(collection_id) => format!("record_{collection_id}"),
+            Self::Record(collection_id) => format!("records_{collection_id}"),
             Self::Bucket => "buckets".to_owned(),
-            Self::File => "files".to_owned(),
+            Self::File(bucket_id) => format!("files_{bucket_id}"),
             Self::Token => "tokens".to_owned(),
             Self::CollectionRule => "collection_rules".to_owned(),
             Self::BucketRule => "bucket_rules".to_owned(),
@@ -289,17 +289,22 @@ impl ChangeTable {
             "projects" => Ok(Self::Project),
             "collections" => Ok(Self::Collection),
             "buckets" => Ok(Self::Bucket),
-            "files" => Ok(Self::File),
             "tokens" => Ok(Self::Token),
             "collection_rules" => Ok(Self::CollectionRule),
             "bucket_rules" => Ok(Self::BucketRule),
             str => {
-                if str.starts_with("record_") {
-                    let collection_id = match Uuid::from_str(&str["record_".len()..]) {
+                if str.starts_with("records_") {
+                    let collection_id = match Uuid::from_str(&str["records_".len()..]) {
                         Ok(id) => id,
                         Err(err) => return Err(err.into()),
                     };
                     Ok(Self::Record(collection_id))
+                } else if str.starts_with("files_") {
+                    let bucket_id = match Uuid::from_str(&str["files_".len()..]) {
+                        Ok(id) => id,
+                        Err(err) => return Err(err.into()),
+                    };
+                    Ok(Self::File(bucket_id))
                 } else {
                     Err(Error::msg(format!("Unknown change table '{str}'")))
                 }

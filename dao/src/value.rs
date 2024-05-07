@@ -12,13 +12,13 @@ use scylla::{
     frame::response::result::CqlValue as ScyllaCqlValue,
     serialize::value::SerializeCql as ScyllaSerializeCql,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use uuid::Uuid;
 
 use crate::util::conversion;
 
-#[derive(Serialize, EnumIter, PartialEq, Clone, Copy)]
+#[derive(Deserialize, Serialize, EnumIter, PartialEq, Clone, Copy)]
 pub enum ColumnKind {
     Boolean,   // boolean
     TinyInt,   // 8-bit signed int
@@ -159,7 +159,7 @@ impl ColumnKind {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub enum ColumnValue {
     Boolean(Option<bool>),
     TinyInteger(Option<i8>),

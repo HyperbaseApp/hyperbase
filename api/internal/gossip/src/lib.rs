@@ -1,10 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use hb_dao::Db;
+use hb_dao::{local_info::LocalInfoDao, Db};
 use peer::Peer;
 use server::GossipServer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::{
     config::{database_messaging::DatabaseMessagingConfig, peer_sampling::PeerSamplingConfig},
@@ -22,20 +23,31 @@ mod service;
 mod view;
 
 pub struct ApiInternalGossip {
-    address: SocketAddr,
+    local_id: Uuid,
+    local_address: SocketAddr,
     db: Arc<Db>,
     peers: Vec<Peer>,
 }
 
 impl ApiInternalGossip {
-    pub fn new(host: &str, port: &u16, db: Arc<Db>, peers: &Option<Vec<SocketAddr>>) -> Self {
-        let address = format!("{host}:{port}").parse().unwrap();
+    pub async fn new(host: &str, port: &u16, db: Arc<Db>, peers: &Option<Vec<SocketAddr>>) -> Self {
+        let local_id = match LocalInfoDao::db_select(&db).await {
+            Ok(data) => *data.id(),
+            Err(_) => {
+                let local_info_data = LocalInfoDao::new();
+                local_info_data.db_insert(&db).await.unwrap();
+                *local_info_data.id()
+            }
+        };
+
+        let local_address = format!("{host}:{port}").parse().unwrap();
 
         Self {
-            address,
+            local_id,
+            local_address,
             db,
             peers: match peers {
-                Some(peers) => peers.iter().map(|p| Peer::new(*p)).collect(),
+                Some(peers) => peers.iter().map(|p| Peer::new(None, *p)).collect(),
                 None => Vec::new(),
             },
         }
@@ -51,14 +63,24 @@ impl ApiInternalGossip {
         hb_log::info(Some("💫"), "[ApiInternalGossip] Running component");
 
         tokio::spawn((|| async move {
-            let (peer_sampling_service, view, peer_sampling_tx) =
-                PeerSamplingService::new(self.address, PeerSamplingConfig::default(), self.peers);
+            let (peer_sampling_service, view, peer_sampling_tx) = PeerSamplingService::new(
+                self.local_id,
+                self.local_address,
+                PeerSamplingConfig::default(),
+                self.peers,
+            );
 
             let (database_messaging_service, header_messaging_tx, content_messaging_tx) =
-                DatabaseMessagingService::new(DatabaseMessagingConfig::default(), self.db, view);
+                DatabaseMessagingService::new(
+                    self.local_id,
+                    self.local_address,
+                    DatabaseMessagingConfig::default(),
+                    self.db,
+                    view,
+                );
 
             let server = GossipServer::new(
-                self.address,
+                self.local_address,
                 MessageHandler::new(peer_sampling_tx, header_messaging_tx, content_messaging_tx),
             )
             .run();

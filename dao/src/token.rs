@@ -5,6 +5,7 @@ use hb_db_postgresql::model::token::TokenModel as TokenPostgresModel;
 use hb_db_scylladb::model::token::TokenModel as TokenScyllaModel;
 use hb_db_sqlite::model::token::TokenModel as TokenSqliteModel;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
     Db,
 };
 
+#[derive(Deserialize, Serialize)]
 pub struct TokenDao {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -51,6 +53,17 @@ impl TokenDao {
             allow_anonymous: *allow_anonymous,
             expired_at: *expired_at,
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {

@@ -15,13 +15,14 @@ use hb_db_scylladb::model::collection::{
 use hb_db_sqlite::model::collection::{
     CollectionModel as CollectionSqliteModel, SchemaFieldPropsModel as SchemaFieldPropsSqliteModel,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     collection_rule::CollectionRuleDao, record::RecordDao, util::conversion, value::ColumnKind, Db,
 };
 
+#[derive(Deserialize, Serialize)]
 pub struct CollectionDao {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -31,6 +32,7 @@ pub struct CollectionDao {
     schema_fields: HashMap<String, SchemaFieldProps>,
     opt_auth_column_id: bool,
     opt_ttl: Option<i64>,
+    #[serde(skip)]
     _preserve: Option<Preserve>,
 }
 
@@ -55,6 +57,17 @@ impl CollectionDao {
             opt_ttl: *opt_ttl,
             _preserve: None,
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {
@@ -591,7 +604,7 @@ impl CollectionDao {
     }
 }
 
-#[derive(Serialize, Clone, Copy)]
+#[derive(Deserialize, Serialize, Clone, Copy)]
 pub struct SchemaFieldProps {
     kind: ColumnKind,
     required: bool,

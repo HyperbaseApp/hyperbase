@@ -253,11 +253,7 @@ impl Db {
         }
 
         hb_log::info(None, "[DAO] Updating changes table of buckets data");
-        let mut last_updated_at =
-            match ChangeDao::db_select_last_by_table(self, &ChangeTable::Bucket).await? {
-                Some(change_data) => *change_data.updated_at(),
-                None => DateTime::from_timestamp_millis(0).unwrap(),
-            };
+        let mut last_updated_at = DateTime::from_timestamp_millis(0).unwrap();
         let mut last_id = Uuid::nil();
         loop {
             let buckets_data =
@@ -276,59 +272,66 @@ impl Db {
                 None => break,
             }
 
-            let mut changes_data = Vec::with_capacity(buckets_data.len());
             for bucket_data in &buckets_data {
-                changes_data.push(ChangeDao::new(
+                ChangeDao::new(
                     &ChangeTable::Bucket,
                     bucket_data.id(),
                     &ChangeState::Upsert,
                     bucket_data.updated_at(),
-                ));
-            }
-            let mut changes_data_fut = Vec::with_capacity(changes_data.len());
-            for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
-            }
-            future::try_join_all(changes_data_fut).await?;
-        }
+                )
+                .db_insert(self)
+                .await?;
 
-        hb_log::info(None, "[DAO] Updating changes table of files data");
-        let mut last_updated_at =
-            match ChangeDao::db_select_last_by_table(self, &ChangeTable::File).await? {
-                Some(change_data) => *change_data.updated_at(),
-                None => DateTime::from_timestamp_millis(0).unwrap(),
-            };
-        let mut last_id = Uuid::nil();
-        loop {
-            let files_data = FileDao::db_select_many_from_updated_at_and_after_id_with_limit_asc(
-                self,
-                &last_updated_at,
-                &last_id,
-                &count_data_per_page,
-            )
-            .await?;
-            match files_data.last() {
-                Some(file_data) => {
-                    last_updated_at = *file_data.updated_at();
-                    last_id = *file_data.id();
+                hb_log::info(
+                    None,
+                    &format!(
+                        "[DAO] Updating changes table of files data from bucket {}",
+                        bucket_data.id()
+                    ),
+                );
+                let mut last_updated_at = match ChangeDao::db_select_last_by_table(
+                    self,
+                    &ChangeTable::File(*bucket_data.id()),
+                )
+                .await?
+                {
+                    Some(change_data) => *change_data.updated_at(),
+                    None => DateTime::from_timestamp_millis(0).unwrap(),
+                };
+                let mut last_id = Uuid::nil();
+                loop {
+                    let files_data =
+                        FileDao::db_select_many_from_updated_at_and_after_id_with_limit_asc(
+                            self,
+                            &last_updated_at,
+                            &last_id,
+                            &count_data_per_page,
+                        )
+                        .await?;
+                    match files_data.last() {
+                        Some(file_data) => {
+                            last_updated_at = *file_data.updated_at();
+                            last_id = *file_data.id();
+                        }
+                        None => break,
+                    }
+
+                    let mut changes_data = Vec::with_capacity(files_data.len());
+                    for file_data in &files_data {
+                        changes_data.push(ChangeDao::new(
+                            &ChangeTable::File(*file_data.bucket_id()),
+                            file_data.id(),
+                            &ChangeState::Upsert,
+                            file_data.updated_at(),
+                        ));
+                    }
+                    let mut changes_data_fut = Vec::with_capacity(changes_data.len());
+                    for change_data in &changes_data {
+                        changes_data_fut.push(change_data.db_insert(self));
+                    }
+                    future::try_join_all(changes_data_fut).await?;
                 }
-                None => break,
             }
-
-            let mut changes_data = Vec::with_capacity(files_data.len());
-            for file_data in &files_data {
-                changes_data.push(ChangeDao::new(
-                    &ChangeTable::File,
-                    file_data.id(),
-                    &ChangeState::Upsert,
-                    file_data.updated_at(),
-                ));
-            }
-            let mut changes_data_fut = Vec::with_capacity(changes_data.len());
-            for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
-            }
-            future::try_join_all(changes_data_fut).await?;
         }
 
         hb_log::info(None, "[DAO] Updating changes table of tokens data");

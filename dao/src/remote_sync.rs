@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::Db;
 
+#[derive(Clone, Copy)]
 pub struct RemoteSyncDao {
     remote_address: SocketAddr,
     remote_id: Uuid,

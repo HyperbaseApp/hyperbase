@@ -48,6 +48,7 @@ use hb_db_sqlite::{
     query::{record as sqlite_record, system::COUNT_TABLE as SQLITE_COUNT_TABLE},
 };
 use scylla::{frame::response::result::CqlValue as ScyllaCqlValue, serialize::value::SerializeCql};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
@@ -56,6 +57,7 @@ use crate::{
     Db,
 };
 
+#[derive(Deserialize, Serialize)]
 pub struct RecordDao {
     table_name: String,
     collection_id: Uuid,
@@ -80,6 +82,17 @@ impl RecordDao {
             collection_id: *collection_id,
             data,
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn new_table_name(collection_id: &Uuid) -> String {

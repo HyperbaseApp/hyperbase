@@ -1,4 +1,7 @@
-use std::{path::Path, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
@@ -8,11 +11,16 @@ use hb_db_postgresql::model::file::FileModel as FilePostgresModel;
 use hb_db_scylladb::model::file::FileModel as FileScyllaModel;
 use hb_db_sqlite::model::file::FileModel as FileSqliteModel;
 use mime::Mime;
-use tokio::fs;
+use serde::{Deserialize, Serialize};
+use tokio::{
+    fs,
+    io::{AsyncReadExt, AsyncWriteExt},
+};
 use uuid::Uuid;
 
 use crate::{bucket::BucketDao, util::conversion, Db};
 
+#[derive(Deserialize, Serialize)]
 pub struct FileDao {
     id: Uuid,
     created_by: Uuid,
@@ -20,9 +28,10 @@ pub struct FileDao {
     updated_at: DateTime<Utc>,
     bucket_id: Uuid,
     file_name: String,
-    content_type: Mime,
+    content_type: String,
     size: i64,
     public: bool,
+    _bytes: Option<Vec<u8>>,
 }
 
 impl FileDao {
@@ -43,10 +52,22 @@ impl FileDao {
             updated_at: now,
             bucket_id: *bucket_id,
             file_name: file_name.to_owned(),
-            content_type: content_type.clone(),
+            content_type: content_type.to_string(),
             size: *size,
             public: *public,
+            _bytes: None,
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {
@@ -73,8 +94,8 @@ impl FileDao {
         &self.file_name
     }
 
-    pub fn content_type(&self) -> &Mime {
-        &self.content_type
+    pub fn content_type(&self) -> Mime {
+        Mime::from_str(&self.content_type).unwrap()
     }
 
     pub fn size(&self) -> &i64 {
@@ -97,14 +118,55 @@ impl FileDao {
         self.public = *public;
     }
 
+    pub async fn populate_bytes(&mut self, bucket_path: &str) -> Result<()> {
+        let mut file = fs::File::open(&self.full_path(bucket_path)?).await?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes).await?;
+        self._bytes = Some(bytes);
+        Ok(())
+    }
+
+    pub fn drop_bytes(&mut self) {
+        self._bytes = None;
+    }
+
+    pub fn full_path(&self, bucket_path: &str) -> Result<PathBuf> {
+        let exe_path = std::env::current_exe()?;
+        let exe_path = match exe_path.to_str() {
+            Some(path) => path,
+            None => return Err(Error::msg("Failed to get current executable path")),
+        };
+        Ok(PathBuf::from(format!(
+            "{}/{}/{}",
+            exe_path, bucket_path, self.id
+        )))
+    }
+
     pub async fn save(&self, db: &Db, bucket_path: &str, path: impl AsRef<Path>) -> Result<()> {
-        fs::copy(path, &format!("{}/{}", bucket_path, &self.id)).await?;
+        fs::copy(path, &self.full_path(bucket_path)?).await?;
 
         self.db_insert(db).await
     }
 
+    pub async fn save_from_bytes(&self, db: &Db, bucket_path: &str) -> Result<()> {
+        if let Some(bytes) = &self._bytes {
+            let mut file = fs::File::create(self.full_path(bucket_path)?).await?;
+            file.write_all(bytes).await?;
+            file.flush().await?;
+
+            self.db_insert(db).await
+        } else {
+            Err(Error::msg("File bytes is empty"))
+        }
+    }
+
     pub async fn delete(db: &Db, bucket_data: &BucketDao, id: &Uuid) -> Result<()> {
-        fs::remove_file(&format!("{}/{}", bucket_data.path(), id)).await?;
+        let exe_path = std::env::current_exe()?;
+        let exe_path = match exe_path.to_str() {
+            Some(path) => path,
+            None => return Err(Error::msg("Failed to get current executable path")),
+        };
+        fs::remove_file(&format!("{}/{}/{}", exe_path, bucket_data.path(), id)).await?;
 
         Self::db_delete(db, bucket_data.id(), id).await
     }
@@ -390,9 +452,10 @@ impl FileDao {
             updated_at: conversion::scylla_cql_timestamp_to_datetime_utc(model.updated_at())?,
             bucket_id: *model.bucket_id(),
             file_name: model.file_name().to_owned(),
-            content_type: Mime::from_str(model.content_type())?,
+            content_type: Mime::from_str(model.content_type())?.to_string(),
             size: *model.size(),
             public: *model.public(),
+            _bytes: None,
         })
     }
 
@@ -418,9 +481,10 @@ impl FileDao {
             updated_at: *model.updated_at(),
             bucket_id: *model.bucket_id(),
             file_name: model.file_name().to_owned(),
-            content_type: Mime::from_str(model.content_type())?,
+            content_type: Mime::from_str(model.content_type())?.to_string(),
             size: *model.size(),
             public: *model.public(),
+            _bytes: None,
         })
     }
 
@@ -446,9 +510,10 @@ impl FileDao {
             updated_at: *model.updated_at(),
             bucket_id: *model.bucket_id(),
             file_name: model.file_name().to_owned(),
-            content_type: Mime::from_str(model.content_type())?,
+            content_type: Mime::from_str(model.content_type())?.to_string(),
             size: *model.size(),
             public: *model.public(),
+            _bytes: None,
         })
     }
 
@@ -474,9 +539,10 @@ impl FileDao {
             updated_at: *model.updated_at(),
             bucket_id: *model.bucket_id(),
             file_name: model.file_name().to_owned(),
-            content_type: Mime::from_str(model.content_type())?,
+            content_type: Mime::from_str(model.content_type())?.to_string(),
             size: *model.size(),
             public: *model.public(),
+            _bytes: None,
         })
     }
 

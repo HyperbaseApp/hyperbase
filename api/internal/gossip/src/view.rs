@@ -1,22 +1,37 @@
 use std::net::SocketAddr;
 
 use ahash::{HashSet, HashSetExt};
+use anyhow::{Error, Result};
+use hb_dao::{remote_sync::RemoteSyncDao, Db};
 use rand::{prelude::SliceRandom, Rng};
+use uuid::Uuid;
 
 use crate::peer::Peer;
 
 #[derive(Clone)]
 pub struct View {
+    local_id: Uuid,
     local_address: SocketAddr,
     peers: Vec<Peer>,
 }
 
 impl View {
-    pub fn new(local_address: SocketAddr, peers: Vec<Peer>) -> Self {
+    pub fn new(local_id: Uuid, local_address: SocketAddr, peers: Vec<Peer>) -> Self {
         Self {
+            local_id,
             local_address,
             peers,
         }
+    }
+
+    pub fn add_with_local(mut self) -> Self {
+        let mut peers = Vec::with_capacity(self.peers.len() + 1);
+        peers.push(Peer::new(Some(self.local_id), self.local_address));
+        for peer in self.peers {
+            peers.push(peer);
+        }
+        self.peers = peers;
+        self
     }
 
     pub fn select_peer(&self) -> Option<Peer> {
@@ -25,6 +40,26 @@ impl View {
         } else {
             let peer_idx = rand::thread_rng().gen_range(0..self.peers.len());
             Some(self.peers[peer_idx])
+        }
+    }
+
+    pub async fn select_remote_sync(&self, db: &Db) -> Option<Result<RemoteSyncDao>> {
+        if let Some(peer) = self.select_peer() {
+            let remotes_sync_data =
+                match RemoteSyncDao::db_select_many_by_address(&db, peer.address()).await {
+                    Ok(data) => {
+                        if !data.is_empty() {
+                            data
+                        } else {
+                            return Some(Err(Error::msg("Remote is empty")));
+                        }
+                    }
+                    Err(err) => return Some(Err(err.into())),
+                };
+            let remote_sync_data = remotes_sync_data.choose(&mut rand::thread_rng()).unwrap();
+            Some(Ok(*remote_sync_data))
+        } else {
+            None
         }
     }
 

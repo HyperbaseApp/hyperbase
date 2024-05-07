@@ -37,4 +37,26 @@ impl MessageHandler {
     ) -> Result<()> {
         Ok(self.peer_sampling_tx.send((sender, kind, peers))?)
     }
+
+    pub fn send_header(
+        &self,
+        sender: SocketAddr,
+        from: Uuid,
+        to: Uuid,
+        header: HeaderMessage,
+    ) -> Result<()> {
+        Ok(self.header_messaging_tx.send((sender, from, to, header))?)
+    }
+
+    pub fn send_content(
+        &self,
+        sender: SocketAddr,
+        from: Uuid,
+        to: Uuid,
+        content: ContentMessage,
+    ) -> Result<()> {
+        Ok(self
+            .content_messaging_tx
+            .send((sender, from, to, content))?)
+    }
 }

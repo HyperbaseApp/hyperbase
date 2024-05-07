@@ -4,10 +4,12 @@ use hb_db_mysql::model::collection_rule::CollectionRuleModel as CollectionRuleMy
 use hb_db_postgresql::model::collection_rule::CollectionRuleModel as CollectionRulePostgresModel;
 use hb_db_scylladb::model::collection_rule::CollectionRuleModel as CollectionRuleScyllaModel;
 use hb_db_sqlite::model::collection_rule::CollectionRuleModel as CollectionRuleSqliteModel;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
 
+#[derive(Deserialize, Serialize)]
 pub struct CollectionRuleDao {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -48,6 +50,17 @@ impl CollectionRuleDao {
             update_one: *update_one,
             delete_one: *delete_one,
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {
@@ -429,7 +442,7 @@ impl CollectionRuleDao {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq)]
 pub enum CollectionPermission {
     All,
     SelfMade,

@@ -90,7 +90,7 @@ impl ApiRestCtx {
         &self.reset_password_ttl
     }
 
-    pub fn bucket_path(&self) -> &str {
+    pub fn bucket_path(&self) -> &String {
         &self.bucket_path
     }
 }

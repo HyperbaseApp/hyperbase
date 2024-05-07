@@ -4,10 +4,12 @@ use hb_db_mysql::model::admin::AdminModel as AdminMysqlModel;
 use hb_db_postgresql::model::admin::AdminModel as AdminPostgresModel;
 use hb_db_scylladb::model::admin::AdminModel as AdminScyllaModel;
 use hb_db_sqlite::model::admin::AdminModel as AdminSqliteModel;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{project::ProjectDao, util::conversion, Db};
 
+#[derive(Deserialize, Serialize)]
 pub struct AdminDao {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -26,6 +28,17 @@ impl AdminDao {
             email: email.to_owned(),
             password_hash: password_hash.to_owned(),
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {

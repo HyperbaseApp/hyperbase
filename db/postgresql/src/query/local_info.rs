@@ -15,7 +15,7 @@ pub async fn init(pool: &Pool<Postgres>) {
     pool.execute(
         r#"CREATE OR REPLACE FUNCTION prevent_duplicate_row() RETURNS TRIGGER AS $$
     BEGIN
-      IF (SELECT COUNT(*) FROM "local_info") >= 1 THEN
+      IF (SELECT COUNT(1) FROM "local_info") >= 1 THEN
         RAISE EXCEPTION 'Only one row allowed in the table';
       END IF;
       RETURN NEW;

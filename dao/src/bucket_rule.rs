@@ -4,10 +4,12 @@ use hb_db_mysql::model::bucket_rule::BucketRuleModel as BucketRuleMysqlModel;
 use hb_db_postgresql::model::bucket_rule::BucketRuleModel as BucketRulePostgresModel;
 use hb_db_scylladb::model::bucket_rule::BucketRuleModel as BucketRuleScyllaModel;
 use hb_db_sqlite::model::bucket_rule::BucketRuleModel as BucketRuleSqliteModel;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
 
+#[derive(Deserialize, Serialize)]
 pub struct BucketRuleDao {
     id: Uuid,
     created_at: DateTime<Utc>,
@@ -48,6 +50,17 @@ impl BucketRuleDao {
             update_one: *update_one,
             delete_one: *delete_one,
         }
+    }
+
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    where
+        Self: Deserialize<'a>,
+    {
+        rmp_serde::from_slice(bytes)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        rmp_serde::to_vec(self)
     }
 
     pub fn id(&self) -> &Uuid {
@@ -407,7 +420,7 @@ impl BucketRuleDao {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Deserialize, Serialize, Clone, Copy)]
 pub enum BucketPermission {
     All,
     SelfMade,

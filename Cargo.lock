@@ -1209,6 +1209,7 @@ dependencies = [
  "mime",
  "num-bigint",
  "rand",
+ "rmp-serde",
  "scylla",
  "serde",
  "serde_json",

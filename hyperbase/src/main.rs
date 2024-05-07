@@ -133,12 +133,15 @@ async fn main() {
 
     if let Some(config_internal) = config.api().internal() {
         if let Some(config_gossip) = config_internal.gossip() {
-            api_internal_gossip = Some(ApiInternalGossip::new(
-                config_gossip.host(),
-                config_gossip.port(),
-                db.clone(),
-                config_gossip.peers(),
-            ));
+            api_internal_gossip = Some(
+                ApiInternalGossip::new(
+                    config_gossip.host(),
+                    config_gossip.port(),
+                    db.clone(),
+                    config_gossip.peers(),
+                )
+                .await,
+            );
         }
     }
 

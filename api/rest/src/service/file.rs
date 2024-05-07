@@ -399,11 +399,19 @@ async fn head_find_one(
         }
     }
 
-    let file =
-        match NamedFile::open_async(&format!("{}/{}", bucket_data.path(), file_data.id())).await {
-            Ok(file) => file,
-            Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
-        };
+    let file_path = match file_data.full_path(bucket_data.path()) {
+        Ok(path) => path,
+        Err(err) => {
+            return Response::error_raw(
+                &StatusCode::INTERNAL_SERVER_ERROR,
+                &format!("Failed to get file path: {err}"),
+            )
+        }
+    };
+    let file = match NamedFile::open_async(&file_path).await {
+        Ok(file) => file,
+        Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+    };
 
     let mut res = HttpResponse::Ok();
     for header in file.into_response(&req).headers() {
@@ -621,13 +629,16 @@ async fn find_one(
             ),
         )
     } else {
-        let file = match NamedFile::open_async(&format!(
-            "{}/{}",
-            bucket_data.path(),
-            file_data.id()
-        ))
-        .await
-        {
+        let file_path = match file_data.full_path(bucket_data.path()) {
+            Ok(path) => path,
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::INTERNAL_SERVER_ERROR,
+                    &format!("Failed to get file path: {err}"),
+                )
+            }
+        };
+        let file = match NamedFile::open_async(&file_path).await {
             Ok(file) => file,
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
