@@ -4,6 +4,7 @@ use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
 use hb_api_websocket::message::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
+    change::{ChangeDao, ChangeState, ChangeTable},
     collection::CollectionDao,
     log::{LogDao, LogKind},
     project::ProjectDao,
@@ -194,6 +195,27 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
 
     record_data.db_insert(ctx.dao().db()).await?;
 
+    let record_id = if let Some(ColumnValue::Uuid(Some(id))) = record_data.get("_id") {
+        id
+    } else {
+        return Err(Error::msg(format!("Record doesn't have _id")));
+    };
+    let record_updated_at =
+        if let Some(ColumnValue::Timestamp(Some(updated_at))) = record_data.get("_updated_at") {
+            updated_at
+        } else {
+            return Err(Error::msg(format!("Record doesn't have _updated_at")));
+        };
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::Record(*record_data.collection_id()),
+        record_id,
+        &ChangeState::Upsert,
+        record_updated_at,
+    );
+    change_data.db_upsert(ctx.dao().db()).await?;
+
+    let ws_broadcaster_chan = ctx.websocket().broadcaster().clone();
     tokio::spawn((|| async move {
         let mut record = HashMap::with_capacity(record_data.len());
         for (key, value) in record_data.data() {
@@ -213,7 +235,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
         let created_by = Uuid::parse_str(record["_created_by"].as_str().unwrap()).unwrap();
 
         if let Err(err) = websocket_broadcast(
-            ctx.websocket().broadcaster(),
+            &ws_broadcaster_chan,
             WebSocketTarget::Collection(*collection_data.id()),
             Some(created_by),
             WebSocketMessageKind::InsertOne,
@@ -225,9 +247,21 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
                     "[ApiMqttClient] Error when broadcasting insert_one record to websocket: {err}"
                 ),
             );
-            return;
         }
     })());
+    if let Some(internal_broadcast) = ctx.internal_broadcast() {
+        let internal_broadcast = internal_broadcast.clone();
+        tokio::spawn((|| async move {
+            if let Err(err) = internal_broadcast.broadcast(&change_data).await {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "[ApiMqttClient] Error when broadcasting insert_one record to remote peer: {err}"
+                    ),
+                );
+            }
+        })());
+    }
 
     Ok(())
 }

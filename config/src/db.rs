@@ -12,6 +12,7 @@ pub mod sqlite;
 
 #[derive(Deserialize)]
 pub struct DbConfig {
+    option: Option<DbOptionConfig>,
     scylla: Option<DbScyllaConfig>,
     postgres: Option<DbPostgresConfig>,
     mysql: Option<DbMysqlConfig>,
@@ -19,6 +20,10 @@ pub struct DbConfig {
 }
 
 impl DbConfig {
+    pub fn option(&self) -> &Option<DbOptionConfig> {
+        &self.option
+    }
+
     pub fn scylla(&self) -> &Option<DbScyllaConfig> {
         &self.scylla
     }
@@ -33,5 +38,16 @@ impl DbConfig {
 
     pub fn sqlite(&self) -> &Option<DbSqliteConfig> {
         &self.sqlite
+    }
+}
+
+#[derive(Deserialize)]
+pub struct DbOptionConfig {
+    refresh_change: Option<bool>,
+}
+
+impl DbOptionConfig {
+    pub fn refresh_change(&self) -> &Option<bool> {
+        &self.refresh_change
     }
 }

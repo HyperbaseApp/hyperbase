@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{db::SqliteDb, model::change::ChangeModel};
 
-const INSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\") DO NOTHING";
+const INSERT_OR_IGNORE: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\") DO NOTHING";
 const UPSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\") DO UPDATE SET \"state\" = ?, \"updated_at\" = ?, \"change_id\" = ?";
 const SELECT_LAST_BY_TABLE: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"table\" = ? ORDER BY \"updated_at\" DESC, \"change_id\" DESC LIMIT 1";
 const SELECT_MANY_BY_CHANGE_IDS_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"change_id\" IN (?) ORDER BY \"updated_at\" ASC, \"change_id\" ASC";
@@ -17,7 +17,7 @@ pub async fn init(pool: &Pool<Sqlite>) {
     pool.execute("CREATE TABLE IF NOT EXISTS \"changes\" (\"table\" text, \"id\" blob, \"state\" text, \"updated_at\" timestamp, \"change_id\" blob, PRIMARY KEY (\"table\", \"id\"))").await.unwrap();
 
     tokio::try_join!(
-        pool.prepare(INSERT),
+        pool.prepare(INSERT_OR_IGNORE),
         pool.prepare(UPSERT),
         pool.prepare(SELECT_LAST_BY_TABLE),
         pool.prepare(SELECT_MANY_BY_CHANGE_IDS_ASC),
@@ -27,9 +27,9 @@ pub async fn init(pool: &Pool<Sqlite>) {
 }
 
 impl SqliteDb {
-    pub async fn insert_change(&self, value: &ChangeModel) -> Result<()> {
+    pub async fn insert_or_ignore_change(&self, value: &ChangeModel) -> Result<()> {
         self.execute(
-            sqlx::query(UPSERT)
+            sqlx::query(INSERT_OR_IGNORE)
                 .bind(value.table())
                 .bind(value.id())
                 .bind(value.state())

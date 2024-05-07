@@ -1,26 +1,29 @@
 use std::net::SocketAddr;
 
 use anyhow::Result;
-use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    message::{content::ContentMessage, header::HeaderMessage, MessageKind},
-    peer::Peer,
+    message::{
+        content::{ContentChannelSender, ContentMessage},
+        header::{HeaderChannelSender, HeaderMessage},
+        MessageKind,
+    },
+    peer::{Peer, PeerSamplingSender},
 };
 
 #[derive(Clone)]
 pub struct MessageHandler {
-    peer_sampling_tx: mpsc::UnboundedSender<(SocketAddr, MessageKind, Option<Vec<Peer>>)>,
-    header_messaging_tx: mpsc::UnboundedSender<(SocketAddr, Uuid, Uuid, HeaderMessage)>,
-    content_messaging_tx: mpsc::UnboundedSender<(SocketAddr, Uuid, Uuid, ContentMessage)>,
+    peer_sampling_tx: PeerSamplingSender,
+    header_messaging_tx: HeaderChannelSender,
+    content_messaging_tx: ContentChannelSender,
 }
 
 impl MessageHandler {
     pub fn new(
-        peer_sampling_tx: mpsc::UnboundedSender<(SocketAddr, MessageKind, Option<Vec<Peer>>)>,
-        header_messaging_tx: mpsc::UnboundedSender<(SocketAddr, Uuid, Uuid, HeaderMessage)>,
-        content_messaging_tx: mpsc::UnboundedSender<(SocketAddr, Uuid, Uuid, ContentMessage)>,
+        peer_sampling_tx: PeerSamplingSender,
+        header_messaging_tx: HeaderChannelSender,
+        content_messaging_tx: ContentChannelSender,
     ) -> Self {
         Self {
             peer_sampling_tx,

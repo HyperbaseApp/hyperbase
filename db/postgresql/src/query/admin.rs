@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::PostgresDb, model::admin::AdminModel};
 
 const INSERT: &str = "INSERT INTO \"admins\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\") VALUES ($1, $2, $3, $4, $5)";
+const UPSERT: &str = "INSERT INTO \"admins\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (\"id\") DO UPDATE SET \"created_at\" = $2, \"updated_at\" = $3, \"email\" = $4, \"password_hash\" = $5";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\" FROM \"admins\" WHERE \"id\" = $1";
 const SELECT_BY_EMAIL: &str= "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\" FROM \"admins\" WHERE \"email\" = $1";
 const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\" FROM \"admins\" WHERE \"updated_at\" > $1 OR (\"updated_at\" = $1 AND \"id\" > $2) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT $3";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<Postgres>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_EMAIL),
         pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
@@ -32,6 +34,19 @@ impl PostgresDb {
     pub async fn insert_admin(&self, value: &AdminModel) -> Result<()> {
         self.execute(
             sqlx::query(INSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.email())
+                .bind(value.password_hash()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_admin(&self, value: &AdminModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
                 .bind(value.id())
                 .bind(value.created_at())
                 .bind(value.updated_at())

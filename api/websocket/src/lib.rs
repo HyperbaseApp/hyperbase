@@ -153,10 +153,9 @@ impl ApiWebSocketServer {
                             continue;
                         }
                         if let Target::Collection(collection_id) = &message.target {
-                            let token_data =
-                                TokenDao::db_select(self.ctx.dao().db(), token_id).await?;
+                            let token_data = TokenDao::db_select(self.ctx.db(), token_id).await?;
                             if let Some(permission) = token_data
-                                .is_allow_find_many_records(self.ctx.dao().db(), collection_id)
+                                .is_allow_find_many_records(self.ctx.db(), collection_id)
                                 .await
                             {
                                 if permission == CollectionPermission::None {

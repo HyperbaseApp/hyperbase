@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use hb_api_internal_gossip::ApiInternalGossip;
+use hb_api_internal_gossip::{ApiInternalGossip, InternalBroadcast};
 use hb_api_mqtt::{
     context::{ApiMqttCtx, ApiMqttDaoCtx, ApiMqttWsCtx},
     ApiMqttClient,
@@ -12,10 +12,7 @@ use hb_api_rest::{
     },
     ApiRestServer,
 };
-use hb_api_websocket::{
-    context::{ApiWebSocketCtx, ApiWebSocketDaoCtx},
-    ApiWebSocketServer,
-};
+use hb_api_websocket::{context::ApiWebSocketCtx, ApiWebSocketServer};
 use hb_dao::Db;
 use hb_db_mysql::db::MysqlDb;
 use hb_db_postgresql::db::PostgresDb;
@@ -122,31 +119,40 @@ async fn main() {
         hb_log::panic(None, "[Hyperbase] No database configuration is specified");
         return;
     };
-    // if let Err(err) = db.init().await {
-    //     hb_log::panic(
-    //         None,
-    //         format!("[Hyperbase] Initilizing database failed: {err}"),
-    //     );
-    // }
-
-    let mut api_internal_gossip = None;
-
-    if let Some(config_internal) = config.api().internal() {
-        if let Some(config_gossip) = config_internal.gossip() {
-            api_internal_gossip = Some(
-                ApiInternalGossip::new(
-                    config_gossip.host(),
-                    config_gossip.port(),
-                    db.clone(),
-                    config_gossip.peers(),
-                )
-                .await,
+    if config
+        .db()
+        .option()
+        .as_ref()
+        .is_some_and(|opt| opt.refresh_change().is_some_and(|refresh| refresh))
+    {
+        if let Err(err) = db.init().await {
+            hb_log::panic(
+                None,
+                format!("[Hyperbase] Initilizing database failed: {err}"),
             );
         }
     }
 
+    let mut api_internal_gossip = None;
+    let mut internal_broadcast = None;
+
+    if let Some(config_internal) = config.api().internal() {
+        if let Some(config_gossip) = config_internal.gossip() {
+            let gossip_api = ApiInternalGossip::new(
+                config_gossip.host(),
+                config_gossip.port(),
+                db.clone(),
+                config_gossip.peers(),
+            )
+            .await;
+            api_internal_gossip = Some(gossip_api.0);
+            internal_broadcast =
+                Some(InternalBroadcast::new(gossip_api.1, gossip_api.2, db.clone()).await);
+        }
+    }
+
     let (api_websocket_server, websocket_handler, websocket_publisher) = ApiWebSocketServer::new(
-        ApiWebSocketCtx::new(ApiWebSocketDaoCtx::new(db.clone())),
+        ApiWebSocketCtx::new(db.clone()),
         config.api().websocket().heartbeat_interval(),
         config.api().websocket().client_timeout(),
     );
@@ -173,6 +179,7 @@ async fn main() {
                 )),
                 None => None,
             },
+            internal_broadcast.clone(),
             *config.auth().admin_registration(),
             *config.auth().access_token_length(),
             *config.auth().registration_ttl(),
@@ -193,6 +200,7 @@ async fn main() {
             ApiMqttCtx::new(
                 ApiMqttDaoCtx::new(db),
                 ApiMqttWsCtx::new(websocket_publisher),
+                internal_broadcast,
             ),
         )),
         None => None,

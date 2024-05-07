@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::MysqlDb, model::project::ProjectModel};
 
 const INSERT: &str = "INSERT INTO `projects` (`id`, `created_at`, `updated_at`, `admin_id`, `name`) VALUES (?, ?, ?, ?, ?)";
+const UPSERT: &str = "INSERT INTO `projects` (`id`, `created_at`, `updated_at`, `admin_id`, `name`) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `created_at` = ?, `updated_at` = ?, `admin_id` = ?, `name` = ?";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects` WHERE `id` = ?";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects` WHERE `admin_id` = ? ORDER BY `id` DESC";
 const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_at`, `updated_at`, `admin_id`, `name` FROM `projects` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<MySql>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_ADMIN_ID),
         pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
@@ -33,6 +35,23 @@ impl MysqlDb {
         self.execute(
             sqlx::query(INSERT)
                 .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.admin_id())
+                .bind(value.name()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_project(&self, value: &ProjectModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.admin_id())
+                .bind(value.name())
                 .bind(value.created_at())
                 .bind(value.updated_at())
                 .bind(value.admin_id())

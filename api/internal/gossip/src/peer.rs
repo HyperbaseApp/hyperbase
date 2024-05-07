@@ -4,7 +4,14 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 use uuid::Uuid;
+
+use crate::message::MessageKind;
+
+type PeerSampling = (SocketAddr, MessageKind, Option<Vec<Peer>>);
+pub type PeerSamplingSender = mpsc::UnboundedSender<PeerSampling>;
+pub type PeerSamplingReceiver = mpsc::UnboundedReceiver<PeerSampling>;
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
 pub struct Peer {
@@ -22,10 +29,8 @@ impl Peer {
         }
     }
 
-    pub fn increment_age(&mut self) {
-        if self.age < u16::MAX {
-            self.age += 1;
-        }
+    pub fn id(&self) -> &Option<Uuid> {
+        &self.id
     }
 
     pub fn address(&self) -> &SocketAddr {
@@ -34,6 +39,12 @@ impl Peer {
 
     pub fn age(&self) -> &u16 {
         &self.age
+    }
+
+    pub fn increment_age(&mut self) {
+        if self.age < u16::MAX {
+            self.age += 1;
+        }
     }
 }
 

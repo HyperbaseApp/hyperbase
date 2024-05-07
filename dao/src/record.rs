@@ -96,7 +96,7 @@ impl RecordDao {
     }
 
     pub fn new_table_name(collection_id: &Uuid) -> String {
-        "record_".to_owned() + &collection_id.to_string().replace("-", "")
+        "records_".to_owned() + &collection_id.to_string().replace("-", "")
     }
 
     pub fn table_name(&self) -> &str {

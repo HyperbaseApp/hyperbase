@@ -69,12 +69,15 @@ impl ChangeDao {
         &self.change_id
     }
 
-    pub async fn db_insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert_or_ignore(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.insert_change(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.insert_change(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.insert_change(&self.to_sqlitedb_model()).await,
+            Db::PostgresqlDb(db) => {
+                db.insert_or_ignore_change(&self.to_postgresdb_model())
+                    .await
+            }
+            Db::MysqlDb(db) => db.insert_or_ignore_change(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.insert_or_ignore_change(&self.to_sqlitedb_model()).await,
         }
     }
 
@@ -313,7 +316,7 @@ impl ChangeTable {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum ChangeState {
     Upsert,
     Delete,

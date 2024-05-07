@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::SqliteDb, model::admin::AdminModel};
 
 const INSERT: &str = "INSERT INTO \"admins\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\") VALUES (?, ?, ?, ?, ?)";
+const UPSERT: &str = "INSERT INTO \"admins\" (\"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"id\") DO UPDATE SET \"created_at\" = ?, \"updated_at\" = ?, \"email\" = ?, \"password_hash\" = ?";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\" FROM \"admins\" WHERE \"id\" = ?";
 const SELECT_BY_EMAIL: &str= "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\" FROM \"admins\" WHERE \"email\" = ?";
 const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"email\", \"password_hash\" FROM \"admins\" WHERE \"updated_at\" > ? OR (\"updated_at\" = ? AND \"id\" > ?) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT ?";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<Sqlite>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_EMAIL),
         pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
@@ -33,6 +35,23 @@ impl SqliteDb {
         self.execute(
             sqlx::query(INSERT)
                 .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.email())
+                .bind(value.password_hash()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_admin(&self, value: &AdminModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.email())
+                .bind(value.password_hash())
                 .bind(value.created_at())
                 .bind(value.updated_at())
                 .bind(value.email())

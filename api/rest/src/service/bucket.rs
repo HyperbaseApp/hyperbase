@@ -1,6 +1,12 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use hb_dao::{admin::AdminDao, bucket::BucketDao, project::ProjectDao};
+use chrono::Utc;
+use hb_dao::{
+    admin::AdminDao,
+    bucket::BucketDao,
+    change::{ChangeDao, ChangeState, ChangeTable},
+    project::ProjectDao,
+};
 use hb_token_jwt::claim::ClaimId;
 
 use crate::{
@@ -89,6 +95,30 @@ async fn insert_one(
 
     if let Err(err) = bucket_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::Bucket,
+        bucket_data.id(),
+        &ChangeState::Upsert,
+        bucket_data.updated_at(),
+    );
+    if let Err(err) = change_data.db_upsert(ctx.dao().db()).await {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
+    if let Some(internal_broadcast) = ctx.internal_broadcast() {
+        let internal_broadcast = internal_broadcast.clone();
+        tokio::spawn((|| async move {
+            if let Err(err) = internal_broadcast.broadcast(&change_data).await {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "[ApiRestServer] Error when broadcasting insert_one bucket to remote peer: {err}"
+                    ),
+                );
+            }
+        })());
     }
 
     Response::data(
@@ -230,6 +260,30 @@ async fn update_one(
         if let Err(err) = bucket_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
+
+        let change_data = ChangeDao::new(
+            &ChangeTable::Bucket,
+            bucket_data.id(),
+            &ChangeState::Upsert,
+            bucket_data.updated_at(),
+        );
+        if let Err(err) = change_data.db_upsert(ctx.dao().db()).await {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+        }
+
+        if let Some(internal_broadcast) = ctx.internal_broadcast() {
+            let internal_broadcast = internal_broadcast.clone();
+            tokio::spawn((|| async move {
+                if let Err(err) = internal_broadcast.broadcast(&change_data).await {
+                    hb_log::error(
+                        None,
+                        &format!(
+                            "[ApiRestServer] Error when broadcasting update_one bucket to remote peer: {err}"
+                        ),
+                    );
+                }
+            })());
+        }
     }
 
     Response::data(
@@ -295,8 +349,34 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::FORBIDDEN, "This bucket does not belong to you");
     }
 
+    let deleted_at = Utc::now();
+
     if let Err(err) = BucketDao::db_delete(ctx.dao().db(), path.bucket_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::Bucket,
+        bucket_data.id(),
+        &ChangeState::Delete,
+        &deleted_at,
+    );
+    if let Err(err) = change_data.db_upsert(ctx.dao().db()).await {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
+    if let Some(internal_broadcast) = ctx.internal_broadcast() {
+        let internal_broadcast = internal_broadcast.clone();
+        tokio::spawn((|| async move {
+            if let Err(err) = internal_broadcast.broadcast(&change_data).await {
+                hb_log::error(
+                    None,
+                    &format!(
+                        "[ApiRestServer] Error when broadcasting insert_one bucket to remote peer: {err}"
+                    ),
+                );
+            }
+        })());
     }
 
     Response::data(

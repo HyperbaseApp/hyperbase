@@ -12,7 +12,7 @@ const DELETE: &str = "DELETE FROM \"hyperbase\".\"collections\" WHERE \"id\" = ?
 
 fn update_default_time_to_live(id: &Uuid, ttl: &i64) -> String {
     format!(
-        "ALTER TABLE \"hyperbase\".\"record_{}\" WITH default_time_to_live = {}",
+        "ALTER TABLE \"hyperbase\".\"records_{}\" WITH default_time_to_live = {}",
         id.to_string().replace("-", ""),
         ttl
     )

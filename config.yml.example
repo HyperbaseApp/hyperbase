@@ -25,6 +25,8 @@ mailer:
   sender_email: "sender_email"
 
 db:
+  option:
+    refresh_change: false
   scylla:
     user: "user"
     password: "password"

@@ -24,6 +24,14 @@ impl View {
         }
     }
 
+    pub fn peers(&self) -> &[Peer] {
+        &self.peers
+    }
+
+    pub fn len_peers(&self) -> usize {
+        self.peers.len()
+    }
+
     pub fn add_with_local(mut self) -> Self {
         let mut peers = Vec::with_capacity(self.peers.len() + 1);
         peers.push(Peer::new(Some(self.local_id), self.local_address));

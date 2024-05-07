@@ -1,11 +1,14 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use hb_dao::{local_info::LocalInfoDao, Db};
+use anyhow::{Error, Result};
+use hb_dao::{change::ChangeDao, local_info::LocalInfoDao, Db};
+use message::content::{ContentChangeModel, ContentChannelSender, ContentMessage};
 use peer::Peer;
-use server::GossipServer;
-use tokio::task::JoinHandle;
+use server::{GossipServer, GossipServerRunner};
+use tokio::{sync::Mutex, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+use view::View;
 
 use crate::{
     config::{database_messaging::DatabaseMessagingConfig, peer_sampling::PeerSamplingConfig},
@@ -16,21 +19,25 @@ use crate::{
 mod client;
 mod config;
 mod handler;
-mod message;
+pub mod message;
 mod peer;
 mod server;
 mod service;
-mod view;
+pub mod view;
 
 pub struct ApiInternalGossip {
-    local_id: Uuid,
-    local_address: SocketAddr,
-    db: Arc<Db>,
-    peers: Vec<Peer>,
+    peer_sampling_service: PeerSamplingService,
+    database_messaging_service: DatabaseMessagingService,
+    server: GossipServerRunner,
 }
 
 impl ApiInternalGossip {
-    pub async fn new(host: &str, port: &u16, db: Arc<Db>, peers: &Option<Vec<SocketAddr>>) -> Self {
+    pub async fn new(
+        host: &str,
+        port: &u16,
+        db: Arc<Db>,
+        peers: &Option<Vec<SocketAddr>>,
+    ) -> (Self, Arc<Mutex<View>>, ContentChannelSender) {
         let local_id = match LocalInfoDao::db_select(&db).await {
             Ok(data) => *data.id(),
             Err(_) => {
@@ -42,15 +49,47 @@ impl ApiInternalGossip {
 
         let local_address = format!("{host}:{port}").parse().unwrap();
 
-        Self {
+        let peers = match peers {
+            Some(peers) => peers.iter().map(|p| Peer::new(None, *p)).collect(),
+            None => Vec::new(),
+        };
+
+        let (peer_sampling_service, view, peer_sampling_tx) = PeerSamplingService::new(
             local_id,
             local_address,
-            db,
-            peers: match peers {
-                Some(peers) => peers.iter().map(|p| Peer::new(None, *p)).collect(),
-                None => Vec::new(),
+            PeerSamplingConfig::default(),
+            db.clone(),
+            peers,
+        );
+
+        let (database_messaging_service, header_messaging_tx, content_messaging_tx) =
+            DatabaseMessagingService::new(
+                local_id,
+                local_address,
+                DatabaseMessagingConfig::default(),
+                db,
+                view.clone(),
+            );
+
+        let server = GossipServer::new(
+            local_address,
+            MessageHandler::new(
+                peer_sampling_tx,
+                header_messaging_tx,
+                content_messaging_tx.clone(),
+            ),
+        )
+        .run();
+
+        (
+            Self {
+                peer_sampling_service,
+                database_messaging_service,
+                server,
             },
-        }
+            view,
+            content_messaging_tx,
+        )
     }
 
     pub fn run_none() -> JoinHandle<()> {
@@ -63,35 +102,14 @@ impl ApiInternalGossip {
         hb_log::info(Some("💫"), "[ApiInternalGossip] Running component");
 
         tokio::spawn((|| async move {
-            let (peer_sampling_service, view, peer_sampling_tx) = PeerSamplingService::new(
-                self.local_id,
-                self.local_address,
-                PeerSamplingConfig::default(),
-                self.peers,
-            );
+            let server_handle = self.server.handle();
 
-            let (database_messaging_service, header_messaging_tx, content_messaging_tx) =
-                DatabaseMessagingService::new(
-                    self.local_id,
-                    self.local_address,
-                    DatabaseMessagingConfig::default(),
-                    self.db,
-                    view,
-                );
-
-            let server = GossipServer::new(
-                self.local_address,
-                MessageHandler::new(peer_sampling_tx, header_messaging_tx, content_messaging_tx),
-            )
-            .run();
-            let server_handle = server.handle();
-
-            let peer_sampling_service = peer_sampling_service.run();
-            let database_messaging_service = database_messaging_service.run();
+            let peer_sampling_service = self.peer_sampling_service.run();
+            let database_messaging_service = self.database_messaging_service.run();
 
             tokio::select! {
                 _ = cancel_token.cancelled() => {}
-                s = server => {
+                s = self.server => {
                     if let Err(err) = s {
                         hb_log::panic(None, &format!("[ApiInternalGossip] Gossip server error: {err}"));
                     }
@@ -103,5 +121,40 @@ impl ApiInternalGossip {
             hb_log::info(None, "[ApiInternalGossip] Shutting down component");
             server_handle.stop().await;
         })())
+    }
+}
+
+#[derive(Clone)]
+pub struct InternalBroadcast {
+    view: Arc<Mutex<View>>,
+    tx: ContentChannelSender,
+    db: Arc<Db>,
+    local_id: Uuid,
+}
+
+impl InternalBroadcast {
+    pub async fn new(view: Arc<Mutex<View>>, tx: ContentChannelSender, db: Arc<Db>) -> Self {
+        let local_info_data = LocalInfoDao::db_select(&db).await.unwrap();
+        Self {
+            view,
+            tx,
+            db,
+            local_id: *local_info_data.id(),
+        }
+    }
+
+    pub async fn broadcast(&self, change_data: &ChangeDao) -> Result<()> {
+        let view = self.view.lock().await;
+        if let Some(Ok(remote_data)) = view.select_remote_sync(&self.db).await {
+            let change_data = ContentChangeModel::from_change_dao(&self.db, change_data).await?;
+            Ok(self.tx.send((
+                *remote_data.remote_address(),
+                self.local_id,
+                *remote_data.remote_id(),
+                ContentMessage::Broadcast { change_data },
+            ))?)
+        } else {
+            Err(Error::msg("Failed to broadcast data to peer"))
+        }
     }
 }

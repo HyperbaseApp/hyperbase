@@ -11,33 +11,33 @@ use crate::Db;
 
 #[derive(Clone, Copy)]
 pub struct RemoteSyncDao {
-    remote_address: SocketAddr,
     remote_id: Uuid,
+    remote_address: SocketAddr,
     last_data_sync: DateTime<Utc>,
     last_change_id: Uuid,
 }
 
 impl RemoteSyncDao {
     pub fn new(
-        remote_address: &SocketAddr,
         remote_id: &Uuid,
+        remote_address: &SocketAddr,
         last_data_sync: &DateTime<Utc>,
         last_change_id: &Uuid,
     ) -> Self {
         Self {
-            remote_address: *remote_address,
             remote_id: *remote_id,
+            remote_address: *remote_address,
             last_data_sync: *last_data_sync,
             last_change_id: *last_change_id,
         }
     }
 
-    pub fn remote_address(&self) -> &SocketAddr {
-        &self.remote_address
-    }
-
     pub fn remote_id(&self) -> &Uuid {
         &self.remote_id
+    }
+
+    pub fn remote_address(&self) -> &SocketAddr {
+        &self.remote_address
     }
 
     pub fn last_data_sync(&self) -> &DateTime<Utc> {

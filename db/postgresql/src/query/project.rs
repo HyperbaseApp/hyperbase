@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::PostgresDb, model::project::ProjectModel};
 
 const INSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES ($1, $2, $3, $4, $5)";
+const UPSERT: &str = "INSERT INTO \"projects\" (\"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (\"id\") DO UPDATE SET \"created_at\" = $2, \"updated_at\" = $3, \"admin_id\" = $4, \"name\" = $5";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"id\" = $1";
 const SELECT_MANY_BY_ADMIN_ID:  &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"admin_id\" = $1 ORDER BY \"id\" DESC";
 const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"admin_id\", \"name\" FROM \"projects\" WHERE \"updated_at\" > $1 OR (\"updated_at\" = $1 AND \"id\" > $2) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT $3";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<Postgres>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_ADMIN_ID),
         pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
@@ -32,6 +34,19 @@ impl PostgresDb {
     pub async fn insert_project(&self, value: &ProjectModel) -> Result<()> {
         self.execute(
             sqlx::query(INSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.admin_id())
+                .bind(value.name()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_project(&self, value: &ProjectModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
                 .bind(value.id())
                 .bind(value.created_at())
                 .bind(value.updated_at())

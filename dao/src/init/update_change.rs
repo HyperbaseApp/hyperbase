@@ -59,7 +59,7 @@ impl Db {
             }
             let mut changes_data_fut = Vec::with_capacity(changes_data.len());
             for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
+                changes_data_fut.push(change_data.db_insert_or_ignore(self));
             }
             future::try_join_all(changes_data_fut).await?;
         }
@@ -99,7 +99,7 @@ impl Db {
             }
             let mut changes_data_fut = Vec::with_capacity(changes_data.len());
             for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
+                changes_data_fut.push(change_data.db_insert_or_ignore(self));
             }
             future::try_join_all(changes_data_fut).await?;
         }
@@ -131,7 +131,7 @@ impl Db {
                     &ChangeState::Upsert,
                     collections_data.updated_at(),
                 )
-                .db_insert(self)
+                .db_insert_or_ignore(self)
                 .await?;
 
                 hb_log::info(
@@ -245,7 +245,7 @@ impl Db {
                     }
                     let mut changes_data_fut = Vec::with_capacity(changes_data.len());
                     for change_data in &changes_data {
-                        changes_data_fut.push(change_data.db_insert(self));
+                        changes_data_fut.push(change_data.db_insert_or_ignore(self));
                     }
                     future::try_join_all(changes_data_fut).await?;
                 }
@@ -279,7 +279,7 @@ impl Db {
                     &ChangeState::Upsert,
                     bucket_data.updated_at(),
                 )
-                .db_insert(self)
+                .db_insert_or_ignore(self)
                 .await?;
 
                 hb_log::info(
@@ -327,7 +327,7 @@ impl Db {
                     }
                     let mut changes_data_fut = Vec::with_capacity(changes_data.len());
                     for change_data in &changes_data {
-                        changes_data_fut.push(change_data.db_insert(self));
+                        changes_data_fut.push(change_data.db_insert_or_ignore(self));
                     }
                     future::try_join_all(changes_data_fut).await?;
                 }
@@ -368,7 +368,7 @@ impl Db {
             }
             let mut changes_data_fut = Vec::with_capacity(changes_data.len());
             for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
+                changes_data_fut.push(change_data.db_insert_or_ignore(self));
             }
             future::try_join_all(changes_data_fut).await?;
         }
@@ -411,7 +411,7 @@ impl Db {
             }
             let mut changes_data_fut = Vec::with_capacity(changes_data.len());
             for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
+                changes_data_fut.push(change_data.db_insert_or_ignore(self));
             }
             future::try_join_all(changes_data_fut).await?;
         }
@@ -452,7 +452,7 @@ impl Db {
             }
             let mut changes_data_fut = Vec::with_capacity(changes_data.len());
             for change_data in &changes_data {
-                changes_data_fut.push(change_data.db_insert(self));
+                changes_data_fut.push(change_data.db_insert_or_ignore(self));
             }
             future::try_join_all(changes_data_fut).await?;
         }

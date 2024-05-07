@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::MysqlDb, model::admin::AdminModel};
 
 const INSERT: &str = "INSERT INTO `admins` (`id`, `created_at`, `updated_at`, `email`, `password_hash`) VALUES (?, ?, ?, ?, ?)";
+const UPSERT: &str = "INSERT INTO `admins` (`id`, `created_at`, `updated_at`, `email`, `password_hash`) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `created_at` = ?, `updated_at` = ?, `email` = ?, `password_hash` = ?";
 const SELECT: &str = "SELECT `id`, `created_at`, `updated_at`, `email`, `password_hash` FROM `admins` WHERE `id` = ?";
 const SELECT_BY_EMAIL: &str= "SELECT `id`, `created_at`, `updated_at`, `email`, `password_hash` FROM `admins` WHERE `email` = ?";
 const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT `id`, `created_at`, `updated_at`, `email`, `password_hash` FROM `admins` WHERE `updated_at` > ? OR (`updated_at` = ? AND `id` > ?) ORDER BY `updated_at` ASC, `id` ASC LIMIT ?";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<MySql>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_EMAIL),
         pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
@@ -33,6 +35,23 @@ impl MysqlDb {
         self.execute(
             sqlx::query(INSERT)
                 .bind(model.id())
+                .bind(model.created_at())
+                .bind(model.updated_at())
+                .bind(model.email())
+                .bind(model.password_hash()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_admin(&self, model: &AdminModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
+                .bind(model.id())
+                .bind(model.created_at())
+                .bind(model.updated_at())
+                .bind(model.email())
+                .bind(model.password_hash())
                 .bind(model.created_at())
                 .bind(model.updated_at())
                 .bind(model.email())

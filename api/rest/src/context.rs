@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use hb_api_internal_gossip::InternalBroadcast;
 use hb_api_websocket::handler::WebSocketHandler;
 use hb_dao::Db;
 use hb_hash_argon2::argon2::Argon2Hash;
@@ -14,6 +15,7 @@ pub struct ApiRestCtx {
     dao: ApiRestDaoCtx,
     websocket: ApiRestWsCtx,
     mqtt_admin_credential: Option<MqttAdminCredential>,
+    internal_broadcast: Option<InternalBroadcast>,
     admin_registration: bool,
     access_token_length: usize,
     registration_ttl: u32,
@@ -29,6 +31,7 @@ impl ApiRestCtx {
         dao: ApiRestDaoCtx,
         websocket: ApiRestWsCtx,
         mqtt_admin_credential: Option<MqttAdminCredential>,
+        internal_broadcast: Option<InternalBroadcast>,
         admin_registration: bool,
         access_token_length: usize,
         registration_ttl: u32,
@@ -42,6 +45,7 @@ impl ApiRestCtx {
             dao,
             websocket,
             mqtt_admin_credential,
+            internal_broadcast,
             admin_registration,
             access_token_length,
             registration_ttl,
@@ -72,6 +76,10 @@ impl ApiRestCtx {
 
     pub fn mqtt_admin_credential(&self) -> &Option<MqttAdminCredential> {
         &self.mqtt_admin_credential
+    }
+
+    pub fn internal_broadcast(&self) -> &Option<InternalBroadcast> {
+        &self.internal_broadcast
     }
 
     pub fn admin_registration(&self) -> &bool {

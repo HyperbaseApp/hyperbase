@@ -1,5 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
+use chrono::DateTime;
+use hb_dao::{remote_sync::RemoteSyncDao, Db};
 use rand::Rng;
 use tokio::{
     sync::{mpsc, Mutex},
@@ -11,16 +13,17 @@ use crate::{
     client,
     config::peer_sampling::PeerSamplingConfig,
     message::{Message, MessageKind, MessageV},
-    peer::Peer,
+    peer::{Peer, PeerSamplingReceiver, PeerSamplingSender},
     view::View,
 };
 
 pub struct PeerSamplingService {
     local_address: SocketAddr,
     config: PeerSamplingConfig,
+    db: Arc<Db>,
     view: Arc<Mutex<View>>,
 
-    rx: mpsc::UnboundedReceiver<(SocketAddr, MessageKind, Option<Vec<Peer>>)>,
+    rx: PeerSamplingReceiver,
 }
 
 impl PeerSamplingService {
@@ -28,18 +31,16 @@ impl PeerSamplingService {
         local_id: Uuid,
         local_address: SocketAddr,
         config: PeerSamplingConfig,
+        db: Arc<Db>,
         peers: Vec<Peer>,
-    ) -> (
-        Self,
-        Arc<Mutex<View>>,
-        mpsc::UnboundedSender<(SocketAddr, MessageKind, Option<Vec<Peer>>)>,
-    ) {
+    ) -> (Self, Arc<Mutex<View>>, PeerSamplingSender) {
         let (tx, rx) = mpsc::unbounded_channel();
         let view = Arc::new(Mutex::new(View::new(local_id, local_address, peers)));
         (
             Self {
                 local_address,
                 config,
+                db,
                 view: view.clone(),
                 rx,
             },
@@ -59,6 +60,7 @@ impl PeerSamplingService {
                 Self::run_receiver_task(
                     self.local_address,
                     self.config,
+                    self.db,
                     self.view.clone(),
                     self.rx
                 ),
@@ -70,11 +72,13 @@ impl PeerSamplingService {
     async fn run_receiver_task(
         local_address: SocketAddr,
         config: PeerSamplingConfig,
+        db: Arc<Db>,
         view: Arc<Mutex<View>>,
-        mut receiver: mpsc::UnboundedReceiver<(SocketAddr, MessageKind, Option<Vec<Peer>>)>,
+        mut receiver: PeerSamplingReceiver,
     ) {
         while let Some((sender_address, kind, peers)) = receiver.recv().await {
             let view = view.clone();
+            let db = db.clone();
             tokio::spawn((|| async move {
                 let mut view = view.lock().await;
                 if kind == MessageKind::Request && *config.pull() {
@@ -98,6 +102,42 @@ impl PeerSamplingService {
                             config.swapping_factor(),
                             &peers,
                         );
+                        let peers = view.peers();
+                        for peer in peers {
+                            if let Some(peer_id) = peer.id() {
+                                let remotes = match RemoteSyncDao::db_select_many_by_address(
+                                    &db,
+                                    peer.address(),
+                                )
+                                .await
+                                {
+                                    Ok(data) => data,
+                                    Err(err) => {
+                                        hb_log::error(None, &format!("[ApiInternalGossip] Failed to select remotes data by address: {err}"));
+                                        return;
+                                    }
+                                };
+                                let mut exists = false;
+                                for remote in &remotes {
+                                    if remote.remote_id() == peer_id {
+                                        exists = true;
+                                        break;
+                                    }
+                                }
+                                if !exists {
+                                    let remote_data = RemoteSyncDao::new(
+                                        peer_id,
+                                        peer.address(),
+                                        &DateTime::from_timestamp_millis(0).unwrap(),
+                                        &Uuid::nil(),
+                                    );
+                                    if let Err(err) = remote_data.db_upsert(&db).await {
+                                        hb_log::error(None, &format!("[ApiInternalGossip] Failed to insert new remote data: {err}"));
+                                        return;
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         hb_log::warn(
                             None,
