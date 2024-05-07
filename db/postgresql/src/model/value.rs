@@ -56,7 +56,7 @@ impl ColumnKind {
     pub fn to_str(&self) -> &str {
         match self {
             Self::Bool => "bool",
-            Self::Char => "\"char\"",
+            Self::Char => "char",
             Self::Smallint => "smallint",
             Self::Smallserial => "smallserial",
             Self::Int2 => "int2",

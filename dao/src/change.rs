@@ -25,11 +25,27 @@ impl ChangeDao {
         updated_at: &DateTime<Utc>,
     ) -> Self {
         Self {
-            table: table.to_owned(),
+            table: *table,
             id: *id,
             state: *state,
             updated_at: *updated_at,
             change_id: Uuid::now_v7(),
+        }
+    }
+
+    pub fn raw_new(
+        table: &ChangeTable,
+        id: &Uuid,
+        state: &ChangeState,
+        updated_at: &DateTime<Utc>,
+        change_id: &Uuid,
+    ) -> Self {
+        Self {
+            table: *table,
+            id: *id,
+            state: *state,
+            updated_at: *updated_at,
+            change_id: *change_id,
         }
     }
 
@@ -94,6 +110,86 @@ impl ChangeDao {
                 } else {
                     Ok(None)
                 }
+            }
+        }
+    }
+
+    pub async fn db_select_many_by_change_ids_asc(
+        db: &Db,
+        change_ids: &Vec<Uuid>,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => {
+                let changes = db.select_many_changes_by_change_ids_asc(change_ids).await?;
+                let mut changes_data = Vec::with_capacity(changes.len());
+                for change in &changes {
+                    changes_data.push(Self::from_postgresdb_model(change)?);
+                }
+                Ok(changes_data)
+            }
+            Db::MysqlDb(db) => {
+                let changes = db.select_many_changes_by_change_ids_asc(change_ids).await?;
+                let mut changes_data = Vec::with_capacity(changes.len());
+                for change in &changes {
+                    changes_data.push(Self::from_mysqldb_model(change)?);
+                }
+                Ok(changes_data)
+            }
+            Db::SqliteDb(db) => {
+                let changes = db.select_many_changes_by_change_ids_asc(change_ids).await?;
+                let mut changes_data = Vec::with_capacity(changes.len());
+                for change in &changes {
+                    changes_data.push(Self::from_sqlitedb_model(change)?);
+                }
+                Ok(changes_data)
+            }
+        }
+    }
+
+    pub async fn db_select_many_from_updated_at_and_after_change_id_with_limit_asc(
+        db: &Db,
+        updated_at: &DateTime<Utc>,
+        change_id: &Uuid,
+        limit: &i32,
+    ) -> Result<Vec<Self>> {
+        match db {
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => {
+                let changes = db
+                    .select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
+                        updated_at, change_id, limit,
+                    )
+                    .await?;
+                let mut changes_data = Vec::with_capacity(changes.len());
+                for change in &changes {
+                    changes_data.push(Self::from_postgresdb_model(change)?);
+                }
+                Ok(changes_data)
+            }
+            Db::MysqlDb(db) => {
+                let changes = db
+                    .select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
+                        updated_at, change_id, limit,
+                    )
+                    .await?;
+                let mut changes_data = Vec::with_capacity(changes.len());
+                for change in &changes {
+                    changes_data.push(Self::from_mysqldb_model(change)?);
+                }
+                Ok(changes_data)
+            }
+            Db::SqliteDb(db) => {
+                let changes = db
+                    .select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
+                        updated_at, change_id, limit,
+                    )
+                    .await?;
+                let mut changes_data = Vec::with_capacity(changes.len());
+                for change in &changes {
+                    changes_data.push(Self::from_sqlitedb_model(change)?);
+                }
+                Ok(changes_data)
             }
         }
     }
@@ -214,24 +310,21 @@ impl ChangeTable {
 
 #[derive(Clone, Copy)]
 pub enum ChangeState {
-    Insert,
-    Update,
+    Upsert,
     Delete,
 }
 
 impl ChangeState {
     pub fn to_str(&self) -> &str {
         match self {
-            Self::Insert => "insert",
-            Self::Update => "update",
+            Self::Upsert => "upsert",
             Self::Delete => "delete",
         }
     }
 
     pub fn from_str(str: &str) -> Result<Self> {
         match str {
-            "insert" => Ok(Self::Insert),
-            "update" => Ok(Self::Update),
+            "upsert" => Ok(Self::Upsert),
             "delete" => Ok(Self::Delete),
             _ => Err(Error::msg(format!("Unknown change state '{str}'"))),
         }

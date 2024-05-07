@@ -1,12 +1,13 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
-use peer::PeerDescriptor;
+use hb_dao::Db;
+use peer::Peer;
 use server::GossipServer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    config::peer_sampling::PeerSamplingConfig,
+    config::{database_messaging::DatabaseMessagingConfig, peer_sampling::PeerSamplingConfig},
     handler::MessageHandler,
     service::{database_messaging::DatabaseMessagingService, peer_sampling::PeerSamplingService},
 };
@@ -18,20 +19,23 @@ mod message;
 mod peer;
 mod server;
 mod service;
+mod view;
 
 pub struct ApiInternalGossip {
     address: SocketAddr,
-    peers: Vec<PeerDescriptor>,
+    db: Arc<Db>,
+    peers: Vec<Peer>,
 }
 
 impl ApiInternalGossip {
-    pub fn new(host: &str, port: &u16, peers: &Option<Vec<SocketAddr>>) -> Self {
+    pub fn new(host: &str, port: &u16, db: Arc<Db>, peers: &Option<Vec<SocketAddr>>) -> Self {
         let address = format!("{host}:{port}").parse().unwrap();
 
         Self {
             address,
+            db,
             peers: match peers {
-                Some(peers) => peers.iter().map(|p| PeerDescriptor::new(*p)).collect(),
+                Some(peers) => peers.iter().map(|p| Peer::new(*p)).collect(),
                 None => Vec::new(),
             },
         }
@@ -47,15 +51,15 @@ impl ApiInternalGossip {
         hb_log::info(Some("💫"), "[ApiInternalGossip] Running component");
 
         tokio::spawn((|| async move {
-            let (peer_sampling_service, peer_sampling_tx) =
+            let (peer_sampling_service, view, peer_sampling_tx) =
                 PeerSamplingService::new(self.address, PeerSamplingConfig::default(), self.peers);
 
-            let (database_messaging_service, database_messaging_tx) =
-                DatabaseMessagingService::new();
+            let (database_messaging_service, header_messaging_tx, content_messaging_tx) =
+                DatabaseMessagingService::new(DatabaseMessagingConfig::default(), self.db, view);
 
             let server = GossipServer::new(
                 self.address,
-                MessageHandler::new(peer_sampling_tx, database_messaging_tx),
+                MessageHandler::new(peer_sampling_tx, header_messaging_tx, content_messaging_tx),
             )
             .run();
             let server_handle = server.handle();
@@ -71,7 +75,7 @@ impl ApiInternalGossip {
                     }
                 }
                 _ = peer_sampling_service => {}
-                // _ = database_messaging_service => {}
+                _ = database_messaging_service => {}
             }
 
             hb_log::info(None, "[ApiInternalGossip] Shutting down component");

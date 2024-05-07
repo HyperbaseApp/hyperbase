@@ -7,14 +7,21 @@ pub struct RemoteSyncModel {
     remote_address: String,
     remote_id: Uuid,
     last_data_sync: DateTime<Utc>,
+    last_change_id: Uuid,
 }
 
 impl RemoteSyncModel {
-    pub fn new(remote_address: &str, remote_id: &Uuid, last_data_sync: &DateTime<Utc>) -> Self {
+    pub fn new(
+        remote_address: &str,
+        remote_id: &Uuid,
+        last_data_sync: &DateTime<Utc>,
+        last_change_id: &Uuid,
+    ) -> Self {
         Self {
             remote_address: remote_address.to_owned(),
             remote_id: *remote_id,
             last_data_sync: *last_data_sync,
+            last_change_id: *last_change_id,
         }
     }
 
@@ -28,5 +35,9 @@ impl RemoteSyncModel {
 
     pub fn last_data_sync(&self) -> &DateTime<Utc> {
         &self.last_data_sync
+    }
+
+    pub fn last_change_id(&self) -> &Uuid {
+        &self.last_change_id
     }
 }

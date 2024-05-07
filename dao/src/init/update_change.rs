@@ -53,7 +53,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::Admin,
                     admin_data.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     admin_data.updated_at(),
                 ))
             }
@@ -93,7 +93,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::Project,
                     project_data.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     project_data.updated_at(),
                 ));
             }
@@ -128,7 +128,7 @@ impl Db {
                 ChangeDao::new(
                     &ChangeTable::Collection,
                     collections_data.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     collections_data.updated_at(),
                 )
                 .db_insert(self)
@@ -239,7 +239,7 @@ impl Db {
                         changes_data.push(ChangeDao::new(
                             &ChangeTable::Record(*record_data.collection_id()),
                             id,
-                            &ChangeState::Insert,
+                            &ChangeState::Upsert,
                             updated_at,
                         ));
                     }
@@ -281,7 +281,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::Bucket,
                     bucket_data.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     bucket_data.updated_at(),
                 ));
             }
@@ -320,7 +320,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::File,
                     file_data.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     file_data.updated_at(),
                 ));
             }
@@ -359,7 +359,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::Token,
                     token_data.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     token_data.updated_at(),
                 ));
             }
@@ -402,7 +402,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::CollectionRule,
                     collection_rule.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     collection_rule.updated_at(),
                 ));
             }
@@ -443,7 +443,7 @@ impl Db {
                 changes_data.push(ChangeDao::new(
                     &ChangeTable::BucketRule,
                     bucket_rule.id(),
-                    &ChangeState::Insert,
+                    &ChangeState::Upsert,
                     bucket_rule.updated_at(),
                 ));
             }

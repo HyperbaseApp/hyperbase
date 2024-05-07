@@ -1,19 +1,19 @@
 use std::{net::SocketAddr, str::FromStr};
 
-use anyhow::Result;
+use anyhow::{Error, Result};
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::remote_sync::RemoteSyncModel as RemoteSyncMysqlModel;
 use hb_db_postgresql::model::remote_sync::RemoteSyncModel as RemoteSyncPostgresModel;
-use hb_db_scylladb::model::remote_sync::RemoteSyncModel as RemoteSyncScyllaModel;
 use hb_db_sqlite::model::remote_sync::RemoteSyncModel as RemoteSyncSqliteModel;
 use uuid::Uuid;
 
-use crate::{util::conversion, Db};
+use crate::Db;
 
 pub struct RemoteSyncDao {
     remote_address: SocketAddr,
     remote_id: Uuid,
     last_data_sync: DateTime<Utc>,
+    last_change_id: Uuid,
 }
 
 impl RemoteSyncDao {
@@ -21,11 +21,13 @@ impl RemoteSyncDao {
         remote_address: &SocketAddr,
         remote_id: &Uuid,
         last_data_sync: &DateTime<Utc>,
+        last_change_id: &Uuid,
     ) -> Self {
         Self {
             remote_address: *remote_address,
             remote_id: *remote_id,
             last_data_sync: *last_data_sync,
+            last_change_id: *last_change_id,
         }
     }
 
@@ -41,6 +43,10 @@ impl RemoteSyncDao {
         &self.last_data_sync
     }
 
+    pub fn last_change_id(&self) -> &Uuid {
+        &self.last_change_id
+    }
+
     pub fn set_remote_id(&mut self, remote_id: &Uuid) {
         self.remote_id = *remote_id;
     }
@@ -49,57 +55,64 @@ impl RemoteSyncDao {
         self.last_data_sync = *last_data_sync;
     }
 
-    pub async fn db_insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => db.insert_remote_sync(&self.to_scylladb_model()).await,
-            Db::PostgresqlDb(db) => db.insert_remote_sync(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.insert_remote_sync(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.insert_remote_sync(&self.to_sqlitedb_model()).await,
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => db.upsert_remote_sync(&self.to_postgresdb_model()).await,
+            Db::MysqlDb(db) => db.upsert_remote_sync(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.upsert_remote_sync(&self.to_sqlitedb_model()).await,
         }
     }
 
-    pub async fn db_select(db: &Db, remote_address: &SocketAddr) -> Result<Self> {
+    pub async fn db_select(db: &Db, remote_id: &Uuid) -> Result<Self> {
         match db {
-            Db::ScyllaDb(db) => Self::from_scylladb_model(
-                &db.select_remote_sync(&remote_address.to_string()).await?,
-            ),
-            Db::PostgresqlDb(db) => Self::from_postgresdb_model(
-                &db.select_remote_sync(&remote_address.to_string()).await?,
-            ),
-            Db::MysqlDb(db) => {
-                Self::from_mysqldb_model(&db.select_remote_sync(&remote_address.to_string()).await?)
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => {
+                Self::from_postgresdb_model(&db.select_remote_sync(remote_id).await?)
             }
-            Db::SqliteDb(db) => Self::from_sqlitedb_model(
-                &db.select_remote_sync(&remote_address.to_string()).await?,
-            ),
+            Db::MysqlDb(db) => Self::from_mysqldb_model(&db.select_remote_sync(remote_id).await?),
+            Db::SqliteDb(db) => Self::from_sqlitedb_model(&db.select_remote_sync(remote_id).await?),
         }
     }
 
-    pub async fn db_update(&self, db: &Db) -> Result<()> {
+    pub async fn db_select_many_by_address(
+        db: &Db,
+        remote_address: &SocketAddr,
+    ) -> Result<Vec<Self>> {
+        let remote_address = remote_address.to_string();
         match db {
-            Db::ScyllaDb(db) => db.update_remote_sync(&self.to_scylladb_model()).await,
-            Db::PostgresqlDb(db) => db.update_remote_sync(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.update_remote_sync(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.update_remote_sync(&self.to_sqlitedb_model()).await,
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => {
+                let remotes = db
+                    .select_many_remotes_sync_by_address(&remote_address)
+                    .await?;
+                let mut remotes_data = Vec::with_capacity(remotes.len());
+                for remote in &remotes {
+                    remotes_data.push(Self::from_postgresdb_model(remote)?);
+                }
+                Ok(remotes_data)
+            }
+            Db::MysqlDb(db) => {
+                let remotes = db
+                    .select_many_remotes_sync_by_address(&remote_address)
+                    .await?;
+                let mut remotes_data = Vec::with_capacity(remotes.len());
+                for remote in &remotes {
+                    remotes_data.push(Self::from_mysqldb_model(remote)?);
+                }
+                Ok(remotes_data)
+            }
+            Db::SqliteDb(db) => {
+                let remotes = db
+                    .select_many_remotes_sync_by_address(&remote_address)
+                    .await?;
+                let mut remotes_data = Vec::with_capacity(remotes.len());
+                for remote in &remotes {
+                    remotes_data.push(Self::from_sqlitedb_model(remote)?);
+                }
+                Ok(remotes_data)
+            }
         }
-    }
-
-    fn from_scylladb_model(model: &RemoteSyncScyllaModel) -> Result<Self> {
-        Ok(Self {
-            remote_address: SocketAddr::from_str(model.remote_address())?,
-            remote_id: *model.remote_id(),
-            last_data_sync: conversion::scylla_cql_timestamp_to_datetime_utc(
-                model.last_data_sync(),
-            )?,
-        })
-    }
-
-    fn to_scylladb_model(&self) -> RemoteSyncScyllaModel {
-        RemoteSyncScyllaModel::new(
-            &self.remote_address.to_string(),
-            &self.remote_id,
-            &conversion::datetime_utc_to_scylla_cql_timestamp(&self.last_data_sync),
-        )
     }
 
     fn from_postgresdb_model(model: &RemoteSyncPostgresModel) -> Result<Self> {
@@ -107,6 +120,7 @@ impl RemoteSyncDao {
             remote_address: SocketAddr::from_str(model.remote_address())?,
             remote_id: *model.remote_id(),
             last_data_sync: *model.last_data_sync(),
+            last_change_id: *model.last_change_id(),
         })
     }
 
@@ -115,6 +129,7 @@ impl RemoteSyncDao {
             &self.remote_address.to_string(),
             &self.remote_id,
             &self.last_data_sync,
+            &self.last_change_id,
         )
     }
 
@@ -123,6 +138,7 @@ impl RemoteSyncDao {
             remote_address: SocketAddr::from_str(model.remote_address())?,
             remote_id: *model.remote_id(),
             last_data_sync: *model.last_data_sync(),
+            last_change_id: *model.last_change_id(),
         })
     }
 
@@ -131,6 +147,7 @@ impl RemoteSyncDao {
             &self.remote_address.to_string(),
             &self.remote_id,
             &self.last_data_sync,
+            &self.last_change_id,
         )
     }
 
@@ -139,6 +156,7 @@ impl RemoteSyncDao {
             remote_address: SocketAddr::from_str(model.remote_address())?,
             remote_id: *model.remote_id(),
             last_data_sync: *model.last_data_sync(),
+            last_change_id: *model.last_change_id(),
         })
     }
 
@@ -147,6 +165,7 @@ impl RemoteSyncDao {
             &self.remote_address.to_string(),
             &self.remote_id,
             &self.last_data_sync,
+            &self.last_change_id,
         )
     }
 }

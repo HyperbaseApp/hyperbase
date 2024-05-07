@@ -1103,7 +1103,9 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "anyhow",
+ "chrono",
  "futures",
+ "hb_dao",
  "hb_log",
  "rand",
  "rmp-serde",

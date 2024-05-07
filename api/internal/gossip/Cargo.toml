@@ -6,10 +6,12 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 
 
 [dependencies]
+hb_dao = { workspace = true }
 hb_log = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
 rmp-serde = { workspace = true }

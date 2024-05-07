@@ -6,7 +6,7 @@ use sqlx::{
 
 use crate::query::{
     admin, admin_password_reset, bucket, bucket_rule, change, collection, collection_rule, file,
-    log, project, registration, remote_sync, token,
+    local_info, log, project, registration, remote_sync, token,
 };
 
 pub struct PostgresDb {
@@ -121,6 +121,7 @@ impl PostgresDb {
             registration::init(pool),
             admin_password_reset::init(pool),
             log::init(pool),
+            local_info::init(pool),
             remote_sync::init(pool),
             change::init(pool),
         );

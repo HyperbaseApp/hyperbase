@@ -122,12 +122,12 @@ async fn main() {
         hb_log::panic(None, "[Hyperbase] No database configuration is specified");
         return;
     };
-    if let Err(err) = db.init().await {
-        hb_log::panic(
-            None,
-            format!("[Hyperbase] Initilizing database failed: {err}"),
-        );
-    }
+    // if let Err(err) = db.init().await {
+    //     hb_log::panic(
+    //         None,
+    //         format!("[Hyperbase] Initilizing database failed: {err}"),
+    //     );
+    // }
 
     let mut api_internal_gossip = None;
 
@@ -136,6 +136,7 @@ async fn main() {
             api_internal_gossip = Some(ApiInternalGossip::new(
                 config_gossip.host(),
                 config_gossip.port(),
+                db.clone(),
                 config_gossip.peers(),
             ));
         }

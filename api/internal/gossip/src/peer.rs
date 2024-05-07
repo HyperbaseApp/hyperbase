@@ -6,14 +6,14 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, Copy)]
-pub struct PeerDescriptor {
+pub struct Peer {
     address: SocketAddr,
     age: u16,
 }
 
-impl PeerDescriptor {
-    pub fn new(address: SocketAddr) -> PeerDescriptor {
-        PeerDescriptor { address, age: 0 }
+impl Peer {
+    pub fn new(address: SocketAddr) -> Peer {
+        Peer { address, age: 0 }
     }
 
     pub fn increment_age(&mut self) {
@@ -22,24 +22,24 @@ impl PeerDescriptor {
         }
     }
 
-    pub fn age(&self) -> &u16 {
-        &self.age
-    }
-
     pub fn address(&self) -> &SocketAddr {
         &self.address
     }
+
+    pub fn age(&self) -> &u16 {
+        &self.age
+    }
 }
 
-impl Eq for PeerDescriptor {}
+impl Eq for Peer {}
 
-impl PartialEq for PeerDescriptor {
+impl PartialEq for Peer {
     fn eq(&self, other: &Self) -> bool {
         self.address == other.address
     }
 }
 
-impl Hash for PeerDescriptor {
+impl Hash for Peer {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.address.hash(state);
     }

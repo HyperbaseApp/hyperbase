@@ -1,26 +1,31 @@
 use std::net::SocketAddr;
 
-use ahash::HashMap;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-use crate::{handler::MessageHandler, peer::PeerDescriptor};
+use crate::{handler::MessageHandler, peer::Peer};
 
-pub mod database_action;
+use self::{content::ContentMessage, header::HeaderMessage};
+
+pub mod content;
+pub mod header;
 
 #[derive(Deserialize, Serialize)]
 pub enum Message {
     Sampling {
         kind: MessageKind,
-        value: Option<Vec<PeerDescriptor>>,
+        value: Option<Vec<Peer>>,
     },
     Header {
-        kind: MessageKind,
-        value: Vec<String>,
+        from: Uuid,
+        to: Uuid,
+        value: HeaderMessage,
     },
     Content {
-        kind: MessageKind,
-        value: HashMap<String, Vec<u8>>,
+        from: Uuid,
+        to: Uuid,
+        value: ContentMessage,
     },
 }
 
@@ -35,8 +40,8 @@ impl Message {
                     )
                 }
             }
-            Message::Header { kind, value } => todo!(),
-            Message::Content { kind, value } => todo!(),
+            Message::Header { from, to, value } => todo!(),
+            Message::Content { from, to, value } => todo!(),
         }
     }
 

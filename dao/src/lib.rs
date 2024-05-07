@@ -13,6 +13,7 @@ pub mod collection;
 pub mod collection_rule;
 pub mod file;
 mod init;
+pub mod local_info;
 pub mod log;
 pub mod project;
 pub mod record;

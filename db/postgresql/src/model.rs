@@ -6,6 +6,7 @@ pub mod change;
 pub mod collection;
 pub mod collection_rule;
 pub mod file;
+pub mod local_info;
 pub mod log;
 pub mod project;
 pub mod registration;

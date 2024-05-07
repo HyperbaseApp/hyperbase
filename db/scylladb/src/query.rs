@@ -10,6 +10,5 @@ pub mod log;
 pub mod project;
 pub mod record;
 pub mod registration;
-pub mod remote_sync;
 pub mod system;
 pub mod token;
