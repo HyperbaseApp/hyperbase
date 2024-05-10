@@ -13,7 +13,7 @@ pub struct ChangeDao {
     table: ChangeTable,
     id: Uuid,
     state: ChangeState,
-    updated_at: DateTime<Utc>,
+    timestamp: DateTime<Utc>,
     change_id: Uuid,
 }
 
@@ -22,13 +22,13 @@ impl ChangeDao {
         table: &ChangeTable,
         id: &Uuid,
         state: &ChangeState,
-        updated_at: &DateTime<Utc>,
+        timestamp: &DateTime<Utc>,
     ) -> Self {
         Self {
             table: *table,
             id: *id,
             state: *state,
-            updated_at: *updated_at,
+            timestamp: *timestamp,
             change_id: Uuid::now_v7(),
         }
     }
@@ -37,14 +37,14 @@ impl ChangeDao {
         table: &ChangeTable,
         id: &Uuid,
         state: &ChangeState,
-        updated_at: &DateTime<Utc>,
+        timestamp: &DateTime<Utc>,
         change_id: &Uuid,
     ) -> Self {
         Self {
             table: *table,
             id: *id,
             state: *state,
-            updated_at: *updated_at,
+            timestamp: *timestamp,
             change_id: *change_id,
         }
     }
@@ -61,8 +61,8 @@ impl ChangeDao {
         &self.state
     }
 
-    pub fn updated_at(&self) -> &DateTime<Utc> {
-        &self.updated_at
+    pub fn timestamp(&self) -> &DateTime<Utc> {
+        &self.timestamp
     }
 
     pub fn change_id(&self) -> &Uuid {
@@ -150,9 +150,9 @@ impl ChangeDao {
         }
     }
 
-    pub async fn db_select_many_from_updated_at_and_after_change_id_with_limit_asc(
+    pub async fn db_select_many_from_timestamp_and_after_change_id_with_limit_asc(
         db: &Db,
-        updated_at: &DateTime<Utc>,
+        timestamp: &DateTime<Utc>,
         change_id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<Self>> {
@@ -160,8 +160,8 @@ impl ChangeDao {
             Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
             Db::PostgresqlDb(db) => {
                 let changes = db
-                    .select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
-                        updated_at, change_id, limit,
+                    .select_many_changes_from_timestamp_and_after_change_id_with_limit_asc(
+                        timestamp, change_id, limit,
                     )
                     .await?;
                 let mut changes_data = Vec::with_capacity(changes.len());
@@ -172,8 +172,8 @@ impl ChangeDao {
             }
             Db::MysqlDb(db) => {
                 let changes = db
-                    .select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
-                        updated_at, change_id, limit,
+                    .select_many_changes_from_timestamp_and_after_change_id_with_limit_asc(
+                        timestamp, change_id, limit,
                     )
                     .await?;
                 let mut changes_data = Vec::with_capacity(changes.len());
@@ -184,8 +184,8 @@ impl ChangeDao {
             }
             Db::SqliteDb(db) => {
                 let changes = db
-                    .select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
-                        updated_at, change_id, limit,
+                    .select_many_changes_from_timestamp_and_after_change_id_with_limit_asc(
+                        timestamp, change_id, limit,
                     )
                     .await?;
                 let mut changes_data = Vec::with_capacity(changes.len());
@@ -202,7 +202,7 @@ impl ChangeDao {
             table: ChangeTable::from_str(model.table())?,
             id: *model.id(),
             state: ChangeState::from_str(model.state())?,
-            updated_at: *model.updated_at(),
+            timestamp: *model.timestamp(),
             change_id: *model.change_id(),
         })
     }
@@ -212,7 +212,7 @@ impl ChangeDao {
             &self.table.to_string(),
             &self.id,
             self.state.to_str(),
-            &self.updated_at,
+            &self.timestamp,
             &self.change_id,
         )
     }
@@ -222,7 +222,7 @@ impl ChangeDao {
             table: ChangeTable::from_str(model.table())?,
             id: *model.id(),
             state: ChangeState::from_str(model.state())?,
-            updated_at: *model.updated_at(),
+            timestamp: *model.timestamp(),
             change_id: *model.change_id(),
         })
     }
@@ -232,7 +232,7 @@ impl ChangeDao {
             &self.table.to_string(),
             &self.id,
             self.state.to_str(),
-            &self.updated_at,
+            &self.timestamp,
             &self.change_id,
         )
     }
@@ -242,7 +242,7 @@ impl ChangeDao {
             table: ChangeTable::from_str(model.table())?,
             id: *model.id(),
             state: ChangeState::from_str(model.state())?,
-            updated_at: *model.updated_at(),
+            timestamp: *model.timestamp(),
             change_id: *model.change_id(),
         })
     }
@@ -252,7 +252,7 @@ impl ChangeDao {
             &self.table.to_string(),
             &self.id,
             self.state.to_str(),
-            &self.updated_at,
+            &self.timestamp,
             &self.change_id,
         )
     }
@@ -318,21 +318,27 @@ impl ChangeTable {
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ChangeState {
+    Insert,
     Upsert,
+    Update,
     Delete,
 }
 
 impl ChangeState {
     pub fn to_str(&self) -> &str {
         match self {
+            Self::Insert => "insert",
             Self::Upsert => "upsert",
+            Self::Update => "update",
             Self::Delete => "delete",
         }
     }
 
     pub fn from_str(str: &str) -> Result<Self> {
         match str {
+            "insert" => Ok(Self::Insert),
             "upsert" => Ok(Self::Upsert),
+            "update" => Ok(Self::Update),
             "delete" => Ok(Self::Delete),
             _ => Err(Error::msg(format!("Unknown change state '{str}'"))),
         }

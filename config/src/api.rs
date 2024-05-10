@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 
 use duration_str::deserialize_duration;
 use serde::Deserialize;
@@ -44,7 +44,7 @@ impl ApiInternalConfig {
 pub struct ApiGossipConfig {
     host: String,
     port: u16,
-    peers: Option<Vec<SocketAddr>>,
+    peers: Option<Vec<String>>,
 }
 
 impl ApiGossipConfig {
@@ -56,7 +56,7 @@ impl ApiGossipConfig {
         &self.port
     }
 
-    pub fn peers(&self) -> &Option<Vec<SocketAddr>> {
+    pub fn peers(&self) -> &Option<Vec<String>> {
         &self.peers
     }
 }

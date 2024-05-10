@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::SqliteDb, model::bucket::BucketModel};
 
 const INSERT: &str = "INSERT INTO \"buckets\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\") VALUES (?, ?, ?, ?, ?, ?, ?)";
+const UPSERT: &str = "INSERT INTO \"buckets\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\") VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (\"id\") DO UPDATE SET \"created_at\" = ?, \"updated_at\" = ?, \"project_id\" = ?, \"name\" = ?, \"path\" = ?, \"opt_ttl\" = ?";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"buckets\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"buckets\" WHERE \"project_id\" = ? ORDER BY \"id\" DESC";
 const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"name\", \"path\", \"opt_ttl\" FROM \"buckets\" WHERE \"updated_at\" > ? OR (\"updated_at\" = ? AND \"id\" > ?) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT ?";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<Sqlite>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_PROJECT_ID),
         pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
@@ -33,6 +35,27 @@ impl SqliteDb {
         self.execute(
             sqlx::query(INSERT)
                 .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.project_id())
+                .bind(value.name())
+                .bind(value.path())
+                .bind(value.opt_ttl()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_bucket(&self, value: &BucketModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.project_id())
+                .bind(value.name())
+                .bind(value.path())
+                .bind(value.opt_ttl())
                 .bind(value.created_at())
                 .bind(value.updated_at())
                 .bind(value.project_id())

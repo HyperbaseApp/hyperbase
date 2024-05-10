@@ -372,7 +372,7 @@ async fn delete_one(
                 hb_log::error(
                     None,
                     &format!(
-                        "[ApiRestServer] Error when broadcasting insert_one bucket to remote peer: {err}"
+                        "[ApiRestServer] Error when broadcasting delete_one bucket to remote peer: {err}"
                     ),
                 );
             }

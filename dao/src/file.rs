@@ -118,7 +118,7 @@ impl FileDao {
         self.public = *public;
     }
 
-    pub async fn populate_bytes(&mut self, bucket_path: &str) -> Result<()> {
+    pub async fn populate_file_bytes(&mut self, bucket_path: &str) -> Result<()> {
         let mut file = fs::File::open(&self.full_path(bucket_path)?).await?;
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).await?;

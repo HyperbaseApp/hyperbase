@@ -67,7 +67,7 @@ num-bigint = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 rmp-serde = "1"
 rumqttc = "0.24"
-scylla = { version = "0.12", features = ["num-bigint-04", "bigdecimal-04"] }
+scylla = { version = "0.13", features = ["num-bigint-04", "bigdecimal-04"] }
 serde = { version = "1" }
 serde_json = { version = "1" }
 serde_with = "3"

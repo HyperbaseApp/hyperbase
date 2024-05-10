@@ -5,23 +5,23 @@ use uuid::Uuid;
 
 use crate::{db::SqliteDb, model::change::ChangeModel};
 
-const INSERT_OR_IGNORE: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\") DO NOTHING";
-const UPSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"updated_at\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\") DO UPDATE SET \"state\" = ?, \"updated_at\" = ?, \"change_id\" = ?";
-const SELECT_LAST_BY_TABLE: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"table\" = ? ORDER BY \"updated_at\" DESC, \"change_id\" DESC LIMIT 1";
-const SELECT_MANY_BY_CHANGE_IDS_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"change_id\" IN (?) ORDER BY \"updated_at\" ASC, \"change_id\" ASC";
-const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"updated_at\", \"change_id\" FROM \"changes\" WHERE \"updated_at\" > ? OR (\"updated_at\" = ? AND \"change_id\" > ?) ORDER BY \"updated_at\" ASC, \"change_id\" ASC LIMIT ?";
+const INSERT_OR_IGNORE: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"timestamp\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\", \"state\") DO NOTHING";
+const UPSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"timestamp\", \"change_id\") VALUES (?, ?, ?, ?, ?) ON CONFLICT (\"table\", \"id\", \"state\") DO UPDATE SET \"state\" = ?, \"timestamp\" = ?, \"change_id\" = ?";
+const SELECT_LAST_BY_TABLE: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"table\" = ? ORDER BY \"timestamp\" DESC, \"change_id\" DESC LIMIT 1";
+const SELECT_MANY_BY_CHANGE_IDS_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"change_id\" IN (?) ORDER BY \"timestamp\" ASC, \"change_id\" ASC";
+const SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"timestamp\" > ? OR (\"timestamp\" = ? AND \"change_id\" > ?) ORDER BY \"timestamp\" ASC, \"change_id\" ASC LIMIT ?";
 
 pub async fn init(pool: &Pool<Sqlite>) {
     hb_log::info(Some("🔧"), "[SQLite] Setting up changes table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"changes\" (\"table\" text, \"id\" blob, \"state\" text, \"updated_at\" timestamp, \"change_id\" blob, PRIMARY KEY (\"table\", \"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"changes\" (\"table\" text, \"id\" blob, \"state\" text, \"timestamp\" timestamp, \"change_id\" blob, PRIMARY KEY (\"table\", \"id\", \"state\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT_OR_IGNORE),
         pool.prepare(UPSERT),
         pool.prepare(SELECT_LAST_BY_TABLE),
         pool.prepare(SELECT_MANY_BY_CHANGE_IDS_ASC),
-        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC),
+        pool.prepare(SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC),
     )
     .unwrap();
 }
@@ -33,7 +33,7 @@ impl SqliteDb {
                 .bind(value.table())
                 .bind(value.id())
                 .bind(value.state())
-                .bind(value.updated_at())
+                .bind(value.timestamp())
                 .bind(value.change_id()),
         )
         .await?;
@@ -46,10 +46,10 @@ impl SqliteDb {
                 .bind(value.table())
                 .bind(value.id())
                 .bind(value.state())
-                .bind(value.updated_at())
+                .bind(value.timestamp())
                 .bind(value.change_id())
                 .bind(value.state())
-                .bind(value.updated_at())
+                .bind(value.timestamp())
                 .bind(value.change_id()),
         )
         .await?;
@@ -92,17 +92,17 @@ impl SqliteDb {
         Ok(self.fetch_all(query).await?)
     }
 
-    pub async fn select_many_changes_from_updated_at_and_after_change_id_with_limit_asc(
+    pub async fn select_many_changes_from_timestamp_and_after_change_id_with_limit_asc(
         &self,
-        updated_at: &DateTime<Utc>,
+        timestamp: &DateTime<Utc>,
         change_id: &Uuid,
         limit: &i32,
     ) -> Result<Vec<ChangeModel>> {
         Ok(self
             .fetch_all(
-                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC)
-                    .bind(updated_at)
-                    .bind(updated_at)
+                sqlx::query_as(SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC)
+                    .bind(timestamp)
+                    .bind(timestamp)
                     .bind(change_id)
                     .bind(limit),
             )

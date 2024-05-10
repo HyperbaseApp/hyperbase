@@ -59,7 +59,10 @@ impl View {
                         if !data.is_empty() {
                             data
                         } else {
-                            return Some(Err(Error::msg("Remote is empty")));
+                            return Some(Err(Error::msg(format!(
+                                "Remote '{}' doesn't found",
+                                peer.address()
+                            ))));
                         }
                     }
                     Err(err) => return Some(Err(err.into())),

@@ -2,7 +2,7 @@ use std::collections::hash_map::Keys;
 
 use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use hb_db_mysql::{
     db::MysqlDb,
     model::{
@@ -105,6 +105,30 @@ impl RecordDao {
 
     pub fn collection_id(&self) -> &Uuid {
         &self.collection_id
+    }
+
+    pub fn id(&self) -> &Option<Uuid> {
+        if let Some(ColumnValue::Uuid(id)) = self.data.get("_id") {
+            id
+        } else {
+            &None
+        }
+    }
+
+    pub fn created_by(&self) -> &Option<Uuid> {
+        if let Some(ColumnValue::Uuid(created_by)) = self.data.get("_created_by") {
+            created_by
+        } else {
+            &None
+        }
+    }
+
+    pub fn updated_at(&self) -> &Option<DateTime<Utc>> {
+        if let Some(ColumnValue::Timestamp(updated_at)) = self.data.get("_updated_at") {
+            updated_at
+        } else {
+            &None
+        }
     }
 
     pub fn data(&self) -> &HashMap<String, ColumnValue> {

@@ -11,7 +11,6 @@ use hb_dao::{
     project::ProjectDao,
     record::{RecordDao, RecordFilters, RecordPagination},
     token::TokenDao,
-    value::ColumnValue,
 };
 use hb_token_jwt::claim::ClaimId;
 use validator::Validate;
@@ -443,24 +442,8 @@ async fn duplicate_one(
             };
 
             for record_data in &records_data {
-                let created_by = match record_data.get("_created_by") {
-                    Some(data) => match data {
-                        ColumnValue::Uuid(uuid) => match uuid {
-                            Some(uuid) => uuid,
-                            None => {
-                                return Response::error_raw(
-                                    &StatusCode::INTERNAL_SERVER_ERROR,
-                                    &format!("Field '_created_by' can't be null"),
-                                )
-                            }
-                        },
-                        _ => {
-                            return Response::error_raw(
-                                &StatusCode::INTERNAL_SERVER_ERROR,
-                                &format!("Field '_created_by' isn't of type UUID"),
-                            )
-                        }
-                    },
+                let created_by = match record_data.created_by() {
+                    Some(id) => id,
                     None => {
                         return Response::error_raw(
                             &StatusCode::INTERNAL_SERVER_ERROR,

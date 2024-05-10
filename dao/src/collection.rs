@@ -286,7 +286,7 @@ impl CollectionDao {
         }
     }
 
-    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
+    async fn db_update_prepare(&mut self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(_) => {
                 for (field, props) in &self.schema_fields {
@@ -412,12 +412,30 @@ impl CollectionDao {
                     .push(RecordDao::db_create_unique_index(db, &self.id, field))
             }
         }
+
         tokio::try_join!(
             future::try_join_all(create_indexes_fut),
             future::try_join_all(create_unique_indexes_fut)
         )?;
 
+        Ok(())
+    }
+
+    pub async fn db_update(&mut self, db: &Db) -> Result<()> {
+        self.db_update_prepare(db).await?;
+
         self.updated_at = Utc::now();
+
+        match db {
+            Db::ScyllaDb(db) => db.update_collection(&self.to_scylladb_model()).await,
+            Db::PostgresqlDb(db) => db.update_collection(&self.to_postgresdb_model()).await,
+            Db::MysqlDb(db) => db.update_collection(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.update_collection(&self.to_sqlitedb_model()).await,
+        }
+    }
+
+    pub async fn db_update_raw(&mut self, db: &Db) -> Result<()> {
+        self.db_update_prepare(db).await?;
 
         match db {
             Db::ScyllaDb(db) => db.update_collection(&self.to_scylladb_model()).await,

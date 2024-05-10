@@ -9,9 +9,21 @@ const SELECT: &str = "SELECT `id` FROM `local_info`";
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "[MySQL] Setting up local_info table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `local_info` (`id` binary(16), PRIMARY KEY (`id`), CONSTRAINT only_one_row CHECK (1 <= (SELECT COUNT(1) FROM \"local_info\")))")
+    pool.execute("CREATE TABLE IF NOT EXISTS `local_info` (`id` binary(16), PRIMARY KEY (`id`))")
         .await
         .unwrap();
+    pool.execute(
+        r#"CREATE TRIGGER IF NOT EXISTS only_one_row_insert
+    BEFORE INSERT ON `local_info`
+    FOR EACH ROW
+    BEGIN
+      IF (SELECT COUNT(*) FROM `local_info`) >= 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only one row allowed in the table';
+      END IF;
+    END;"#,
+    )
+    .await
+    .unwrap();
 
     tokio::try_join!(pool.prepare(INSERT), pool.prepare(SELECT),).unwrap();
 }

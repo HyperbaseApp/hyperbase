@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::PostgresDb, model::bucket_rule::BucketRuleModel};
 
 const INSERT: &str = "INSERT INTO \"bucket_rules\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
+const UPSERT: &str = "INSERT INTO \"bucket_rules\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (\"id\") DO UPDATE SET \"created_at\" = $2, \"updated_at\" = $3, \"project_id\" = $4, \"token_id\" = $5, \"bucket_id\" = $6, \"find_one\" = $7, \"find_many\" = $8, \"insert_one\" = $9, \"update_one\" = $10, \"delete_one\" = $11";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"id\" = $1";
 const SELECT_BY_TOKEN_ID_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = $1 AND \"bucket_id\" = $2";
 const SELECT_MANY_BY_TOKEN_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"token_id\", \"bucket_id\", \"find_one\", \"find_many\", \"insert_one\", \"update_one\", \"delete_one\" FROM \"bucket_rules\" WHERE \"token_id\" = $1 ORDER BY \"id\" DESC";
@@ -22,6 +23,7 @@ pub async fn init(pool: &Pool<Postgres>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_BY_TOKEN_ID_AND_BUCKET_ID),
         pool.prepare(SELECT_MANY_BY_TOKEN_ID),
@@ -38,6 +40,25 @@ impl PostgresDb {
     pub async fn insert_bucket_rule(&self, value: &BucketRuleModel) -> Result<()> {
         self.execute(
             sqlx::query(INSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.project_id())
+                .bind(value.token_id())
+                .bind(value.bucket_id())
+                .bind(value.find_one())
+                .bind(value.find_many())
+                .bind(value.insert_one())
+                .bind(value.update_one())
+                .bind(value.delete_one()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_bucket_rule(&self, value: &BucketRuleModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
                 .bind(value.id())
                 .bind(value.created_at())
                 .bind(value.updated_at())

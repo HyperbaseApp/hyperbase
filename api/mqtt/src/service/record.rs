@@ -145,17 +145,8 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
             Err(err) => return Err(err),
         };
 
-        let mut user_id = None;
-        if let Some(id) = user_data.get("_id") {
-            if let ColumnValue::Uuid(id) = id {
-                if let Some(id) = id {
-                    user_id = Some(*id);
-                }
-            }
-        }
-
-        if let Some(user_id) = user_id {
-            user_id
+        if let Some(user_id) = user_data.id() {
+            *user_id
         } else {
             return Err(Error::msg("User doesn't found"));
         }
@@ -195,17 +186,16 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
 
     record_data.db_insert(ctx.dao().db()).await?;
 
-    let record_id = if let Some(ColumnValue::Uuid(Some(id))) = record_data.get("_id") {
+    let record_id = if let Some(id) = record_data.id() {
         id
     } else {
         return Err(Error::msg(format!("Record doesn't have _id")));
     };
-    let record_updated_at =
-        if let Some(ColumnValue::Timestamp(Some(updated_at))) = record_data.get("_updated_at") {
-            updated_at
-        } else {
-            return Err(Error::msg(format!("Record doesn't have _updated_at")));
-        };
+    let record_updated_at = if let Some(updated_at) = record_data.updated_at() {
+        updated_at
+    } else {
+        return Err(Error::msg(format!("Record doesn't have _updated_at")));
+    };
 
     let change_data = ChangeDao::new(
         &ChangeTable::Record(*record_data.collection_id()),

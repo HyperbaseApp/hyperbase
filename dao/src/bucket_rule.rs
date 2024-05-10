@@ -136,6 +136,15 @@ impl BucketRuleDao {
         }
     }
 
+    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
+        match db {
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => db.upsert_bucket_rule(&self.to_postgresdb_model()).await,
+            Db::MysqlDb(db) => db.upsert_bucket_rule(&self.to_mysqldb_model()).await,
+            Db::SqliteDb(db) => db.upsert_bucket_rule(&self.to_sqlitedb_model()).await,
+        }
+    }
+
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_bucket_rule(id).await?),

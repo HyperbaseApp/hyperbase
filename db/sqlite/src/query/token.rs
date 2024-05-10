@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{db::SqliteDb, model::token::TokenModel};
 
 const INSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+const UPSERT: &str = "INSERT INTO \"tokens\" (\"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (\"id\") DO UPDATE SET \"created_at\" = ?, \"updated_at\" = ?, \"project_id\" = ?, \"admin_id\" = ?, \"name\" = ?, \"token\" = ?, \"allow_anonymous\" = ?, \"expired_at\" = ?";
 const SELECT: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"admin_id\" = ? AND \"project_id\" = ? ORDER BY \"id\" DESC";
 const SELECT_MANY_BY_PROJECT_ID: &str = "SELECT \"id\", \"created_at\", \"updated_at\", \"project_id\", \"admin_id\", \"name\", \"token\", \"allow_anonymous\", \"expired_at\" FROM \"tokens\" WHERE \"project_id\" = ? ORDER BY \"id\" DESC";
@@ -20,6 +21,7 @@ pub async fn init(pool: &Pool<Sqlite>) {
 
     tokio::try_join!(
         pool.prepare(INSERT),
+        pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID),
         pool.prepare(SELECT_MANY_BY_PROJECT_ID),
@@ -35,6 +37,31 @@ impl SqliteDb {
         self.execute(
             sqlx::query(INSERT)
                 .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.project_id())
+                .bind(value.admin_id())
+                .bind(value.name())
+                .bind(value.token())
+                .bind(value.allow_anonymous())
+                .bind(value.expired_at()),
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn upsert_token(&self, value: &TokenModel) -> Result<()> {
+        self.execute(
+            sqlx::query(UPSERT)
+                .bind(value.id())
+                .bind(value.created_at())
+                .bind(value.updated_at())
+                .bind(value.project_id())
+                .bind(value.admin_id())
+                .bind(value.name())
+                .bind(value.token())
+                .bind(value.allow_anonymous())
+                .bind(value.expired_at())
                 .bind(value.created_at())
                 .bind(value.updated_at())
                 .bind(value.project_id())

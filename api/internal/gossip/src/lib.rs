@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::ToSocketAddrs, sync::Arc};
 
 use anyhow::{Error, Result};
 use hb_dao::{change::ChangeDao, local_info::LocalInfoDao, Db};
@@ -36,21 +36,29 @@ impl ApiInternalGossip {
         host: &str,
         port: &u16,
         db: Arc<Db>,
-        peers: &Option<Vec<SocketAddr>>,
+        peers: &Option<Vec<String>>,
     ) -> (Self, Arc<Mutex<View>>, ContentChannelSender) {
         let local_id = match LocalInfoDao::db_select(&db).await {
             Ok(data) => *data.id(),
             Err(_) => {
                 let local_info_data = LocalInfoDao::new();
-                local_info_data.db_insert(&db).await.unwrap();
+                let _ = local_info_data.db_insert(&db).await;
+                let local_info_data = LocalInfoDao::db_select(&db).await.unwrap();
                 *local_info_data.id()
             }
         };
 
-        let local_address = format!("{host}:{port}").parse().unwrap();
+        let local_address = format!("{host}:{port}")
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .unwrap();
 
         let peers = match peers {
-            Some(peers) => peers.iter().map(|p| Peer::new(None, *p)).collect(),
+            Some(peers) => peers
+                .iter()
+                .map(|p| Peer::new(None, p.to_socket_addrs().unwrap().next().unwrap()))
+                .collect(),
             None => Vec::new(),
         };
 
@@ -146,6 +154,7 @@ impl InternalBroadcast {
     pub async fn broadcast(&self, change_data: &ChangeDao) -> Result<()> {
         let view = self.view.lock().await;
         if let Some(Ok(remote_data)) = view.select_remote_sync(&self.db).await {
+            drop(view);
             let change_data = ContentChangeModel::from_change_dao(&self.db, change_data).await?;
             Ok(self.tx.send((
                 *remote_data.remote_address(),

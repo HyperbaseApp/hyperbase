@@ -364,7 +364,7 @@ async fn token_based(
             );
         }
 
-        let record_id = if let ColumnValue::Uuid(Some(id)) = records_data[0].get("_id").unwrap() {
+        let record_id = if let Some(id) = records_data[0].id() {
             id
         } else {
             return Response::error_raw(

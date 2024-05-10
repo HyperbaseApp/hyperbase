@@ -7,7 +7,7 @@ pub struct ChangeModel {
     table: String,
     id: Uuid,
     state: String,
-    updated_at: DateTime<Utc>,
+    timestamp: DateTime<Utc>,
     change_id: Uuid,
 }
 
@@ -16,14 +16,14 @@ impl ChangeModel {
         table: &str,
         id: &Uuid,
         state: &str,
-        updated_at: &DateTime<Utc>,
+        timestamp: &DateTime<Utc>,
         change_id: &Uuid,
     ) -> Self {
         Self {
             table: table.to_owned(),
             id: *id,
             state: state.to_owned(),
-            updated_at: *updated_at,
+            timestamp: *timestamp,
             change_id: *change_id,
         }
     }
@@ -40,8 +40,8 @@ impl ChangeModel {
         &self.state
     }
 
-    pub fn updated_at(&self) -> &DateTime<Utc> {
-        &self.updated_at
+    pub fn timestamp(&self) -> &DateTime<Utc> {
+        &self.timestamp
     }
 
     pub fn change_id(&self) -> &Uuid {

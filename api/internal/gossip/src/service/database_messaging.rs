@@ -29,6 +29,8 @@ pub struct DatabaseMessagingService {
     db: Arc<Db>,
     view: Arc<Mutex<View>>,
 
+    is_sync: Arc<Mutex<bool>>,
+
     header_rx: HeaderChannelReceiver,
     content_rx: ContentChannelReceiver,
 }
@@ -49,9 +51,10 @@ impl DatabaseMessagingService {
                 local_address,
                 config,
                 db,
+                view,
+                is_sync: Arc::new(Mutex::new(false)),
                 header_rx,
                 content_rx,
-                view,
             },
             header_tx,
             content_tx,
@@ -72,6 +75,7 @@ impl DatabaseMessagingService {
                     self.config,
                     self.db.clone(),
                     self.view.clone(),
+                    self.is_sync.clone(),
                     self.header_rx,
                     self.content_rx
                 ),
@@ -80,7 +84,8 @@ impl DatabaseMessagingService {
                     self.local_address,
                     self.config,
                     self.db,
-                    self.view
+                    self.view,
+                    self.is_sync
                 )
             );
         })())
@@ -92,6 +97,7 @@ impl DatabaseMessagingService {
         config: DatabaseMessagingConfig,
         db: Arc<Db>,
         view: Arc<Mutex<View>>,
+        is_sync: Arc<Mutex<bool>>,
         mut header_receiver: HeaderChannelReceiver,
         mut content_receiver: ContentChannelReceiver,
     ) {
@@ -99,6 +105,7 @@ impl DatabaseMessagingService {
             tokio::select! {
                 msg = header_receiver.recv() => {
                     if let Some((sender_address, from, to, header)) = msg {
+                        hb_log::info(None, &format!("[ApiInternalGossip] Header message received: sender: {sender_address}, from_id: {from}, to_id: {to}, local_id: {local_id}"));
                         if to == local_id {
                             let db = db.clone();
                             tokio::spawn((|| async move {
@@ -108,7 +115,7 @@ impl DatabaseMessagingService {
                                         last_change_id,
                                     } => {
                                         let time_threshold = Utc::now() - Duration::from_secs(1);
-                                        let changes_data = match ChangeDao::db_select_many_from_updated_at_and_after_change_id_with_limit_asc(&db, &from_time, &last_change_id, config.actions_size()).await {
+                                        let changes_data = match ChangeDao::db_select_many_from_timestamp_and_after_change_id_with_limit_asc(&db, &from_time, &last_change_id, config.actions_size()).await {
                                             Ok(data) => data,
                                             Err(err) => {
                                                 hb_log::error(None, format!("[ApiInternalGossip] Error select many changes data: {err}"));
@@ -117,11 +124,12 @@ impl DatabaseMessagingService {
                                         };
                                         let mut content_changes_data = Vec::with_capacity(changes_data.len());
                                         for change_data in &changes_data {
-                                            if *change_data.updated_at() < time_threshold {
-                                                content_changes_data.push(*change_data.id());
+                                            if *change_data.timestamp() < time_threshold {
+                                                content_changes_data.push(*change_data.change_id());
                                             }
                                         }
                                         if !content_changes_data.is_empty() {
+                                            let content_changes_len = content_changes_data.len();
                                             match client::send(
                                                 &sender_address,
                                                 Message::new(
@@ -137,7 +145,7 @@ impl DatabaseMessagingService {
                                             )
                                             .await
                                             {
-                                                Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Header message response sent successfully to {sender_address} ({written} bytes)")),
+                                                Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Header message response sent successfully to {sender_address} ({content_changes_len} data, {written} bytes)")),
                                                 Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Header message response failed to send to {sender_address} due to error: {err}")),
                                             }
                                         }
@@ -169,8 +177,9 @@ impl DatabaseMessagingService {
                                             }
                                         }
                                         if !missing_change_ids.is_empty() {
+                                            let missing_change_ids_len = missing_change_ids.len();
                                             match client::send(&sender_address, Message::new(local_address, MessageV::Content { from: local_id, to: from, data: ContentMessage::Request { change_ids: missing_change_ids } })).await{
-                                                Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Content message request sent successfully to {sender_address} ({written} bytes)")),
+                                                Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Content message request sent successfully to {sender_address} ({missing_change_ids_len} data, {written} bytes)")),
                                                 Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Content message request failed to send to {sender_address} due to error: {err}")),
                                             }
                                         }
@@ -182,10 +191,13 @@ impl DatabaseMessagingService {
                 }
                 msg = content_receiver.recv() => {
                     if let Some((sender_address, from, to, message)) = msg {
+                        hb_log::info(None, &format!("[ApiInternalGossip] Content message received: sender: {sender_address}, from_id: {from}, to_id: {to}, local_id: {local_id}"));
                         if to == local_id {
                             let db = db.clone();
-                            let view = view.lock().await;
-                            let view = view.clone();
+                            let view_mutex = view.lock().await;
+                            let view = view_mutex.clone();
+                            let is_sync = is_sync.clone();
+                            drop(view_mutex);
                             tokio::spawn((|| async move {
                                 match message {
                                     ContentMessage::Request { change_ids } => {
@@ -217,6 +229,7 @@ impl DatabaseMessagingService {
                                             };
                                             content_changes_data.push(content_change_data)
                                         }
+                                        let content_changes_len = content_changes_data.len();
                                         match client::send(
                                             &sender_address,
                                             Message::new(
@@ -232,36 +245,47 @@ impl DatabaseMessagingService {
                                         )
                                         .await
                                         {
-                                            Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Content message response sent successfully to {sender_address} ({written} bytes)")),
+                                            Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Content message response sent successfully to {sender_address} ({content_changes_len} data, {written} bytes)")),
                                             Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Content message response failed to send to {sender_address} due to error: {err}")),
                                         }
                                     }
                                     ContentMessage::Response { mut changes_data } => {
+                                        let mut is_sync_mtx = is_sync.lock().await;
+                                        if !*is_sync_mtx {
+                                            *is_sync_mtx = true;
+                                        }
+                                        drop(is_sync_mtx);
+
                                         changes_data.sort_by(|a, b| {
-                                            if a.updated_at() == b.updated_at() {
+                                            if a.timestamp() == b.timestamp() {
                                                 a.change_id().cmp(b.change_id())
                                             } else {
-                                                a.updated_at().cmp(b.updated_at())
+                                                a.timestamp().cmp(b.timestamp())
                                             }
                                         });
+                                        let mut last_change_data = None;
                                         for data in &changes_data {
+                                            last_change_data = Some(data);
                                             if let Err(err) = data.handle(&db).await {
                                                 hb_log::warn(None, format!("[ApiInternalGossip] Error handle content change data: {err}"));
-                                                return;
+                                                break;
                                             }
                                         }
-                                        if let Some(last_change_data) = changes_data.last() {
+                                        if let Some(last_change_data) = last_change_data {
                                             let remote_sync_data = RemoteSyncDao::new(
                                                 &from,
                                                 &sender_address,
-                                                last_change_data.updated_at(),
+                                                last_change_data.timestamp(),
                                                 last_change_data.change_id(),
                                             );
                                             if let Err(err) = remote_sync_data.db_upsert(&db).await {
                                                 hb_log::error(None, format!("[ApiInternalGossip] Error upsert remote_sync data: {err}"));
                                                 return;
                                             }
-                                            Self::send_request_header(&local_address, &local_id, &db, view.clone()).await;
+                                            Self::send_request_header(&local_address, &local_id, &remote_sync_data).await;
+                                        } else {
+                                            let mut is_sync_mtx = is_sync.lock().await;
+                                            *is_sync_mtx = false;
                                         }
                                     }
                                     ContentMessage::Broadcast { change_data } => {
@@ -299,7 +323,7 @@ impl DatabaseMessagingService {
                                                         )
                                                         .await
                                                         {
-                                                            Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Broadcast message sent successfully to {} ({} bytes)", remote_sync_data.remote_address(), written)),
+                                                            Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Broadcast message sent successfully to {} (change_id {}, {} bytes)", remote_sync_data.remote_address(), change_data.change_id(), written)),
                                                             Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Broadcast message failed to send to {} due to error: {}", remote_sync_data.remote_address(), err)),
                                                         }
                                                     }
@@ -327,10 +351,34 @@ impl DatabaseMessagingService {
         config: DatabaseMessagingConfig,
         db: Arc<Db>,
         view: Arc<Mutex<View>>,
+        is_sync: Arc<Mutex<bool>>,
     ) {
         loop {
-            let view = view.lock().await;
-            Self::send_request_header(&local_address, &local_id, &db, view.clone()).await;
+            let is_sync = is_sync.lock().await;
+            if !*is_sync {
+                let view = view.lock().await;
+                if let Some(remote_sync_data) = view.select_remote_sync(&db).await {
+                    match remote_sync_data {
+                        Ok(remote_sync_data) => {
+                            Self::send_request_header(&local_address, &local_id, &remote_sync_data)
+                                .await;
+                        }
+                        Err(err) => {
+                            hb_log::warn(
+                                None,
+                                &format!("[ApiInternalGossip] Failed to get remote sync: {err}"),
+                            );
+                        }
+                    }
+                } else {
+                    hb_log::warn(
+                        None,
+                        "[ApiInternalGossip] No remote found for header message request",
+                    );
+                }
+                drop(view);
+            }
+            drop(is_sync);
 
             let sleep_duration_deviation = match config.period_deviation() {
                 0 => 0,
@@ -349,42 +397,29 @@ impl DatabaseMessagingService {
         }
     }
 
-    async fn send_request_header(local_address: &SocketAddr, local_id: &Uuid, db: &Db, view: View) {
-        if let Some(remote_sync_data) = view.select_remote_sync(db).await {
-            match remote_sync_data {
-                Ok(remote_sync_data) => {
-                    match client::send(
-                            remote_sync_data.remote_address(),
-                            Message::new(
-                                *local_address,
-                                MessageV::Header {
-                                    from: *local_id,
-                                    to: *remote_sync_data.remote_id(),
-                                    data: HeaderMessage::Request {
-                                        from_time: *remote_sync_data.last_data_sync(),
-                                        last_change_id: *remote_sync_data.last_change_id(),
-                                    },
-                                }
-                            )
-                        )
-                        .await
-                        {
-                            Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Header message request sent successfully to {} ({} bytes)", remote_sync_data.remote_address(), written)),
-                            Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Header message request failed to send to {} due to error: {}", remote_sync_data.remote_address(), err)),
-                        }
+    async fn send_request_header(
+        local_address: &SocketAddr,
+        local_id: &Uuid,
+        remote_sync_data: &RemoteSyncDao,
+    ) {
+        match client::send(
+            remote_sync_data.remote_address(),
+            Message::new(
+                *local_address,
+                MessageV::Header {
+                    from: *local_id,
+                    to: *remote_sync_data.remote_id(),
+                    data: HeaderMessage::Request {
+                        from_time: *remote_sync_data.last_data_sync(),
+                        last_change_id: *remote_sync_data.last_change_id(),
+                    },
                 }
-                Err(err) => {
-                    hb_log::warn(
-                        None,
-                        &format!("[ApiInternalGossip] Failed to get remote sync: {err}"),
-                    );
-                }
-            }
-        } else {
-            hb_log::warn(
-                None,
-                "[ApiInternalGossip] No remote found for header message request",
-            );
+            )
+        )
+        .await
+        {
+            Ok(written) => hb_log::info(None, &format!("[ApiInternalGossip] Header message request sent successfully to {} (from {}, last_id {}, {} bytes)", remote_sync_data.remote_address(), remote_sync_data.last_data_sync(), remote_sync_data.last_change_id(), written)),
+            Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Header message request failed to send to {} due to error: {}", remote_sync_data.remote_address(), err)),
         }
     }
 }

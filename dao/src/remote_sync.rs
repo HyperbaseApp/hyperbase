@@ -56,6 +56,24 @@ impl RemoteSyncDao {
         self.last_data_sync = *last_data_sync;
     }
 
+    pub async fn db_insert_or_ignore(&self, db: &Db) -> Result<()> {
+        match db {
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => {
+                db.insert_or_ignore_remote_sync(&self.to_postgresdb_model())
+                    .await
+            }
+            Db::MysqlDb(db) => {
+                db.insert_or_ignore_remote_sync(&self.to_mysqldb_model())
+                    .await
+            }
+            Db::SqliteDb(db) => {
+                db.insert_or_ignore_remote_sync(&self.to_sqlitedb_model())
+                    .await
+            }
+        }
+    }
+
     pub async fn db_upsert(&self, db: &Db) -> Result<()> {
         match db {
             Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),

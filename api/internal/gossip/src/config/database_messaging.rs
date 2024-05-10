@@ -27,8 +27,8 @@ impl DatabaseMessagingConfig {
 impl Default for DatabaseMessagingConfig {
     fn default() -> Self {
         Self {
-            period: 5000,
-            period_deviation: 5000,
+            period: 60000,
+            period_deviation: 10000,
             actions_size: 30,
             max_broadcast: 3,
         }

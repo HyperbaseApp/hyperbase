@@ -28,7 +28,7 @@ impl Db {
         hb_log::info(None, "[DAO] Updating changes table of admins data");
         let mut last_updated_at =
             match ChangeDao::db_select_last_by_table(self, &ChangeTable::Admin).await? {
-                Some(change_data) => *change_data.updated_at(),
+                Some(change_data) => *change_data.timestamp(),
                 None => DateTime::from_timestamp_millis(0).unwrap(),
             };
         let mut last_id = Uuid::nil();
@@ -67,7 +67,7 @@ impl Db {
         hb_log::info(None, "[DAO] Updating changes table of projects data");
         let mut last_updated_at =
             match ChangeDao::db_select_last_by_table(self, &ChangeTable::Project).await? {
-                Some(change_data) => *change_data.updated_at(),
+                Some(change_data) => *change_data.timestamp(),
                 None => DateTime::from_timestamp_millis(0).unwrap(),
             };
         let mut last_id = Uuid::nil();
@@ -128,7 +128,15 @@ impl Db {
                 ChangeDao::new(
                     &ChangeTable::Collection,
                     collections_data.id(),
-                    &ChangeState::Upsert,
+                    &ChangeState::Insert,
+                    collections_data.created_at(),
+                )
+                .db_insert_or_ignore(self)
+                .await?;
+                ChangeDao::new(
+                    &ChangeTable::Collection,
+                    collections_data.id(),
+                    &ChangeState::Update,
                     collections_data.updated_at(),
                 )
                 .db_insert_or_ignore(self)
@@ -147,7 +155,7 @@ impl Db {
                 )
                 .await?
                 {
-                    Some(change_data) => *change_data.updated_at(),
+                    Some(change_data) => *change_data.timestamp(),
                     None => DateTime::from_timestamp_millis(0).unwrap(),
                 };
                 let mut last_id = Uuid::nil();
@@ -201,37 +209,30 @@ impl Db {
                     .await?;
                     match records_data.last() {
                         Some(record_data) => {
-                            last_updated_at =
-                                if let Some(ColumnValue::Timestamp(Some(updated_at))) =
-                                    record_data.get("_updated_at")
-                                {
-                                    *updated_at
-                                } else {
-                                    return Err(Error::msg(
-                                        "Record _updated_at doesn't found".to_owned(),
-                                    ));
-                                };
-                            last_id =
-                                if let Some(ColumnValue::Uuid(Some(id))) = record_data.get("_id") {
-                                    *id
-                                } else {
-                                    return Err(Error::msg("Record _id doesn't found".to_owned()));
-                                }
+                            last_updated_at = if let Some(updated_at) = record_data.updated_at() {
+                                *updated_at
+                            } else {
+                                return Err(Error::msg(
+                                    "Record _updated_at doesn't found".to_owned(),
+                                ));
+                            };
+                            last_id = if let Some(id) = record_data.id() {
+                                *id
+                            } else {
+                                return Err(Error::msg("Record _id doesn't found".to_owned()));
+                            }
                         }
                         None => break,
                     }
 
                     let mut changes_data = Vec::with_capacity(records_data.len());
                     for record_data in &records_data {
-                        let id =
-                            if let ColumnValue::Uuid(Some(id)) = record_data.get("_id").unwrap() {
-                                id
-                            } else {
-                                return Err(Error::msg("Record id doesn't found".to_owned()));
-                            };
-                        let updated_at = if let ColumnValue::Timestamp(Some(updated_at)) =
-                            record_data.get("_updated_at").unwrap()
-                        {
+                        let id = if let Some(id) = record_data.id() {
+                            id
+                        } else {
+                            return Err(Error::msg("Record id doesn't found".to_owned()));
+                        };
+                        let updated_at = if let Some(updated_at) = record_data.updated_at() {
                             updated_at
                         } else {
                             return Err(Error::msg("Record id doesn't found".to_owned()));
@@ -295,7 +296,7 @@ impl Db {
                 )
                 .await?
                 {
-                    Some(change_data) => *change_data.updated_at(),
+                    Some(change_data) => *change_data.timestamp(),
                     None => DateTime::from_timestamp_millis(0).unwrap(),
                 };
                 let mut last_id = Uuid::nil();
@@ -337,7 +338,7 @@ impl Db {
         hb_log::info(None, "[DAO] Updating changes table of tokens data");
         let mut last_updated_at =
             match ChangeDao::db_select_last_by_table(self, &ChangeTable::Token).await? {
-                Some(change_data) => *change_data.updated_at(),
+                Some(change_data) => *change_data.timestamp(),
                 None => DateTime::from_timestamp_millis(0).unwrap(),
             };
         let mut last_id = Uuid::nil();
@@ -379,7 +380,7 @@ impl Db {
         );
         let mut last_updated_at =
             match ChangeDao::db_select_last_by_table(self, &ChangeTable::CollectionRule).await? {
-                Some(change_data) => *change_data.updated_at(),
+                Some(change_data) => *change_data.timestamp(),
                 None => DateTime::from_timestamp_millis(0).unwrap(),
             };
         let mut last_id = Uuid::nil();
@@ -420,7 +421,7 @@ impl Db {
 
         let mut last_updated_at =
             match ChangeDao::db_select_last_by_table(self, &ChangeTable::BucketRule).await? {
-                Some(change_data) => *change_data.updated_at(),
+                Some(change_data) => *change_data.timestamp(),
                 None => DateTime::from_timestamp_millis(0).unwrap(),
             };
         let mut last_id = Uuid::nil();

@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::{db::MysqlDb, model::remote_sync::RemoteSyncModel};
 
+const INSERT_OR_IGNORE: &str = "INSERT INTO `remotes_sync` (`remote_id`, `remote_address`, `last_data_sync`, `last_change_id`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `remote_id` = ?";
 const UPSERT: &str = "INSERT INTO `remotes_sync` (`remote_id`, `remote_address`, `last_data_sync`, `last_change_id`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `remote_address` = ?, `last_data_sync` = ?, `last_change_id` = ?";
 const SELECT: &str = "SELECT `remote_id`, `remote_address`, `last_data_sync`, `last_change_id` FROM `remotes_sync` WHERE `remote_id` = ?";
 const SELECT_MANY_BY_REMOTE_ADDRESS: &str = "SELECT `remote_id`, `remote_address`, `last_data_sync`, `last_change_id` FROM `remotes_sync` WHERE `remote_address` = ?";
@@ -14,6 +15,7 @@ pub async fn init(pool: &Pool<MySql>) {
     pool.execute("CREATE TABLE IF NOT EXISTS `remotes_sync` (`remote_id` binary(16), `remote_address` text, `last_data_sync` timestamp, `last_change_id` binary(16), PRIMARY KEY (`remote_id`))").await.unwrap();
 
     tokio::try_join!(
+        pool.prepare(INSERT_OR_IGNORE),
         pool.prepare(UPSERT),
         pool.prepare(SELECT),
         pool.prepare(SELECT_MANY_BY_REMOTE_ADDRESS),
@@ -22,6 +24,19 @@ pub async fn init(pool: &Pool<MySql>) {
 }
 
 impl MysqlDb {
+    pub async fn insert_or_ignore_remote_sync(&self, value: &RemoteSyncModel) -> Result<()> {
+        self.execute(
+            sqlx::query(INSERT_OR_IGNORE)
+                .bind(value.remote_id())
+                .bind(value.remote_address())
+                .bind(value.last_data_sync())
+                .bind(value.last_change_id())
+                .bind(value.remote_id()),
+        )
+        .await?;
+        Ok(())
+    }
+
     pub async fn upsert_remote_sync(&self, value: &RemoteSyncModel) -> Result<()> {
         self.execute(
             sqlx::query(UPSERT)

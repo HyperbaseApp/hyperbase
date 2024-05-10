@@ -128,10 +128,10 @@ impl PeerSamplingService {
                                     let remote_data = RemoteSyncDao::new(
                                         peer_id,
                                         peer.address(),
-                                        &DateTime::from_timestamp_millis(0).unwrap(),
+                                        &DateTime::from_timestamp_millis(1000).unwrap(),
                                         &Uuid::nil(),
                                     );
-                                    if let Err(err) = remote_data.db_upsert(&db).await {
+                                    if let Err(err) = remote_data.db_insert_or_ignore(&db).await {
                                         hb_log::error(None, &format!("[ApiInternalGossip] Failed to insert new remote data: {err}"));
                                         return;
                                     }
@@ -188,6 +188,7 @@ impl PeerSamplingService {
             } else {
                 hb_log::warn(None, "[ApiInternalGossip] No peer found for peer sampling")
             }
+            drop(view);
 
             let sleep_duration_deviation = match config.period_deviation() {
                 0 => 0,

@@ -44,8 +44,8 @@ impl Default for PeerSamplingConfig {
         Self {
             push: true,
             pull: true,
-            period: 5000,
-            period_deviation: 5000,
+            period: 60000,
+            period_deviation: 10000,
             view_size: 30,
             healing_factor: 3,
             swapping_factor: 12,

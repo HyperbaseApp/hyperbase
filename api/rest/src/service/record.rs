@@ -213,17 +213,8 @@ async fn insert_one(
             Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
         };
 
-        let mut user_id = None;
-        if let Some(id) = user_data.get("_id") {
-            if let ColumnValue::Uuid(id) = id {
-                if let Some(id) = id {
-                    user_id = Some(*id);
-                }
-            }
-        }
-
-        if let Some(user_id) = user_id {
-            user_id
+        if let Some(user_id) = user_data.id() {
+            *user_id
         } else {
             return Response::error_raw(&StatusCode::BAD_REQUEST, "User doesn't found");
         }
@@ -463,20 +454,11 @@ async fn find_one(
                         }
                     };
 
-                    let mut user_id = None;
-                    if let Some(id) = user_data.get("_id") {
-                        if let ColumnValue::Uuid(id) = id {
-                            if let Some(id) = id {
-                                user_id = Some(*id);
-                            }
-                        }
-                    }
-
-                    if user_id.is_none() {
+                    if let Some(id) = user_data.id() {
+                        Some(*id)
+                    } else {
                         return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
                     }
-
-                    user_id
                 }
                 None => {
                     if let Some(token_data) = &token_data {
@@ -697,20 +679,11 @@ async fn update_one(
                         }
                     };
 
-                    let mut user_id = None;
-                    if let Some(id) = user_data.get("_id") {
-                        if let ColumnValue::Uuid(id) = id {
-                            if let Some(id) = id {
-                                user_id = Some(*id);
-                            }
-                        }
-                    }
-
-                    if user_id.is_none() {
+                    if let Some(id) = user_data.id() {
+                        Some(*id)
+                    } else {
                         return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
                     }
-
-                    user_id
                 }
                 None => {
                     if let Some(token_data) = &token_data {
@@ -1006,20 +979,11 @@ async fn delete_one(
                         }
                     };
 
-                    let mut user_id = None;
-                    if let Some(id) = user_data.get("_id") {
-                        if let ColumnValue::Uuid(id) = id {
-                            if let Some(id) = id {
-                                user_id = Some(*id);
-                            }
-                        }
-                    }
-
-                    if user_id.is_none() {
+                    if let Some(id) = user_data.id() {
+                        Some(*id)
+                    } else {
                         return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
                     }
-
-                    user_id
                 }
                 None => {
                     if let Some(token_data) = &token_data {
@@ -1263,20 +1227,11 @@ async fn find_many(
                         }
                     };
 
-                    let mut user_id = None;
-                    if let Some(id) = user_data.get("_id") {
-                        if let ColumnValue::Uuid(id) = id {
-                            if let Some(id) = id {
-                                user_id = Some(*id);
-                            }
-                        }
-                    }
-
-                    if user_id.is_none() {
+                    if let Some(id) = user_data.id() {
+                        Some(*id)
+                    } else {
                         return Response::error_raw(&StatusCode::BAD_REQUEST, "User not found");
                     }
-
-                    user_id
                 }
                 None => {
                     if let Some(token_data) = &token_data {
