@@ -19,7 +19,7 @@ const DELETE_MANY_BY_COLLECTION_ID: &str = "DELETE FROM `collection_rules` WHERE
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "[MySQL] Setting up collection_rules table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `collection_rules` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `token_id` binary(16), `collection_id` binary(16), `find_one` text, `find_many` text, `insert_one` boolean, `update_one` text, `delete_one` text, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `collection_rules` (`id` binary(16), `created_at` timestamp(6), `updated_at` timestamp(6), `project_id` binary(16), `token_id` binary(16), `collection_id` binary(16), `find_one` text, `find_many` text, `insert_one` boolean, `update_one` text, `delete_one` text, PRIMARY KEY (`id`))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

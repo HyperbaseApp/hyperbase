@@ -13,7 +13,7 @@ const DELETE_EXPIRE: &str = "DELETE FROM \"logs\" WHERE \"created_at\" < $1";
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up logs table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"logs\" (\"id\" uuid, \"created_at\" timestamptz, \"admin_id\" uuid, \"project_id\" uuid, \"kind\" text, \"message\" text, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"logs\" (\"id\" uuid, \"created_at\" timestamptz(6), \"admin_id\" uuid, \"project_id\" uuid, \"kind\" text, \"message\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

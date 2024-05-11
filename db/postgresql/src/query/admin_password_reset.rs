@@ -17,7 +17,7 @@ pub async fn init(pool: &Pool<Postgres>) {
         "[PostgreSQL] Setting up admin_password_resets table",
     );
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"admin_password_resets\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"admin_id\" uuid, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"admin_password_resets\" (\"id\" uuid, \"created_at\" timestamptz(6), \"updated_at\" timestamptz(6), \"admin_id\" uuid, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

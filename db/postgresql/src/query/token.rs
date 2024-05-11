@@ -17,7 +17,7 @@ const DELETE: &str = "DELETE FROM \"tokens\" WHERE \"id\" = $1";
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up tokens table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"project_id\" uuid, \"admin_id\" uuid, \"name\" text, \"token\" text, \"allow_anonymous\" boolean, \"expired_at\" timestamptz, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"tokens\" (\"id\" uuid, \"created_at\" timestamptz(6), \"updated_at\" timestamptz(6), \"project_id\" uuid, \"admin_id\" uuid, \"name\" text, \"token\" text, \"allow_anonymous\" boolean, \"expired_at\" timestamptz(6), PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

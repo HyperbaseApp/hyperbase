@@ -118,7 +118,7 @@ impl ColumnKind {
             Self::Uuid => ColumnKindPostgres::Uuid,
             Self::Date => ColumnKindPostgres::Date,
             Self::Time => ColumnKindPostgres::Time,
-            Self::Timestamp => ColumnKindPostgres::Timestamptz,
+            Self::Timestamp => ColumnKindPostgres::Timestamptz6,
             Self::Json => ColumnKindPostgres::Jsonb,
         }
     }
@@ -137,7 +137,7 @@ impl ColumnKind {
             Self::Uuid => ColumnKindMysql::Binary16,
             Self::Date => ColumnKindMysql::Date,
             Self::Time => ColumnKindMysql::Time,
-            Self::Timestamp => ColumnKindMysql::Timestamp,
+            Self::Timestamp => ColumnKindMysql::Timestamp6,
             Self::Json => ColumnKindMysql::Json,
         }
     }

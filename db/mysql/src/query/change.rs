@@ -14,7 +14,7 @@ const SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC: &str = "SEL
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "[MySQL] Setting up changes table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `changes` (`table` varchar(500), `id` binary(16), `state` varchar(6), `timestamp` timestamp, `change_id` binary(16), PRIMARY KEY (`table`, `id`, `state`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `changes` (`table` varchar(500), `id` binary(16), `state` varchar(6), `timestamp` timestamp(6), `change_id` binary(16), PRIMARY KEY (`table`, `id`, `state`))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT_OR_IGNORE),

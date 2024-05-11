@@ -15,7 +15,7 @@ const DELETE_EXPIRE: &str = "DELETE FROM \"registrations\" WHERE \"updated_at\" 
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up registrations table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"registrations\" (\"id\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"registrations\" (\"id\" uuid, \"created_at\" timestamptz(6), \"updated_at\" timestamptz(6), \"email\" text, \"password_hash\" text, \"code\" text, PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

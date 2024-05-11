@@ -172,14 +172,7 @@ impl ContentChangeModel {
     pub async fn handle(&self, db: &Db) -> Result<()> {
         let change_data_table = self.table.to_dao();
         let change_data_state = self.state.to_dao();
-        let change_data = ChangeDao::raw_new(
-            &change_data_table,
-            &self.id,
-            &change_data_state,
-            &self.timestamp,
-            &self.change_id,
-        );
-        change_data.db_upsert(db).await?;
+
         match change_data_state {
             ChangeState::Insert => {
                 if let Some(data) = &self.data {
@@ -322,6 +315,15 @@ impl ContentChangeModel {
                 }
             },
         }
+
+        let change_data = ChangeDao::raw_new(
+            &change_data_table,
+            &self.id,
+            &change_data_state,
+            &self.timestamp,
+            &self.change_id,
+        );
+        change_data.db_upsert(db).await?;
 
         Ok(())
     }

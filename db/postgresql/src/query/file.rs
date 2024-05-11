@@ -19,7 +19,7 @@ const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up files table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamptz, \"updated_at\" timestamptz, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamptz(6), \"updated_at\" timestamptz(6), \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

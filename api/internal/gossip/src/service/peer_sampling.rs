@@ -132,7 +132,7 @@ impl PeerSamplingService {
                                         &Uuid::nil(),
                                     );
                                     if let Err(err) = remote_data.db_insert_or_ignore(&db).await {
-                                        hb_log::error(None, &format!("[ApiInternalGossip] Failed to insert new remote data: {err}"));
+                                        hb_log::error(None, &format!("[ApiInternalGossip] Failed to insert new remote_sync data: {err}"));
                                         return;
                                     }
                                 }

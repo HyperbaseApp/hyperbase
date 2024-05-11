@@ -12,7 +12,7 @@ const SELECT_MANY_BY_REMOTE_ADDRESS: &str = "SELECT `remote_id`, `remote_address
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "[MySQL] Setting up remotes_sync table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `remotes_sync` (`remote_id` binary(16), `remote_address` text, `last_data_sync` timestamp, `last_change_id` binary(16), PRIMARY KEY (`remote_id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `remotes_sync` (`remote_id` binary(16), `remote_address` text, `last_data_sync` timestamp(6), `last_change_id` binary(16), PRIMARY KEY (`remote_id`))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT_OR_IGNORE),

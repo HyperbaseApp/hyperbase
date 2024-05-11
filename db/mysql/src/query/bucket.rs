@@ -16,7 +16,7 @@ const DELETE: &str = "DELETE FROM `buckets` WHERE `id` = ?";
 pub async fn init(pool: &Pool<MySql>) {
     hb_log::info(Some("🔧"), "[MySQL] Setting up buckets table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS `buckets` (`id` binary(16), `created_at` timestamp, `updated_at` timestamp, `project_id` binary(16), `name` text, `path` text, `opt_ttl` bigint, PRIMARY KEY (`id`))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS `buckets` (`id` binary(16), `created_at` timestamp(6), `updated_at` timestamp(6), `project_id` binary(16), `name` text, `path` text, `opt_ttl` bigint, PRIMARY KEY (`id`))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT),

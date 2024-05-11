@@ -14,7 +14,7 @@ const SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC: &str = "SEL
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up changes table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"changes\" (\"table\" text, \"id\" uuid, \"state\" text, \"timestamp\" timestamptz, \"change_id\" uuid, PRIMARY KEY (\"table\", \"id\", \"state\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"changes\" (\"table\" text, \"id\" uuid, \"state\" text, \"timestamp\" timestamptz(6), \"change_id\" uuid, PRIMARY KEY (\"table\", \"id\", \"state\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT_OR_IGNORE),

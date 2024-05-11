@@ -12,7 +12,7 @@ const SELECT_MANY_BY_REMOTE_ADDRESS: &str = "SELECT \"remote_id\", \"remote_addr
 pub async fn init(pool: &Pool<Postgres>) {
     hb_log::info(Some("🔧"), "[PostgreSQL] Setting up remotes_sync table");
 
-    pool.execute("CREATE TABLE IF NOT EXISTS \"remotes_sync\" (\"remote_id\" uuid, \"remote_address\" text, \"last_data_sync\" timestamptz, \"last_change_id\" uuid, PRIMARY KEY (\"remote_id\"))").await.unwrap();
+    pool.execute("CREATE TABLE IF NOT EXISTS \"remotes_sync\" (\"remote_id\" uuid, \"remote_address\" text, \"last_data_sync\" timestamptz(6), \"last_change_id\" uuid, PRIMARY KEY (\"remote_id\"))").await.unwrap();
 
     tokio::try_join!(
         pool.prepare(INSERT_OR_IGNORE),
