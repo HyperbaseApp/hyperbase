@@ -9,9 +9,17 @@ use actix_web::{
 };
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::HashSet;
+use chrono::Utc;
 use hb_dao::{
-    admin::AdminDao, bucket::BucketDao, bucket_rule::BucketPermission, collection::CollectionDao,
-    file::FileDao, project::ProjectDao, record::RecordDao, token::TokenDao,
+    admin::AdminDao,
+    bucket::BucketDao,
+    bucket_rule::BucketPermission,
+    change::{ChangeDao, ChangeState, ChangeTable},
+    collection::CollectionDao,
+    file::FileDao,
+    project::ProjectDao,
+    record::RecordDao,
+    token::TokenDao,
 };
 use hb_token_jwt::claim::ClaimId;
 use uuid::Uuid;
@@ -27,6 +35,7 @@ use crate::{
         },
         PaginationRes, Response,
     },
+    util,
 };
 
 pub fn file_api(cfg: &mut web::ServiceConfig) {
@@ -189,6 +198,22 @@ async fn insert_one(
         .await
     {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::File(*file_data.bucket_id()),
+        file_data.id(),
+        &ChangeState::Upsert,
+        &file_data.created_at(),
+    );
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -801,6 +826,22 @@ async fn update_one(
         if let Err(err) = file_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
+
+        let change_data = ChangeDao::new(
+            &ChangeTable::File(*file_data.bucket_id()),
+            file_data.id(),
+            &ChangeState::Upsert,
+            &file_data.updated_at(),
+        );
+        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+            ctx.dao().db(),
+            change_data,
+            ctx.internal_broadcast(),
+        )
+        .await
+        {
+            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+        }
     }
 
     Response::data(
@@ -974,8 +1015,26 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Bucket id does not match");
     }
 
+    let deleted_at = Utc::now();
+
     if let Err(err) = FileDao::delete(ctx.dao().db(), &bucket_data, path.file_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::File(*file_data.bucket_id()),
+        file_data.id(),
+        &ChangeState::Delete,
+        &deleted_at,
+    );
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(

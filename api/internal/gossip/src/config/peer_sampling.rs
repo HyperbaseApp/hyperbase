@@ -10,6 +10,18 @@ pub struct PeerSamplingConfig {
 }
 
 impl PeerSamplingConfig {
+    pub fn new(view_size: &usize) -> Self {
+        Self {
+            push: true,
+            pull: true,
+            period: 60000,
+            period_deviation: 10000,
+            view_size: *view_size,
+            healing_factor: 3,
+            swapping_factor: 12,
+        }
+    }
+
     pub fn push(&self) -> &bool {
         &self.push
     }
@@ -36,19 +48,5 @@ impl PeerSamplingConfig {
 
     pub fn swapping_factor(&self) -> &usize {
         &self.swapping_factor
-    }
-}
-
-impl Default for PeerSamplingConfig {
-    fn default() -> Self {
-        Self {
-            push: true,
-            pull: true,
-            period: 60000,
-            period_deviation: 10000,
-            view_size: 30,
-            healing_factor: 3,
-            swapping_factor: 12,
-        }
     }
 }

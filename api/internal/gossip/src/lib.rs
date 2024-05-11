@@ -37,6 +37,8 @@ impl ApiInternalGossip {
         port: &u16,
         db: Arc<Db>,
         peers: &Option<Vec<String>>,
+        view_size: &usize,
+        actions_size: &i32,
     ) -> (Self, Arc<Mutex<View>>, ContentChannelSender) {
         let local_id = match LocalInfoDao::db_select(&db).await {
             Ok(data) => *data.id(),
@@ -65,7 +67,7 @@ impl ApiInternalGossip {
         let (peer_sampling_service, view, peer_sampling_tx) = PeerSamplingService::new(
             local_id,
             local_address,
-            PeerSamplingConfig::default(),
+            PeerSamplingConfig::new(view_size),
             db.clone(),
             peers,
         );
@@ -74,7 +76,7 @@ impl ApiInternalGossip {
             DatabaseMessagingService::new(
                 local_id,
                 local_address,
-                DatabaseMessagingConfig::default(),
+                DatabaseMessagingConfig::new(actions_size),
                 db,
                 view.clone(),
             );

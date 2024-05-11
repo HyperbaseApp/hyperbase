@@ -7,6 +7,15 @@ pub struct DatabaseMessagingConfig {
 }
 
 impl DatabaseMessagingConfig {
+    pub fn new(actions_size: &i32) -> Self {
+        Self {
+            period: 60000,
+            period_deviation: 10000,
+            actions_size: *actions_size,
+            max_broadcast: 3,
+        }
+    }
+
     pub fn period(&self) -> &u64 {
         &self.period
     }
@@ -21,16 +30,5 @@ impl DatabaseMessagingConfig {
 
     pub fn max_broadcast(&self) -> &u32 {
         &self.max_broadcast
-    }
-}
-
-impl Default for DatabaseMessagingConfig {
-    fn default() -> Self {
-        Self {
-            period: 60000,
-            period_deviation: 10000,
-            actions_size: 30,
-            max_broadcast: 3,
-        }
     }
 }

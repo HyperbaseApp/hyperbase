@@ -143,6 +143,8 @@ async fn main() {
                 config_gossip.port(),
                 db.clone(),
                 config_gossip.peers(),
+                config_gossip.view_size(),
+                config_gossip.actions_size(),
             )
             .await;
             api_internal_gossip = Some(gossip_api.0);

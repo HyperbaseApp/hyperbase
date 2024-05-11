@@ -63,6 +63,8 @@ api:
       peers:
         - "0.0.0.0:7473"
         - "0.0.0.0:7474"
+      view_size: 4
+      actions_size: 30
   rest:
     host: "0.0.0.0"
     port: 8080

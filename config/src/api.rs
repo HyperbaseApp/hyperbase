@@ -45,6 +45,8 @@ pub struct ApiGossipConfig {
     host: String,
     port: u16,
     peers: Option<Vec<String>>,
+    view_size: usize,
+    actions_size: i32,
 }
 
 impl ApiGossipConfig {
@@ -58,6 +60,14 @@ impl ApiGossipConfig {
 
     pub fn peers(&self) -> &Option<Vec<String>> {
         &self.peers
+    }
+
+    pub fn view_size(&self) -> &usize {
+        &self.view_size
+    }
+
+    pub fn actions_size(&self) -> &i32 {
+        &self.actions_size
     }
 }
 

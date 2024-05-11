@@ -65,7 +65,7 @@ impl ApiMqttClient {
 
         tokio::spawn((|| async move {
             self.client
-                .subscribe(self.topic, QoS::AtMostOnce)
+                .subscribe(self.topic, QoS::ExactlyOnce)
                 .await
                 .unwrap();
 

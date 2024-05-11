@@ -13,6 +13,7 @@ use crate::{
         admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
         Response,
     },
+    util,
 };
 
 pub fn admin_api(cfg: &mut web::ServiceConfig) {
@@ -114,22 +115,14 @@ async fn update_one(
         &ChangeState::Upsert,
         admin_data.updated_at(),
     );
-    if let Err(err) = change_data.db_upsert(ctx.dao().db()).await {
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
-    if let Some(internal_broadcast) = ctx.internal_broadcast() {
-        let internal_broadcast = internal_broadcast.clone();
-        tokio::spawn((|| async move {
-            if let Err(err) = internal_broadcast.broadcast(&change_data).await {
-                hb_log::error(
-                    None,
-                    &format!(
-                        "[ApiRestServer] Error when broadcasting update_one admin to remote peer: {err}"
-                    ),
-                );
-            }
-        })());
     }
 
     Response::data(
@@ -182,22 +175,14 @@ async fn delete_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpRespons
         &ChangeState::Delete,
         &deleted_at,
     );
-    if let Err(err) = change_data.db_upsert(ctx.dao().db()).await {
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
-    if let Some(internal_broadcast) = ctx.internal_broadcast() {
-        let internal_broadcast = internal_broadcast.clone();
-        tokio::spawn((|| async move {
-            if let Err(err) = internal_broadcast.broadcast(&change_data).await {
-                hb_log::error(
-                    None,
-                    &format!(
-                        "[ApiRestServer] Error when broadcasting delete_one admin to remote peer: {err}"
-                    ),
-                );
-            }
-        })());
     }
 
     Response::data(

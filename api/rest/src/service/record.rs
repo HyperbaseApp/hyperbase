@@ -1,11 +1,13 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
+use chrono::Utc;
 use hb_api_websocket::message::{
     Message as WebSocketMessage, MessageKind as WebSocketMessageKind, Target as WebSocketTarget,
 };
 use hb_dao::{
     admin::AdminDao,
+    change::{ChangeDao, ChangeState, ChangeTable},
     collection::CollectionDao,
     collection_rule::CollectionPermission,
     log::{LogDao, LogKind},
@@ -29,7 +31,7 @@ use crate::{
         },
         PaginationRes, Response,
     },
-    util::ws_broadcast::websocket_broadcast,
+    util::{self, ws_broadcast::websocket_broadcast},
 };
 
 pub fn record_api(cfg: &mut web::ServiceConfig) {
@@ -258,6 +260,22 @@ async fn insert_one(
 
     if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::Record(*record_data.collection_id()),
+        &record_data.id().unwrap(),
+        &ChangeState::Upsert,
+        &record_data.updated_at().unwrap(),
+    );
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let mut record = HashMap::with_capacity(record_data.len());
@@ -789,6 +807,22 @@ async fn update_one(
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
+    let change_data = ChangeDao::new(
+        &ChangeTable::Record(*record_data.collection_id()),
+        &record_data.id().unwrap(),
+        &ChangeState::Upsert,
+        &record_data.updated_at().unwrap(),
+    );
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
+    }
+
     let mut record = HashMap::with_capacity(record_data.len());
     for (key, value) in record_data.data() {
         let value = match value.to_serde_json() {
@@ -1027,6 +1061,8 @@ async fn delete_one(
         Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
     };
 
+    let deleted_at = Utc::now();
+
     if let Err(err) = RecordDao::db_delete(
         ctx.dao().db(),
         collection_data.id(),
@@ -1036,6 +1072,22 @@ async fn delete_one(
     .await
     {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
+    }
+
+    let change_data = ChangeDao::new(
+        &ChangeTable::Record(*record_data.collection_id()),
+        &record_data.id().unwrap(),
+        &ChangeState::Delete,
+        &deleted_at,
+    );
+    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
+        ctx.dao().db(),
+        change_data,
+        ctx.internal_broadcast(),
+    )
+    .await
+    {
+        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     let record_id = path.record_id().clone();
