@@ -82,7 +82,7 @@ impl ApiRestServer {
                 _ = cancel_token.cancelled() => {}
                 s = server => {
                     if let Err(err) = s {
-                        hb_log::panic(None, &format!("[ApiRestServer] {err}"));
+                        hb_log::panic(None, &format!("[ApiRestServer] Server returned: {err}"));
                     }
                 }
             }

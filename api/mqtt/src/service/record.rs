@@ -31,7 +31,10 @@ pub async fn record_service(ctx: &Arc<ApiMqttCtx>, payload: &Payload) {
             (LogKind::Info, msg)
         }
         Err(err) => {
-            hb_log::error(None, &format!("[ApiMqttClient] {err}"));
+            hb_log::error(
+                None,
+                &format!("[ApiMqttClient] Failed to insert record: {err}"),
+            );
             (LogKind::Error, err.to_string())
         }
     };

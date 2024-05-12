@@ -61,37 +61,36 @@ impl DatabaseMessagingService {
         )
     }
 
-    pub fn run(self) -> JoinHandle<()> {
+    pub async fn run(self) {
         hb_log::info(
             Some("🧩"),
             "[ApiInternalGossip] Running database messaging service",
         );
 
-        tokio::spawn((|| async move {
-            tokio::join!(
-                Self::run_receiver_task(
-                    self.local_id,
-                    self.local_address,
-                    self.config,
-                    self.db.clone(),
-                    self.view.clone(),
-                    self.status.clone(),
-                    self.header_rx,
-                    self.content_rx
-                ),
-                Self::run_sender_task(
-                    self.local_id,
-                    self.local_address,
-                    self.config,
-                    self.db,
-                    self.view,
-                    self.status
-                )
-            );
-        })())
+        tokio::try_join!(
+            Self::run_receiver_task(
+                self.local_id,
+                self.local_address,
+                self.config,
+                self.db.clone(),
+                self.view.clone(),
+                self.status.clone(),
+                self.header_rx,
+                self.content_rx
+            ),
+            Self::run_sender_task(
+                self.local_id,
+                self.local_address,
+                self.config,
+                self.db,
+                self.view,
+                self.status
+            )
+        )
+        .unwrap();
     }
 
-    async fn run_receiver_task(
+    fn run_receiver_task(
         local_id: Uuid,
         local_address: SocketAddr,
         config: DatabaseMessagingConfig,
@@ -100,14 +99,13 @@ impl DatabaseMessagingService {
         status: Arc<Mutex<DatabaseMessagingStatus>>,
         mut header_receiver: HeaderChannelReceiver,
         mut content_receiver: ContentChannelReceiver,
-    ) {
-        loop {
-            tokio::select! {
-                msg = header_receiver.recv() => {
-                    if let Some((sender_address, from, to, header)) = msg {
-                        if to == local_id {
-                            let db = db.clone();
-                            tokio::spawn((|| async move {
+    ) -> JoinHandle<()> {
+        tokio::spawn((|| async move {
+            loop {
+                tokio::select! {
+                    msg = header_receiver.recv() => {
+                        if let Some((sender_address, from, to, header)) = msg {
+                            if to == local_id {
                                 match header {
                                     HeaderMessage::Request {
                                         from_time,
@@ -119,7 +117,7 @@ impl DatabaseMessagingService {
                                             Ok(data) => data,
                                             Err(err) => {
                                                 hb_log::error(None, format!("[ApiInternalGossip] Error select many changes data: {err}"));
-                                                return;
+                                                continue;
                                             }
                                         };
                                         let mut content_changes_data = Vec::with_capacity(changes_data.len());
@@ -163,7 +161,7 @@ impl DatabaseMessagingService {
                                             Ok(data) => data,
                                             Err(err) => {
                                                 hb_log::error(None, format!("[ApiInternalGossip] Error select many changes data: {err}"));
-                                                return;
+                                                continue;
                                             }
                                         };
                                         let mut missing_change_ids = Vec::with_capacity(change_ids.len());
@@ -199,19 +197,17 @@ impl DatabaseMessagingService {
                                         }
                                     }
                                 }
-                            })());
+                            }
                         }
                     }
-                }
-                msg = content_receiver.recv() => {
-                    if let Some((sender_address, from, to, message)) = msg {
-                        if to == local_id {
-                            let db = db.clone();
-                            let view_mutex = view.lock().await;
-                            let view = view_mutex.clone();
-                            let status = status.clone();
-                            drop(view_mutex);
-                            tokio::spawn((|| async move {
+                    msg = content_receiver.recv() => {
+                        if let Some((sender_address, from, to, message)) = msg {
+                            if to == local_id {
+                                let db = db.clone();
+                                let view_mutex = view.lock().await;
+                                let view = view_mutex.clone();
+                                let status = status.clone();
+                                drop(view_mutex);
                                 match message {
                                     ContentMessage::Request { change_ids } => {
                                         hb_log::info(None, &format!("[ApiInternalGossip] Content message request received: sender: {}, from_id: {}, to_id: {}, local_id: {}, change_ids: {} data", sender_address, from, to, local_id, change_ids.len()));
@@ -224,7 +220,7 @@ impl DatabaseMessagingService {
                                             Ok(data) => data,
                                             Err(err) => {
                                                 hb_log::error(None, format!("[ApiInternalGossip] Error select many changes data: {err}"));
-                                                return;
+                                                continue;
                                             }
                                         };
                                         let mut content_changes_data = Vec::with_capacity(changes_data.len());
@@ -238,7 +234,7 @@ impl DatabaseMessagingService {
                                                 Ok(data) => data,
                                                 Err(err) => {
                                                     hb_log::error(None, format!("[ApiInternalGossip] Error convert change dao to content change data: {err}"));
-                                                    return;
+                                                    continue;
                                                 }
                                             };
                                             content_changes_data.push(content_change_data)
@@ -293,7 +289,7 @@ impl DatabaseMessagingService {
                                             );
                                             if let Err(err) = remote_sync_data.db_upsert(&db).await {
                                                 hb_log::error(None, format!("[ApiInternalGossip] Error upsert remote_sync data: {err}"));
-                                                return;
+                                                continue;
                                             }
                                             Self::send_request_header(&local_address, &local_id, &remote_sync_data).await;
                                         } else {
@@ -305,7 +301,7 @@ impl DatabaseMessagingService {
                                         hb_log::info(None, &format!("[ApiInternalGossip] Content message broadcast received: sender: {}, from_id: {}, to_id: {}, local_id: {}, change_data: {} data", sender_address, from, to, local_id, change_data.change_id()));
                                         if let Err(err) = change_data.handle(&db).await {
                                             hb_log::warn(None, format!("[ApiInternalGossip] Error handle content change data: {err}"));
-                                            return;
+                                            continue;
                                         }
                                         let mut selected_remotes = Vec::new();
                                         let mut selecting_count = 0;
@@ -343,72 +339,80 @@ impl DatabaseMessagingService {
                                                     }
                                                     Err(err) => {
                                                         hb_log::warn(None, &format!("[ApiInternalGossip] Failed to get remote sync: {err}"));
-                                                        return;
+                                                        continue;
                                                     }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            })());
+                            }
                         }
                     }
-                }
 
+                }
             }
-        }
+        })())
     }
 
-    async fn run_sender_task(
+    fn run_sender_task(
         local_id: Uuid,
         local_address: SocketAddr,
         config: DatabaseMessagingConfig,
         db: Arc<Db>,
         view: Arc<Mutex<View>>,
         status: Arc<Mutex<DatabaseMessagingStatus>>,
-    ) {
-        loop {
-            let mut status = status.lock().await;
-            if status.allow_send_request_header_attemp() {
-                let view = view.lock().await;
-                if let Some(remote_sync_data) = view.select_remote_sync(&db).await {
-                    match remote_sync_data {
-                        Ok(remote_sync_data) => {
-                            Self::send_request_header(&local_address, &local_id, &remote_sync_data)
+    ) -> JoinHandle<()> {
+        tokio::spawn((|| async move {
+            loop {
+                let mut status = status.lock().await;
+                if status.allow_send_request_header_attemp() {
+                    let view = view.lock().await;
+                    if let Some(remote_sync_data) = view.select_remote_sync(&db).await {
+                        match remote_sync_data {
+                            Ok(remote_sync_data) => {
+                                Self::send_request_header(
+                                    &local_address,
+                                    &local_id,
+                                    &remote_sync_data,
+                                )
                                 .await;
+                            }
+                            Err(err) => {
+                                hb_log::warn(
+                                    None,
+                                    &format!(
+                                        "[ApiInternalGossip] Failed to get remote sync: {err}"
+                                    ),
+                                );
+                            }
                         }
-                        Err(err) => {
-                            hb_log::warn(
-                                None,
-                                &format!("[ApiInternalGossip] Failed to get remote sync: {err}"),
-                            );
-                        }
+                    } else {
+                        hb_log::warn(
+                            None,
+                            "[ApiInternalGossip] No remote found for header message request",
+                        );
                     }
-                } else {
-                    hb_log::warn(
-                        None,
-                        "[ApiInternalGossip] No remote found for header message request",
-                    );
+                    drop(view);
                 }
-                drop(view);
+                drop(status);
+
+                let sleep_duration_deviation = match config.period_deviation() {
+                    0 => 0,
+                    val => rand::thread_rng().gen_range(0..=*val),
+                };
+                let sleep_duration = config.period() + sleep_duration_deviation;
+
+                hb_log::info(
+                    None,
+                    format!(
+                        "[ApiInternalGossip] Next header message request is after {sleep_duration} ms"
+                    ),
+                );
+
+                tokio::time::sleep(Duration::from_millis(sleep_duration)).await;
             }
-            drop(status);
-
-            let sleep_duration_deviation = match config.period_deviation() {
-                0 => 0,
-                val => rand::thread_rng().gen_range(0..=*val),
-            };
-            let sleep_duration = config.period() + sleep_duration_deviation;
-
-            hb_log::info(
-                None,
-                format!(
-                    "[ApiInternalGossip] Next header message request is after {sleep_duration} ms"
-                ),
-            );
-
-            tokio::time::sleep(Duration::from_millis(sleep_duration)).await;
-        }
+        })())
     }
 
     async fn send_request_header(

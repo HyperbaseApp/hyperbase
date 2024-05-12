@@ -106,7 +106,7 @@ impl GossipServerRunner {
                                     match timeout(Duration::from_secs(5), tcp_stream.read_to_end(&mut buf)).await {
                                         Ok(tcp_stream) => tcp_stream,
                                         Err(err) => {
-                                            hb_log::error(None, &format!("[ApiInternalGossip] {err}"));
+                                            hb_log::error(None, &format!("[ApiInternalGossip] Tcp stream timeout reading data source error: {err}"));
                                             return;
                                         }
                                     };
@@ -116,21 +116,21 @@ impl GossipServerRunner {
                                             match Message::from_bytes(&buf) {
                                                 Ok(message) => message.handle(message_handler),
                                                 Err(err) => {
-                                                    hb_log::error(None, &format!("[ApiInternalGossip] {err}"));
+                                                    hb_log::error(None, &format!("[ApiInternalGossip] Error deserializing buffer to message: {err}"));
                                                     return;
                                                 }
                                             };
                                         }
                                     }
                                     Err(err) => {
-                                        hb_log::error(None, &format!("[ApiInternalGossip] {err}"));
+                                        hb_log::error(None, &format!("[ApiInternalGossip] Tcp stream reading data source error: {err}"));
                                         return;
                                     }
                                 }
                             })());
                         }
                         Err(err) => {
-                            hb_log::error(None, &format!("[ApiInternalGossip] {err}"));
+                            hb_log::error(None, &format!("[ApiInternalGossip] Tcp listener error: {err}"));
                             stopping.0 = true;
                         }
                     }

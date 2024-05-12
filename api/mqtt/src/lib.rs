@@ -9,8 +9,8 @@ use rumqttc::v5::{
     mqttbytes::{v5::Packet, QoS},
     AsyncClient, Event, EventLoop, MqttOptions,
 };
-use service::record::record_service;
-use tokio::task::JoinHandle;
+use service::Service;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -24,7 +24,8 @@ pub struct ApiMqttClient {
     eventloop: EventLoop,
     topic: String,
     timeout: Duration,
-    context: Arc<ApiMqttCtx>,
+    service: Service,
+    payload_sender: mpsc::UnboundedSender<Payload>,
 }
 
 impl ApiMqttClient {
@@ -45,12 +46,15 @@ impl ApiMqttClient {
 
         let (client, eventloop) = AsyncClient::new(mqtt_opts, *channel_capacity);
 
+        let (service, payload_sender) = Service::new(Arc::new(ctx));
+
         Self {
             client,
             eventloop,
             topic: topic.to_owned(),
             timeout: *timeout,
-            context: Arc::new(ctx),
+            service,
+            payload_sender,
         }
     }
 
@@ -60,59 +64,66 @@ impl ApiMqttClient {
         tokio::spawn((|| async {})())
     }
 
-    pub fn run(mut self, cancel_token: CancellationToken) -> JoinHandle<()> {
+    pub fn run(self, cancel_token: CancellationToken) -> JoinHandle<()> {
         hb_log::info(Some("💫"), "[ApiMqttClient] Running component");
 
         tokio::spawn((|| async move {
+            let service = self.service.run();
+
             self.client
                 .subscribe(self.topic, QoS::ExactlyOnce)
                 .await
                 .unwrap();
 
-            let mut now = Instant::now();
-
-            loop {
-                tokio::select! {
-                    _ = cancel_token.cancelled() => {
-                        break;
-                    }
-                    _ = tokio::signal::ctrl_c() => {
-                        break;
-                    }
-                    poll_result = self.eventloop.poll() => {
-                        if let Ok(event) = poll_result {
-                            now = Instant::now();
-                            if let Event::Incoming(packet) = &event {
-                                if let Packet::Publish(publish) = packet {
-                                    match serde_json::from_slice::<Payload>(&publish.payload) {
-                                        Ok(payload) => {
-                                            let ctx = self.context.clone();
-                                            let payload = payload.clone();
-                                            tokio::spawn((|| async move {
-                                                record_service(&ctx, &payload).await;
-                                            })());
-                                        }
-                                        Err(err) => hb_log::error(None, &format!("[ApiMqttClient] {err}")),
-                                    };
-                                }
-                            }
-                            continue;
-                        }
+            tokio::select! {
+                _ = cancel_token.cancelled() => {}
+                _ = tokio::signal::ctrl_c() => {}
+                s = service => {
+                    if let Err(err) = s {
+                        hb_log::panic(None, &format!("[ApiMqttClient] Receiver service error: {err}"));
                     }
                 }
-                if Instant::now().duration_since(now) > self.timeout {
-                    hb_log::panic(
-                        None,
-                        &format!(
-                            "[ApiMqttClient] Failed to connect to MQTT broker {:?}",
-                            self.eventloop.options.broker_address()
-                        ),
-                    );
-                }
+                _ = Self::poll(self.eventloop, self.timeout, self.payload_sender) => {}
             }
 
             hb_log::info(None, "[ApiMqttClient] Shutting down component");
             let _ = self.client.disconnect().await;
         })())
+    }
+
+    async fn poll(
+        mut eventloop: EventLoop,
+        timeout: Duration,
+        payload_sender: mpsc::UnboundedSender<Payload>,
+    ) {
+        let mut now = Instant::now();
+
+        loop {
+            if let Ok(event) = eventloop.poll().await {
+                now = Instant::now();
+                if let Event::Incoming(packet) = &event {
+                    if let Packet::Publish(publish) = packet {
+                        match serde_json::from_slice::<Payload>(&publish.payload) {
+                            Ok(payload) => {
+                                if let Err(err) = payload_sender.send(payload) {
+                                    hb_log::error(
+                                        None,
+                                        &format!("[ApiMqttClient] Send payload error: {err}"),
+                                    );
+                                }
+                            }
+                            Err(err) => hb_log::error(
+                                None,
+                                &format!("[ApiMqttClient] Payload deserialize error: {err}"),
+                            ),
+                        };
+                    }
+                }
+                continue;
+            }
+            if Instant::now().duration_since(now) > timeout {
+                hb_log::panic(None, "[ApiMqttClient] Failed to connect to MQTT broker");
+            }
+        }
     }
 }

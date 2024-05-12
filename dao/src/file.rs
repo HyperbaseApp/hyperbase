@@ -132,13 +132,23 @@ impl FileDao {
 
     pub fn full_path(&self, bucket_path: &str) -> Result<PathBuf> {
         let exe_path = std::env::current_exe()?;
-        let exe_path = match exe_path.to_str() {
-            Some(path) => path,
-            None => return Err(Error::msg("Failed to get current executable path")),
-        };
+        let dir_path =
+            match exe_path.parent() {
+                Some(dir_path) => match dir_path.to_str() {
+                    Some(path) => path,
+                    None => return Err(Error::msg(
+                        "Failed to convert directory path of the current executable as a string",
+                    )),
+                },
+                None => {
+                    return Err(Error::msg(
+                        "Failed to get directory path of the current executable",
+                    ))
+                }
+            };
         Ok(PathBuf::from(format!(
             "{}/{}/{}",
-            exe_path, bucket_path, self.id
+            dir_path, bucket_path, self.id
         )))
     }
 
