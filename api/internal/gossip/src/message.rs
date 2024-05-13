@@ -52,19 +52,15 @@ impl Message {
         }
     }
 
-    pub fn as_bytes(&self) -> Result<Vec<u8>>
-    where
-        Self: Serialize,
-    {
-        let bytes = rmp_serde::to_vec(self)?;
-        Ok(bytes)
-    }
-
     pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self>
     where
         Self: Deserialize<'a>,
     {
-        Ok(rmp_serde::from_slice(bytes)?)
+        Ok(bincode::deserialize(bytes)?)
+    }
+
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        Ok(bincode::serialize(self)?)
     }
 }
 

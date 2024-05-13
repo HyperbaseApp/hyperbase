@@ -59,15 +59,15 @@ impl CollectionDao {
         }
     }
 
-    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self>
     where
         Self: Deserialize<'a>,
     {
-        rmp_serde::from_slice(bytes)
+        Ok(bincode::deserialize(bytes)?)
     }
 
-    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
-        rmp_serde::to_vec(self)
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        Ok(bincode::serialize(self)?)
     }
 
     pub fn id(&self) -> &Uuid {
@@ -152,7 +152,6 @@ impl CollectionDao {
                         ColumnKind::Binary
                         | ColumnKind::Varint
                         | ColumnKind::Decimal
-                        | ColumnKind::String
                         | ColumnKind::Json => {
                             return Err(Error::msg(format!(
                                 "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",
@@ -304,7 +303,6 @@ impl CollectionDao {
                         ColumnKind::Binary
                         | ColumnKind::Varint
                         | ColumnKind::Decimal
-                        | ColumnKind::String
                         | ColumnKind::Json => {
                             return Err(Error::msg(format!(
                                 "Field '{}' has type '{}' that doesn't support indexing in the data type implementation of Hyperbase for MySQL",

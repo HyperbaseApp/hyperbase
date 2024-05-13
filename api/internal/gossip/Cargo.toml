@@ -11,10 +11,10 @@ hb_log = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }
+bincode = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
-rmp-serde = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

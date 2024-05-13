@@ -59,15 +59,15 @@ impl FileDao {
         }
     }
 
-    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self, rmp_serde::decode::Error>
+    pub fn from_bytes<'a>(bytes: &'a [u8]) -> Result<Self>
     where
         Self: Deserialize<'a>,
     {
-        rmp_serde::from_slice(bytes)
+        Ok(bincode::deserialize(bytes)?)
     }
 
-    pub fn to_vec(&self) -> Result<Vec<u8>, rmp_serde::encode::Error> {
-        rmp_serde::to_vec(self)
+    pub fn to_vec(&self) -> Result<Vec<u8>> {
+        Ok(bincode::serialize(self)?)
     }
 
     pub fn id(&self) -> &Uuid {
@@ -120,8 +120,8 @@ impl FileDao {
 
     pub async fn populate_file_bytes(&mut self, bucket_path: &str) -> Result<()> {
         let mut file = fs::File::open(&self.full_path(bucket_path)?).await?;
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes).await?;
+        let mut bytes = Vec::with_capacity(file.metadata().await?.len().try_into()?);
+        file.read_exact(&mut bytes).await?;
         self._bytes = Some(bytes);
         Ok(())
     }

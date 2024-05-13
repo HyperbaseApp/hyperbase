@@ -48,6 +48,7 @@ anyhow = "1"
 argon2 = "0.5"
 backtrace = "0.3"
 bigdecimal = { version = "0.4", features = ["serde"] }
+bincode = "1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 duration-str = { version = "0.9", default-features = false, features = [
     "serde",
@@ -65,7 +66,6 @@ lettre = { version = "0.11", default-features = false, features = [
 mime = "0.3"
 num-bigint = { version = "0.4", features = ["serde"] }
 rand = "0.8"
-rmp-serde = "1"
 rumqttc = "0.24"
 scylla = { version = "0.13", features = ["num-bigint-04", "bigdecimal-04"] }
 serde = { version = "1" }

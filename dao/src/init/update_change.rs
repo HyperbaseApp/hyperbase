@@ -301,7 +301,7 @@ impl Db {
                 };
                 let mut last_id = Uuid::nil();
                 loop {
-                    let files_data =
+                    let mut files_data =
                         FileDao::db_select_many_from_updated_at_and_after_id_with_limit_asc(
                             self,
                             &last_updated_at,
@@ -318,7 +318,8 @@ impl Db {
                     }
 
                     let mut changes_data = Vec::with_capacity(files_data.len());
-                    for file_data in &files_data {
+                    for file_data in &mut files_data {
+                        file_data.populate_file_bytes(bucket_data.path()).await?;
                         changes_data.push(ChangeDao::new(
                             &ChangeTable::File(*file_data.bucket_id()),
                             file_data.id(),

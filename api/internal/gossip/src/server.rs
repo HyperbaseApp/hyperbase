@@ -113,6 +113,7 @@ impl GossipServerRunner {
                                 match tcp_stream {
                                     Ok(read) => {
                                         if read > 0 {
+                                            hb_log::info(None, &format!("[ApiInternalGossip] Received tcp stream: {} bytes", buf.len()));
                                             match Message::from_bytes(&buf) {
                                                 Ok(message) => message.handle(message_handler),
                                                 Err(err) => {

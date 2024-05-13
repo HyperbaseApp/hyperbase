@@ -259,26 +259,19 @@ impl DatabaseMessagingService {
                                             Err(err) => hb_log::warn(None, &format!("[ApiInternalGossip] Content message response failed to send to {sender_address} due to error: {err}")),
                                         }
                                     }
-                                    ContentMessage::Response { mut changes_data } => {
+                                    ContentMessage::Response { changes_data } => {
                                         hb_log::info(None, &format!("[ApiInternalGossip] Content message response received: sender: {}, from_id: {}, to_id: {}, local_id: {}, changes_data: {} data", sender_address, from, to, local_id, changes_data.len()));
                                         let mut status_mtx = status.lock().await;
                                         status_mtx.set_to_syncing();
                                         drop(status_mtx);
 
-                                        changes_data.sort_by(|a, b| {
-                                            if a.timestamp() == b.timestamp() {
-                                                a.change_id().cmp(b.change_id())
-                                            } else {
-                                                a.timestamp().cmp(b.timestamp())
-                                            }
-                                        });
                                         let mut last_change_data = None;
                                         for data in &changes_data {
-                                            last_change_data = Some(data);
                                             if let Err(err) = data.handle(&db).await {
                                                 hb_log::warn(None, format!("[ApiInternalGossip] Error handle content change data: {err}"));
                                                 break;
                                             }
+                                            last_change_data = Some(data);
                                         }
                                         if let Some(last_change_data) = last_change_data {
                                             let remote_sync_data = RemoteSyncDao::new(
@@ -298,10 +291,12 @@ impl DatabaseMessagingService {
                                         }
                                     }
                                     ContentMessage::Broadcast { change_data } => {
-                                        hb_log::info(None, &format!("[ApiInternalGossip] Content message broadcast received: sender: {}, from_id: {}, to_id: {}, local_id: {}, change_data: {} data", sender_address, from, to, local_id, change_data.change_id()));
-                                        if let Err(err) = change_data.handle(&db).await {
-                                            hb_log::warn(None, format!("[ApiInternalGossip] Error handle content change data: {err}"));
-                                            continue;
+                                        if from != to {
+                                            hb_log::info(None, &format!("[ApiInternalGossip] Content message broadcast received: sender: {}, from_id: {}, to_id: {}, local_id: {}, change_data: {} data", sender_address, from, to, local_id, change_data.change_id()));
+                                            if let Err(err) = change_data.handle(&db).await {
+                                                hb_log::warn(None, format!("[ApiInternalGossip] Error handle content change data: {err}"));
+                                                continue;
+                                            }
                                         }
                                         let mut selected_remotes = Vec::new();
                                         let mut selecting_count = 0;

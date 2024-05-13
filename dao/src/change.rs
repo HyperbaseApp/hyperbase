@@ -90,6 +90,21 @@ impl ChangeDao {
         }
     }
 
+    pub async fn db_select_by_change_id(db: &Db, change_id: &Uuid) -> Result<Self> {
+        match db {
+            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::PostgresqlDb(db) => {
+                Self::from_postgresdb_model(&db.select_change_by_change_id(change_id).await?)
+            }
+            Db::MysqlDb(db) => {
+                Self::from_mysqldb_model(&db.select_change_by_change_id(change_id).await?)
+            }
+            Db::SqliteDb(db) => {
+                Self::from_sqlitedb_model(&db.select_change_by_change_id(change_id).await?)
+            }
+        }
+    }
+
     pub async fn db_select_last_by_table(db: &Db, table: &ChangeTable) -> Result<Option<Self>> {
         match db {
             Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),

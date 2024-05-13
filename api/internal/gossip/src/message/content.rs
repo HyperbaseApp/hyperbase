@@ -170,6 +170,16 @@ impl ContentChangeModel {
     }
 
     pub async fn handle(&self, db: &Db) -> Result<()> {
+        if ChangeDao::db_select_by_change_id(db, &self.change_id)
+            .await
+            .is_ok()
+        {
+            return Err(Error::msg(format!(
+                "Change data with change_id {} already exists",
+                &self.change_id
+            )));
+        }
+
         let change_data_table = self.table.to_dao();
         let change_data_state = self.state.to_dao();
 

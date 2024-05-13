@@ -133,7 +133,7 @@ impl ColumnKind {
             Self::Binary | Self::Varint | Self::Decimal => ColumnKindMysql::Blob,
             Self::Float => ColumnKindMysql::Float,
             Self::Double => ColumnKindMysql::Double,
-            Self::String => ColumnKindMysql::Text,
+            Self::String => ColumnKindMysql::Varchar255,
             Self::Uuid => ColumnKindMysql::Binary16,
             Self::Date => ColumnKindMysql::Date,
             Self::Time => ColumnKindMysql::Time,

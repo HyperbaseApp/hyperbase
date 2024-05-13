@@ -148,8 +148,15 @@ async fn main() {
             )
             .await;
             api_internal_gossip = Some(gossip_api.0);
-            internal_broadcast =
-                Some(InternalBroadcast::new(gossip_api.1, gossip_api.2, db.clone()).await);
+            internal_broadcast = Some(
+                InternalBroadcast::new(
+                    gossip_api.1,
+                    db.clone(),
+                    config_gossip.host(),
+                    config_gossip.port(),
+                )
+                .await,
+            );
         }
     }
 

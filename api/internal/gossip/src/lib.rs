@@ -1,14 +1,16 @@
-use std::{net::ToSocketAddrs, sync::Arc};
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+};
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 use hb_dao::{change::ChangeDao, local_info::LocalInfoDao, Db};
 use message::content::{ContentChangeModel, ContentChannelSender, ContentMessage};
 use peer::Peer;
 use server::{GossipServer, GossipServerRunner};
-use tokio::{sync::Mutex, task::JoinHandle};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use view::View;
 
 use crate::{
     config::{database_messaging::DatabaseMessagingConfig, peer_sampling::PeerSamplingConfig},
@@ -39,7 +41,7 @@ impl ApiInternalGossip {
         peers: &Option<Vec<String>>,
         view_size: &usize,
         actions_size: &i32,
-    ) -> (Self, Arc<Mutex<View>>, ContentChannelSender) {
+    ) -> (Self, ContentChannelSender) {
         let local_id = match LocalInfoDao::db_select(&db).await {
             Ok(data) => *data.id(),
             Err(_) => {
@@ -78,7 +80,7 @@ impl ApiInternalGossip {
                 local_address,
                 DatabaseMessagingConfig::new(actions_size),
                 db,
-                view.clone(),
+                view,
             );
 
         let server = GossipServer::new(
@@ -97,7 +99,6 @@ impl ApiInternalGossip {
                 database_messaging_service,
                 server,
             },
-            view,
             content_messaging_tx,
         )
     }
@@ -136,36 +137,37 @@ impl ApiInternalGossip {
 
 #[derive(Clone)]
 pub struct InternalBroadcast {
-    view: Arc<Mutex<View>>,
     tx: ContentChannelSender,
     db: Arc<Db>,
     local_id: Uuid,
+    local_address: SocketAddr,
 }
 
 impl InternalBroadcast {
-    pub async fn new(view: Arc<Mutex<View>>, tx: ContentChannelSender, db: Arc<Db>) -> Self {
+    pub async fn new(tx: ContentChannelSender, db: Arc<Db>, host: &str, port: &u16) -> Self {
         let local_info_data = LocalInfoDao::db_select(&db).await.unwrap();
+
+        let local_address = format!("{host}:{port}")
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .unwrap();
+
         Self {
-            view,
             tx,
             db,
             local_id: *local_info_data.id(),
+            local_address,
         }
     }
 
     pub async fn broadcast(&self, change_data: &ChangeDao) -> Result<()> {
-        let view = self.view.lock().await;
-        if let Some(Ok(remote_data)) = view.select_remote_sync(&self.db).await {
-            drop(view);
-            let change_data = ContentChangeModel::from_change_dao(&self.db, change_data).await?;
-            Ok(self.tx.send((
-                *remote_data.remote_address(),
-                self.local_id,
-                *remote_data.remote_id(),
-                ContentMessage::Broadcast { change_data },
-            ))?)
-        } else {
-            Err(Error::msg("Failed to broadcast data to peer"))
-        }
+        let change_data = ContentChangeModel::from_change_dao(&self.db, change_data).await?;
+        Ok(self.tx.send((
+            self.local_address,
+            self.local_id,
+            self.local_id,
+            ContentMessage::Broadcast { change_data },
+        ))?)
     }
 }

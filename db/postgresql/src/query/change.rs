@@ -7,6 +7,7 @@ use crate::{db::PostgresDb, model::change::ChangeModel};
 
 const INSERT_OR_IGNORE: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"timestamp\", \"change_id\") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (\"table\", \"id\", \"state\") DO NOTHING";
 const UPSERT: &str = "INSERT INTO \"changes\" (\"table\", \"id\", \"state\", \"timestamp\", \"change_id\") VALUES ($1, $2, $3, $4, $5) ON CONFLICT (\"table\", \"id\", \"state\") DO UPDATE SET \"state\" = $3, \"timestamp\" = $4, \"change_id\" = $5";
+const SELECT_BY_CHANGE_ID: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"change_id\" = $1";
 const SELECT_LAST_BY_TABLE: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"table\" = $1 ORDER BY \"timestamp\" DESC, \"change_id\" DESC LIMIT 1";
 const SELECT_MANY_BY_CHANGE_IDS_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"change_id\" = ANY($1) ORDER BY \"timestamp\" ASC, \"change_id\" ASC";
 const SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC: &str = "SELECT \"table\", \"id\", \"state\", \"timestamp\", \"change_id\" FROM \"changes\" WHERE \"timestamp\" > $1 OR (\"timestamp\" = $1 AND \"change_id\" > $2) ORDER BY \"timestamp\" ASC, \"change_id\" ASC LIMIT $3";
@@ -19,6 +20,7 @@ pub async fn init(pool: &Pool<Postgres>) {
     tokio::try_join!(
         pool.prepare(INSERT_OR_IGNORE),
         pool.prepare(UPSERT),
+        pool.prepare(SELECT_BY_CHANGE_ID),
         pool.prepare(SELECT_LAST_BY_TABLE),
         pool.prepare(SELECT_MANY_BY_CHANGE_IDS_ASC),
         pool.prepare(SELECT_MANY_FROM_TIMESTAMP_AND_AFTER_CHANGE_ID_WITH_LIMIT_ASC),
@@ -51,6 +53,12 @@ impl PostgresDb {
         )
         .await?;
         Ok(())
+    }
+
+    pub async fn select_change_by_change_id(&self, change_id: &Uuid) -> Result<ChangeModel> {
+        Ok(self
+            .fetch_one(sqlx::query_as(SELECT_BY_CHANGE_ID).bind(change_id))
+            .await?)
     }
 
     pub async fn select_last_change_by_table(&self, table: &str) -> Result<Option<ChangeModel>> {
