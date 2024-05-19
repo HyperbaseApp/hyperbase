@@ -183,6 +183,21 @@ impl ContentChangeModel {
         let change_data_table = self.table.to_dao();
         let change_data_state = self.state.to_dao();
 
+        let change_data = ChangeDao::raw_new(
+            &change_data_table,
+            &self.id,
+            &change_data_state,
+            &self.timestamp,
+            &self.change_id,
+        );
+
+        if ChangeDao::db_select_by_change_id(db, change_data.change_id())
+            .await
+            .is_ok()
+        {
+            return Err(Error::msg("Ignoring old content change model data"));
+        }
+
         match change_data_state {
             ChangeState::Insert => {
                 if let Some(data) = &self.data {
@@ -326,13 +341,6 @@ impl ContentChangeModel {
             },
         }
 
-        let change_data = ChangeDao::raw_new(
-            &change_data_table,
-            &self.id,
-            &change_data_state,
-            &self.timestamp,
-            &self.change_id,
-        );
         change_data.db_upsert(db).await?;
 
         Ok(())

@@ -568,8 +568,20 @@ async fn duplicate_one(
                         )
                     }
                 };
-                let new_record_data =
+                let mut new_record_data =
                     RecordDao::new(created_by, new_collection_data.id(), &record_data.len());
+                for field in new_collection_data.schema_fields().keys() {
+                    let value = match record_data.get(&field) {
+                        Some(value) => value,
+                        None => {
+                            return Response::error_raw(
+                                &StatusCode::INTERNAL_SERVER_ERROR,
+                                &format!("Field '{field}' isn't found in the record"),
+                            )
+                        }
+                    };
+                    new_record_data.upsert(field, value);
+                }
                 if let Err(err) = new_record_data.db_insert(ctx.dao().db()).await {
                     return Response::error_raw(
                         &StatusCode::INTERNAL_SERVER_ERROR,

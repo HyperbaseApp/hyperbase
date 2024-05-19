@@ -50,11 +50,11 @@ backtrace = "0.3"
 bigdecimal = { version = "0.4", features = ["serde"] }
 bincode = "1"
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
-duration-str = { version = "0.9", default-features = false, features = [
+duration-str = { version = "0.10", default-features = false, features = [
     "serde",
 ] }
 futures = "0.3"
-itertools = "0.12"
+itertools = "0.13"
 jsonwebtoken = "9"
 lettre = { version = "0.11", default-features = false, features = [
     "rustls-tls",

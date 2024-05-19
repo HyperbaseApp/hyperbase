@@ -83,7 +83,10 @@ impl ChangeDao {
 
     pub async fn db_upsert(&self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
+            Db::ScyllaDb(_) => {
+                hb_log::warn(None, "Upsert change data is unimplemented in ScyllaDB");
+                Ok(())
+            }
             Db::PostgresqlDb(db) => db.upsert_change(&self.to_postgresdb_model()).await,
             Db::MysqlDb(db) => db.upsert_change(&self.to_mysqldb_model()).await,
             Db::SqliteDb(db) => db.upsert_change(&self.to_sqlitedb_model()).await,
