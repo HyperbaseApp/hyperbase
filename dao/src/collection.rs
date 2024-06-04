@@ -627,6 +627,7 @@ pub struct SchemaFieldProps {
     unique: bool,
     indexed: bool,
     auth_column: bool,
+    hashed: bool,
     hidden: bool,
 }
 
@@ -637,16 +638,21 @@ impl SchemaFieldProps {
         unique: &bool,
         indexed: &bool,
         auth_column: &bool,
+        hashed: &bool,
         hidden: &bool,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        if *hashed && *kind != ColumnKind::String {
+            return Err(Error::msg("Hashed field must be of type string"));
+        }
+        Ok(Self {
             kind: *kind,
             required: *required,
             unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
+            hashed: *hashed,
             hidden: *hidden,
-        }
+        })
     }
 
     pub fn kind(&self) -> &ColumnKind {
@@ -669,6 +675,10 @@ impl SchemaFieldProps {
         &self.auth_column
     }
 
+    pub fn hashed(&self) -> &bool {
+        &self.hashed
+    }
+
     pub fn hidden(&self) -> &bool {
         &self.hidden
     }
@@ -684,6 +694,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hashed: *model.hashed(),
             hidden: *model.hidden(),
         })
     }
@@ -696,6 +707,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hashed,
             &self.hidden,
         )
     }
@@ -711,6 +723,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hashed: *model.hashed(),
             hidden: *model.hidden(),
         })
     }
@@ -723,6 +736,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hashed,
             &self.hidden,
         )
     }
@@ -738,6 +752,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hashed: *model.hashed(),
             hidden: *model.hidden(),
         })
     }
@@ -750,6 +765,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hashed,
             &self.hidden,
         )
     }
@@ -765,6 +781,7 @@ impl SchemaFieldProps {
             unique: *model.unique(),
             indexed: *model.indexed(),
             auth_column: *model.auth_column(),
+            hashed: *model.hashed(),
             hidden: *model.hidden(),
         })
     }
@@ -777,6 +794,7 @@ impl SchemaFieldProps {
             &self.unique,
             &self.indexed,
             &self.auth_column,
+            &self.hashed,
             &self.hidden,
         )
     }

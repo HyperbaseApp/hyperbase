@@ -218,6 +218,7 @@ pub struct SchemaFieldPropsJson {
     unique: Option<bool>,
     indexed: Option<bool>,
     auth_column: Option<bool>,
+    hashed: Option<bool>,
     hidden: Option<bool>,
 }
 
@@ -228,6 +229,7 @@ impl SchemaFieldPropsJson {
         unique: &Option<bool>,
         indexed: &Option<bool>,
         auth_column: &Option<bool>,
+        hashed: &Option<bool>,
         hidden: &Option<bool>,
     ) -> Self {
         Self {
@@ -236,6 +238,7 @@ impl SchemaFieldPropsJson {
             unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
+            hashed: *hashed,
             hidden: *hidden,
         }
     }
@@ -258,6 +261,10 @@ impl SchemaFieldPropsJson {
 
     pub fn auth_column(&self) -> &Option<bool> {
         &self.auth_column
+    }
+
+    pub fn hashed(&self) -> &Option<bool> {
+        &self.hashed
     }
 
     pub fn hidden(&self) -> &Option<bool> {

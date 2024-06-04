@@ -71,7 +71,7 @@ scylla = { version = "0.13", features = ["num-bigint-04", "bigdecimal-04"] }
 serde = { version = "1" }
 serde_json = { version = "1" }
 serde_with = "3"
-serde_yaml = "0.9"
+serde_yaml_ng = "0.10"
 sqlx = { version = "0.7", features = [
     "runtime-tokio",
     "tls-rustls",

@@ -74,5 +74,5 @@ impl Config {
 
 pub fn from_path(path: &Path) -> Config {
     let file = File::open(path).expect("");
-    serde_yaml::from_reader::<_, Config>(file).unwrap()
+    serde_yaml_ng::from_reader::<_, Config>(file).unwrap()
 }

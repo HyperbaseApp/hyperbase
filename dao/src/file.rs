@@ -119,7 +119,7 @@ impl FileDao {
     }
 
     pub async fn populate_file_bytes(&mut self, bucket_path: &str) -> Result<()> {
-        let mut file = fs::File::open(&self.full_path(bucket_path)?).await?;
+        let mut file = fs::File::open(&Self::full_path(bucket_path, &self.id)?).await?;
         let mut bytes = Vec::with_capacity(file.metadata().await?.len().try_into()?);
         file.read_exact(&mut bytes).await?;
         self._bytes = Some(bytes);
@@ -130,7 +130,7 @@ impl FileDao {
         self._bytes = None;
     }
 
-    pub fn full_path(&self, bucket_path: &str) -> Result<PathBuf> {
+    pub fn full_path(bucket_path: &str, id: &Uuid) -> Result<PathBuf> {
         let exe_path = std::env::current_exe()?;
         let dir_path =
             match exe_path.parent() {
@@ -148,19 +148,18 @@ impl FileDao {
             };
         Ok(PathBuf::from(format!(
             "{}/{}/{}",
-            dir_path, bucket_path, self.id
+            dir_path, bucket_path, id
         )))
     }
 
     pub async fn save(&self, db: &Db, bucket_path: &str, path: impl AsRef<Path>) -> Result<()> {
-        fs::copy(path, &self.full_path(bucket_path)?).await?;
-
+        fs::copy(path, &Self::full_path(bucket_path, &self.id)?).await?;
         self.db_insert(db).await
     }
 
     pub async fn save_from_bytes(&self, db: &Db, bucket_path: &str) -> Result<()> {
         if let Some(bytes) = &self._bytes {
-            let mut file = fs::File::create(self.full_path(bucket_path)?).await?;
+            let mut file = fs::File::create(&Self::full_path(bucket_path, &self.id)?).await?;
             file.write_all(bytes).await?;
             file.flush().await?;
 
@@ -171,13 +170,7 @@ impl FileDao {
     }
 
     pub async fn delete(db: &Db, bucket_data: &BucketDao, id: &Uuid) -> Result<()> {
-        let exe_path = std::env::current_exe()?;
-        let exe_path = match exe_path.to_str() {
-            Some(path) => path,
-            None => return Err(Error::msg("Failed to get current executable path")),
-        };
-        fs::remove_file(&format!("{}/{}/{}", exe_path, bucket_data.path(), id)).await?;
-
+        fs::remove_file(&Self::full_path(bucket_data.path(), id)?).await?;
         Self::db_delete(db, bucket_data.id(), id).await
     }
 

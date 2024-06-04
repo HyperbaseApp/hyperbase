@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use actix_web::{http::StatusCode, web, HttpResponse, HttpResponseBuilder};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use ahash::{HashSet, HashSetExt};
+use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
 use hb_api_websocket::message::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
     admin::AdminDao,
@@ -308,37 +308,51 @@ async fn token_based(
 
         let mut record_fields = HashSet::with_capacity(data.data().as_ref().unwrap().len() + 1);
         record_fields.insert("_id");
+        let mut hashed_fields = HashMap::new();
         let mut record_filter_childs = Vec::with_capacity(data.data().as_ref().unwrap().len());
 
         for (field, props) in collection_data.schema_fields() {
             if *props.auth_column() {
                 if let Some(value) = data.data().as_ref().unwrap().get(field) {
                     record_fields.insert(field.as_str());
-                    let schema_field = match collection_data.schema_fields().get(field) {
-                        Some(schema_field) => schema_field,
-                        None => {
+                    if *props.hashed() {
+                        if let Some(value_str) = value.as_str() {
+                            hashed_fields.insert(field.as_str(), value_str);
+                        } else {
                             return Response::error_raw(
                                 &StatusCode::BAD_REQUEST,
-                                &format!("Field {field} doesn't exist in the collection"),
-                            )
+                                &format!(
+                                    "Field {field} must be of type string because it is hashed"
+                                ),
+                            );
                         }
-                    };
-                    let column_value =
-                        match ColumnValue::from_serde_json(schema_field.kind(), value) {
-                            Ok(column_value) => column_value,
-                            Err(err) => {
+                    } else {
+                        let schema_field = match collection_data.schema_fields().get(field) {
+                            Some(schema_field) => schema_field,
+                            None => {
                                 return Response::error_raw(
                                     &StatusCode::BAD_REQUEST,
-                                    &err.to_string(),
+                                    &format!("Field {field} doesn't exist in the collection"),
                                 )
                             }
                         };
-                    record_filter_childs.push(RecordFilter::new(
-                        &Some(field.to_owned()),
-                        "=",
-                        &Some(column_value),
-                        &None,
-                    ));
+                        let column_value =
+                            match ColumnValue::from_serde_json(schema_field.kind(), value) {
+                                Ok(column_value) => column_value,
+                                Err(err) => {
+                                    return Response::error_raw(
+                                        &StatusCode::BAD_REQUEST,
+                                        &err.to_string(),
+                                    )
+                                }
+                            };
+                        record_filter_childs.push(RecordFilter::new(
+                            &Some(field.to_owned()),
+                            "=",
+                            &Some(column_value),
+                            &None,
+                        ));
+                    }
                 } else {
                     return Response::error_raw(
                         &StatusCode::BAD_REQUEST,
@@ -381,6 +395,28 @@ async fn token_based(
             );
         }
 
+        for (field, value) in hashed_fields {
+            if let Some(data_value) = records_data[0].get(field) {
+                if let ColumnValue::String(data_value) = data_value {
+                    if let Some(data_value) = data_value {
+                        if ctx
+                            .hash()
+                            .argon2()
+                            .verify_password(value, data_value)
+                            .is_ok()
+                        {
+                            continue;
+                        }
+                    }
+                } else {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Field {field} must be of type string because it is hashed"),
+                    );
+                }
+            }
+            return Response::error_raw(&StatusCode::BAD_REQUEST, "Incorrect authentication data");
+        }
         let record_id = if let Some(id) = records_data[0].id() {
             id
         } else {

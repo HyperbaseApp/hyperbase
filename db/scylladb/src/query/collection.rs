@@ -24,7 +24,7 @@ pub async fn init(cached_session: &CachingSession) {
     cached_session
         .get_session()
         .query(
-            "CREATE TYPE IF NOT EXISTS \"hyperbase\".\"schema_field_props\" (\"kind\" text, \"internal_kind\" text, \"required\" boolean, \"unique\" boolean, \"indexed\" boolean, \"auth_column\" boolean, \"hidden\" boolean)",
+            "CREATE TYPE IF NOT EXISTS \"hyperbase\".\"schema_field_props\" (\"kind\" text, \"internal_kind\" text, \"required\" boolean, \"unique\" boolean, \"indexed\" boolean, \"auth_column\" boolean, \"hashed\" boolean, \"hidden\" boolean)",
             &[],
         )
         .await

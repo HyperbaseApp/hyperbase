@@ -119,22 +119,27 @@ async fn insert_one(
                 &format!("Field '{field}' must be required because it is in the indexes"),
             );
         }
-        schema_fields.insert(
-            field.to_owned(),
-            SchemaFieldProps::new(
-                &match ColumnKind::from_str(props.kind()) {
-                    Ok(kind) => kind,
-                    Err(err) => {
-                        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string())
-                    }
-                },
-                &props.required().unwrap_or(false),
-                &props.unique().unwrap_or(false),
-                &props.indexed().unwrap_or(false),
-                &props.auth_column().unwrap_or(false),
-                &props.hidden().unwrap_or(false),
-            ),
-        );
+        let schema_field_props = match SchemaFieldProps::new(
+            &match ColumnKind::from_str(props.kind()) {
+                Ok(kind) => kind,
+                Err(err) => return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string()),
+            },
+            &props.required().unwrap_or(false),
+            &props.unique().unwrap_or(false),
+            &props.indexed().unwrap_or(false),
+            &props.auth_column().unwrap_or(false),
+            &props.hashed().unwrap_or(false),
+            &props.hidden().unwrap_or(false),
+        ) {
+            Ok(props) => props,
+            Err(err) => {
+                return Response::error_raw(
+                    &StatusCode::BAD_REQUEST,
+                    &format!("Error in field '{field}': {err}"),
+                )
+            }
+        };
+        schema_fields.insert(field.to_owned(), schema_field_props);
     }
 
     let collection_data = CollectionDao::new(
@@ -185,6 +190,7 @@ async fn insert_one(
                             &Some(*props.unique()),
                             &Some(*props.indexed()),
                             &Some(*props.auth_column()),
+                            &Some(*props.hashed()),
                             &Some(*props.hidden()),
                         ),
                     )
@@ -266,6 +272,7 @@ async fn find_one(
                             &Some(*value.unique()),
                             &Some(*value.indexed()),
                             &Some(*value.auth_column()),
+                            &Some(*value.hashed()),
                             &Some(*value.hidden()),
                         ),
                     )
@@ -436,25 +443,33 @@ async fn update_one(
                     &format!("Field '{field}' should only have lowercase English letters and an optional underscore (_) after the first character"),
                 );
             }
-            schema_fields.insert(
-                field.to_owned(),
-                SchemaFieldProps::new(
-                    &match ColumnKind::from_str(props.kind()) {
-                        Ok(kind) => kind,
-                        Err(err) => {
-                            return Response::error_raw(
-                                &StatusCode::INTERNAL_SERVER_ERROR,
-                                &err.to_string(),
-                            )
-                        }
-                    },
-                    &props.required().unwrap_or(false),
-                    &props.unique().unwrap_or(false),
-                    &props.indexed().unwrap_or(false),
-                    &props.auth_column().unwrap_or(false),
-                    &props.hidden().unwrap_or(false),
-                ),
-            );
+            let schema_field_kind = match ColumnKind::from_str(props.kind()) {
+                Ok(kind) => kind,
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::INTERNAL_SERVER_ERROR,
+                        &err.to_string(),
+                    )
+                }
+            };
+            let schema_field_props = match SchemaFieldProps::new(
+                &schema_field_kind,
+                &props.required().unwrap_or(false),
+                &props.unique().unwrap_or(false),
+                &props.indexed().unwrap_or(false),
+                &props.auth_column().unwrap_or(false),
+                &props.hashed().unwrap_or(false),
+                &props.hidden().unwrap_or(false),
+            ) {
+                Ok(props) => props,
+                Err(err) => {
+                    return Response::error_raw(
+                        &StatusCode::BAD_REQUEST,
+                        &format!("Error in field '{field}': {err}"),
+                    )
+                }
+            };
+            schema_fields.insert(field.to_owned(), schema_field_props);
         }
         collection_data.update_schema_fields(&schema_fields);
     }
@@ -510,6 +525,7 @@ async fn update_one(
                             &Some(*value.unique()),
                             &Some(*value.indexed()),
                             &Some(*value.auth_column()),
+                            &Some(*value.hashed()),
                             &Some(*value.hidden()),
                         ),
                     )
@@ -678,6 +694,7 @@ async fn find_many(
                                     &Some(*value.unique()),
                                     &Some(*value.indexed()),
                                     &Some(*value.auth_column()),
+                                    &Some(*value.hashed()),
                                     &Some(*value.hidden()),
                                 ),
                             )

@@ -87,6 +87,7 @@ pub struct SchemaFieldPropsModel {
     unique: bool,
     indexed: bool,
     auth_column: bool,
+    hashed: bool,
     hidden: bool,
 }
 
@@ -98,6 +99,7 @@ impl SchemaFieldPropsModel {
         unique: &bool,
         indexed: &bool,
         auth_column: &bool,
+        hashed: &bool,
         hidden: &bool,
     ) -> Self {
         Self {
@@ -107,6 +109,7 @@ impl SchemaFieldPropsModel {
             unique: *unique,
             indexed: *indexed,
             auth_column: *auth_column,
+            hashed: *hashed,
             hidden: *hidden,
         }
     }
@@ -133,6 +136,10 @@ impl SchemaFieldPropsModel {
 
     pub fn auth_column(&self) -> &bool {
         &self.auth_column
+    }
+
+    pub fn hashed(&self) -> &bool {
+        &self.hashed
     }
 
     pub fn hidden(&self) -> &bool {

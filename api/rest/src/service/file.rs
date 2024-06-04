@@ -406,7 +406,7 @@ async fn head_find_one(
         }
     }
 
-    let file_path = match file_data.full_path(bucket_data.path()) {
+    let file_path = match FileDao::full_path(bucket_data.path(), file_data.id()) {
         Ok(path) => path,
         Err(err) => {
             return Response::error_raw(
@@ -627,7 +627,7 @@ async fn find_one(
             ),
         )
     } else {
-        let file_path = match file_data.full_path(bucket_data.path()) {
+        let file_path = match FileDao::full_path(bucket_data.path(), file_data.id()) {
             Ok(path) => path,
             Err(err) => {
                 return Response::error_raw(
