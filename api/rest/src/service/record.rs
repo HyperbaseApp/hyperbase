@@ -821,50 +821,71 @@ async fn update_one(
                     );
                 }
             }
+            let mut is_skip = false;
             let mut value = value.clone();
             if *field_props.hashed() {
-                let value_str = match value.as_str() {
-                    Some(val) => val,
-                    None => {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            &format!(
-                                "Field {field_name} must be of type string because it is hashed"
-                            ),
-                        )
+                if let Some(prev_value) = record_data.get(field_name) {
+                    if let ColumnValue::String(Some(prev_value)) = prev_value {
+                        match value.as_str() {
+                            Some(new_value) => {
+                                if !new_value.is_empty() {
+                                    if new_value == prev_value {
+                                        is_skip = true;
+                                    } else {
+                                        match ctx.hash().argon2().verify_password(new_value, prev_value) {
+                                            Ok(_) => {
+                                                is_skip = true;
+                                            },
+                                            Err(_) => {
+                                                let value_hashed = match ctx.hash().argon2().hash_password(new_value.as_bytes())
+                                                {
+                                                    Ok(val) => val.to_string(),
+                                                    Err(err) => {
+                                                        return Response::error_raw(
+                                                            &StatusCode::INTERNAL_SERVER_ERROR,
+                                                            &format!("Failed to hash value of field '{field_name}': {err}"),
+                                                        )
+                                                    }
+                                                };
+                                                value = match serde_json::from_str::<serde_json::Value>(&format!("\"{value_hashed}\""))
+                                                {
+                                                    Ok(val) => val,
+                                                    Err(err) => return Response::error_raw(
+                                                        &StatusCode::INTERNAL_SERVER_ERROR,
+                                                        &format!("Failed to convert value of field '{field_name} from str to serde_json::Value': {err}"),
+                                                    ),
+                                                }
+                                            },
+                                        }
+                                    }
+                                }
+                            }
+                            None => {
+                                return Response::error_raw(
+                                    &StatusCode::BAD_REQUEST,
+                                    &format!(
+                                        "Field {field_name} must be of type string because it is hashed"
+                                    ),
+                                )
+                            }
+                        };
                     }
-                };
-                let value_hashed = match ctx.hash().argon2().hash_password(value_str.as_bytes()) {
-                    Ok(val) => val.to_string(),
-                    Err(err) => {
-                        return Response::error_raw(
-                            &StatusCode::INTERNAL_SERVER_ERROR,
-                            &format!("Failed to hash value of field '{field_name}': {err}"),
-                        )
-                    }
-                };
-                value = match
-                    serde_json::from_str::<serde_json::Value>(&format!("\"{value_hashed}\""))
-                {
-                    Ok(val) => val,
-                    Err(err) => return Response::error_raw(
-                        &StatusCode::INTERNAL_SERVER_ERROR,
-                        &format!("Failed to convert value of field '{field_name} from str to serde_json::Value': {err}"),
-                    ),
                 }
             }
-            record_data.upsert(
-                field_name,
-                &match ColumnValue::from_serde_json(field_props.kind(), &value) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        return Response::error_raw(
-                            &StatusCode::BAD_REQUEST,
-                            &format!("Error in field '{field_name}': {err}"),
-                        )
-                    }
-                },
-            );
+            if !is_skip {
+                record_data.upsert(
+                    field_name,
+                    &match ColumnValue::from_serde_json(field_props.kind(), &value) {
+                        Ok(value) => value,
+                        Err(err) => {
+                            return Response::error_raw(
+                                &StatusCode::BAD_REQUEST,
+                                &format!("Error in field '{field_name}': {err}"),
+                            )
+                        }
+                    },
+                );
+            }
         }
     }
 
