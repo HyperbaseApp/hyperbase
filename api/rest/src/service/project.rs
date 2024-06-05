@@ -667,8 +667,17 @@ async fn duplicate_one(
                     file_data.size(),
                     file_data.public(),
                 );
+                let file_data_path = match FileDao::full_path(bucket_data.path(), file_data.id()) {
+                    Ok(path) => path,
+                    Err(err) => {
+                        return Response::error_raw(
+                            &StatusCode::INTERNAL_SERVER_ERROR,
+                            &err.to_string(),
+                        )
+                    }
+                };
                 if let Err(err) = new_file_data
-                    .save(ctx.dao().db(), new_bucket_data.path(), bucket_data.path())
+                    .save(ctx.dao().db(), new_bucket_data.path(), &file_data_path)
                     .await
                 {
                     return Response::error_raw(
