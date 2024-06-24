@@ -8,7 +8,6 @@ authors = ["Muhammad Naufal Hilmy Makarim <mail@hilmy.dev>"]
 [dependencies]
 hb_log = { workspace = true }
 
-anyhow = { workspace = true }
 lettre = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

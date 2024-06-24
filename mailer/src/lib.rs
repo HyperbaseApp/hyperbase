@@ -1,4 +1,3 @@
-use anyhow::Result;
 use lettre::{
     message::{Mailbox, MessageBuilder},
     transport::smtp::authentication::Credentials,
@@ -40,18 +39,6 @@ impl Mailer {
             },
             sender,
         )
-    }
-
-    pub fn send_mail(&self, payload: &MailPayload) -> Result<()> {
-        self.smtp_transport.send(
-            &self
-                .message_builder
-                .to_owned()
-                .to(payload.to.parse()?)
-                .subject(&payload.subject)
-                .body(payload.body.to_string())?,
-        )?;
-        Ok(())
     }
 
     pub fn run_none() -> JoinHandle<()> {
