@@ -291,7 +291,10 @@ async fn insert_one(
         }
     }
 
-    if let Err(err) = record_data.db_insert(ctx.dao().db()).await {
+    if let Err(err) = record_data
+        .db_insert(ctx.dao().db(), &Some(collection_data))
+        .await
+    {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
@@ -342,7 +345,7 @@ async fn insert_one(
         };
 
         if let Err(err) = ctx.websocket().handler().broadcast(WebSocketMessage::new(
-            WebSocketTarget::Collection(*collection_data.id()),
+            WebSocketTarget::Collection(*path.collection_id()),
             Some(created_by),
             WebSocketMessageKind::InsertOne,
             record,

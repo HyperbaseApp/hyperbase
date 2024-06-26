@@ -187,7 +187,11 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
         }
     }
 
-    record_data.db_insert(ctx.dao().db()).await?;
+    let collection_id = collection_data.id().to_owned();
+
+    record_data
+        .db_insert(ctx.dao().db(), &Some(collection_data))
+        .await?;
 
     let record_id = if let Some(id) = record_data.id() {
         id
@@ -229,7 +233,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
 
         if let Err(err) = websocket_broadcast(
             &ws_broadcaster_chan,
-            WebSocketTarget::Collection(*collection_data.id()),
+            WebSocketTarget::Collection(collection_id),
             Some(created_by),
             WebSocketMessageKind::InsertOne,
             record,

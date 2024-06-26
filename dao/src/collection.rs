@@ -136,15 +136,6 @@ impl CollectionDao {
         let mut create_unique_indexes_fut = Vec::with_capacity(self.schema_fields.len());
 
         match db {
-            Db::ScyllaDb(_) => {
-                for (field, props) in &self.schema_fields {
-                    if props.unique {
-                        return Err(Error::msg(format!(
-                            "Field '{field}' requires unique index but ScyllaDB doesn't support unique indexes"
-                        )));
-                    }
-                }
-            }
             Db::MysqlDb(_) => {
                 for (field, props) in &self.schema_fields {
                     if props.unique || props.indexed {
@@ -287,15 +278,6 @@ impl CollectionDao {
 
     async fn db_update_prepare(&mut self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(_) => {
-                for (field, props) in &self.schema_fields {
-                    if props.unique {
-                        return Err(Error::msg(format!(
-                            "Field '{field}' requires unique index but ScyllaDB doesn't support unique indexes"
-                        )));
-                    }
-                }
-            }
             Db::MysqlDb(_) => {
                 for (field, props) in &self.schema_fields {
                     if props.indexed {

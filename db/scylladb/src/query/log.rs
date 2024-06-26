@@ -9,7 +9,7 @@ const SELECT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT \"id\", \"created_a
 const COUNT_MANY_BY_ADMIN_ID_AND_PROJECT_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"logs\" WHERE \"admin_id\" = ? AND \"project_id\" = ?";
 
 pub async fn init(cached_session: &CachingSession, ttl: &u32) {
-    hb_log::info(Some("🔧"), "[ScyllaDB] logs up logs table");
+    hb_log::info(Some("🔧"), "[ScyllaDB] Setting up logs table");
 
     cached_session.get_session().query(format!("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"logs\" (\"id\" uuid, \"created_at\" timestamp, \"admin_id\" uuid, \"project_id\" uuid, \"kind\" text, \"message\" text, PRIMARY KEY ((\"admin_id\", \"project_id\"), \"id\")) WITH default_time_to_live = {} AND CLUSTERING ORDER BY (\"id\" DESC)", ttl), &[]).await.unwrap();
 

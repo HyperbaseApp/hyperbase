@@ -34,7 +34,10 @@ use hb_db_scylladb::{
             LOGICAL_OPERATOR as SCYLLA_LOGICAL_OPERATOR,
         },
     },
-    query::{record as scylla_record, system::COUNT_TABLE as SCYLLA_COUNT_TABLE},
+    query::{
+        record::{self as scylla_record},
+        system::COUNT_TABLE as SCYLLA_COUNT_TABLE,
+    },
 };
 use hb_db_sqlite::{
     db::SqliteDb,
@@ -428,9 +431,9 @@ impl RecordDao {
         }
     }
 
-    pub async fn db_insert(&self, db: &Db) -> Result<()> {
+    pub async fn db_insert(&self, db: &Db, collection_data: &Option<CollectionDao>) -> Result<()> {
         match db {
-            Db::ScyllaDb(db) => Self::scylladb_insert(self, db).await,
+            Db::ScyllaDb(db) => Self::scylladb_insert(self, db, collection_data).await,
             Db::PostgresqlDb(db) => Self::postgresdb_insert(self, db).await,
             Db::MysqlDb(db) => Self::mysqldb_insert(self, db).await,
             Db::SqliteDb(db) => Self::sqlitedb_insert(self, db).await,
@@ -1191,7 +1194,41 @@ impl RecordDao {
         Ok(())
     }
 
-    async fn scylladb_insert(&self, db: &ScyllaDb) -> Result<()> {
+    async fn scylladb_insert(
+        &self,
+        db: &ScyllaDb,
+        collection_data: &Option<CollectionDao>,
+    ) -> Result<()> {
+        // Check duplicate column if set to unique
+        if let Some(collection_data) = collection_data {
+            for (field, props) in collection_data.schema_fields() {
+                if *props.unique() {
+                    if let Some(value) = self.data.get(field) {
+                        let mut columns = Vec::with_capacity(collection_data.schema_fields().len());
+                        for column in collection_data.schema_fields().keys() {
+                            columns.push(column.as_str());
+                        }
+                        let filter = format!("\"{field}\" = ?");
+                        let query_count =
+                            scylla_record::count(&self.table_name, &filter, &Vec::new());
+                        let mut count_values =
+                            Vec::<Box<dyn SerializeCql + Send + Sync>>::with_capacity(2);
+                        count_values.push(value.to_scylladb_model()?);
+                        let count = db
+                            .execute(&query_count, &count_values)
+                            .await?
+                            .first_row_typed::<(i64,)>()?
+                            .0;
+                        if count > 0 {
+                            return Err(Error::msg(format!(
+                                "Duplicate value in field '{field}' violates unique constraint"
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+
         let mut data = self.data.to_owned();
         data.insert(
             "_collection_id".to_owned(),

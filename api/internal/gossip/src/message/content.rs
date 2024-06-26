@@ -246,7 +246,7 @@ impl ContentChangeModel {
                             } else {
                                 return Err(Error::msg("Record data must contains _id field"));
                             }
-                            record_data.db_insert(db).await?;
+                            record_data.db_insert(db, &None).await?;
                         }
                         ChangeTable::Bucket => {
                             let bucket_data = BucketDao::from_bytes(data)?;

@@ -582,7 +582,7 @@ async fn duplicate_one(
                     };
                     new_record_data.upsert(field, value);
                 }
-                if let Err(err) = new_record_data.db_insert(ctx.dao().db()).await {
+                if let Err(err) = new_record_data.db_insert(ctx.dao().db(), &None).await {
                     return Response::error_raw(
                         &StatusCode::INTERNAL_SERVER_ERROR,
                         &err.to_string(),
