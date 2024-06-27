@@ -2378,9 +2378,10 @@ impl RecordFilters {
             } else {
                 let field = f.field.as_ref().unwrap();
                 if SCYLLA_COMPARISON_OPERATOR.contains(&op.as_str()) {
-                    filter += &format!("\"{}\" {}", field, &op);
                     if f.value.is_some() {
-                        filter += " ?";
+                        filter += &format!("\"{}\" {} ?", field, &op);
+                    } else {
+                        return Err(Error::msg(format!("The 'value' field is required")));
                     }
                 } else {
                     return Err(Error::msg(format!(

@@ -158,9 +158,9 @@ impl FindManyRecordFiltersReqJson {
         let mut filters = Vec::with_capacity(self.0.len());
         for f in &self.0 {
             if (f.field.is_some() || f.value.is_some()) && f.children.is_some() {
-                return Err(Error::msg("Wrong filter format. If 'children' field exists, then 'name' and 'value' fields must not exist"));
+                return Err(Error::msg("Wrong filter format. If 'children' field exists, then 'field' and 'value' fields must not exist"));
             } else if f.children.is_none() && f.field.is_none() {
-                return Err(Error::msg("Wrong filter format. If 'children' field does not exist, then 'name' field must exist"));
+                return Err(Error::msg("Wrong filter format. If 'children' field does not exist, then 'field' field must exist"));
             }
             let schema_field_kind = match &f.field {
                 Some(field) => match collection_data.schema_fields().get(field) {
