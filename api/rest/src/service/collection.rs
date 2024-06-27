@@ -1,11 +1,9 @@
 use actix_web::{http::StatusCode, web, HttpRequest, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt};
-use chrono::Utc;
 use hb_api_websocket::{message::Target, session::UserSession};
 use hb_dao::{
     admin::AdminDao,
-    change::{ChangeDao, ChangeState, ChangeTable},
     collection::{CollectionDao, SchemaFieldProps},
     project::ProjectDao,
     token::TokenDao,
@@ -24,7 +22,6 @@ use crate::{
         },
         PaginationRes, Response,
     },
-    util,
 };
 
 pub fn collection_api(cfg: &mut web::ServiceConfig) {
@@ -151,22 +148,6 @@ async fn insert_one(
     );
     if let Err(err) = collection_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Collection,
-        collection_data.id(),
-        &ChangeState::Insert,
-        &collection_data.created_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -486,22 +467,6 @@ async fn update_one(
         if let Err(err) = collection_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::Collection,
-            collection_data.id(),
-            &ChangeState::Update,
-            &collection_data.updated_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-        }
     }
 
     Response::data(
@@ -586,26 +551,8 @@ async fn delete_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, "Project id does not match");
     }
 
-    let deleted_at = Utc::now();
-
     if let Err(err) = CollectionDao::db_delete(ctx.dao().db(), path.collection_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Collection,
-        collection_data.id(),
-        &ChangeState::Delete,
-        &deleted_at,
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(

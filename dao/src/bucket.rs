@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::future;
 use hb_db_mysql::model::bucket::BucketModel as BucketMysqlModel;
@@ -106,15 +106,6 @@ impl BucketDao {
         }
     }
 
-    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.upsert_bucket(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.upsert_bucket(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.upsert_bucket(&self.to_sqlitedb_model()).await,
-        }
-    }
-
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_bucket(id).await?),
@@ -152,53 +143,6 @@ impl BucketDao {
             }
             Db::SqliteDb(db) => {
                 let buckets = db.select_many_buckets_by_project_id(project_id).await?;
-                let mut buckets_data = Vec::with_capacity(buckets.len());
-                for bucket in &buckets {
-                    buckets_data.push(Self::from_sqlitedb_model(bucket));
-                }
-                Ok(buckets_data)
-            }
-        }
-    }
-
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let buckets = db
-                    .select_many_buckets_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut buckets_data = Vec::with_capacity(buckets.len());
-                for bucket in &buckets {
-                    buckets_data.push(Self::from_postgresdb_model(bucket));
-                }
-                Ok(buckets_data)
-            }
-            Db::MysqlDb(db) => {
-                let buckets = db
-                    .select_many_buckets_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut buckets_data = Vec::with_capacity(buckets.len());
-                for bucket in &buckets {
-                    buckets_data.push(Self::from_mysqldb_model(bucket));
-                }
-                Ok(buckets_data)
-            }
-            Db::SqliteDb(db) => {
-                let buckets = db
-                    .select_many_buckets_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
                 let mut buckets_data = Vec::with_capacity(buckets.len());
                 for bucket in &buckets {
                     buckets_data.push(Self::from_sqlitedb_model(bucket));

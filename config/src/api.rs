@@ -5,17 +5,12 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ApiConfig {
-    internal: Option<ApiInternalConfig>,
     rest: ApiRestConfig,
     websocket: ApiWebSocketConfig,
     mqtt: Option<ApiMqttConfig>,
 }
 
 impl ApiConfig {
-    pub fn internal(&self) -> &Option<ApiInternalConfig> {
-        &self.internal
-    }
-
     pub fn rest(&self) -> &ApiRestConfig {
         &self.rest
     }
@@ -26,48 +21,6 @@ impl ApiConfig {
 
     pub fn mqtt(&self) -> &Option<ApiMqttConfig> {
         &self.mqtt
-    }
-}
-
-#[derive(Deserialize)]
-pub struct ApiInternalConfig {
-    gossip: Option<ApiGossipConfig>,
-}
-
-impl ApiInternalConfig {
-    pub fn gossip(&self) -> &Option<ApiGossipConfig> {
-        &self.gossip
-    }
-}
-
-#[derive(Deserialize)]
-pub struct ApiGossipConfig {
-    host: String,
-    port: u16,
-    peers: Option<Vec<String>>,
-    view_size: usize,
-    actions_size: i32,
-}
-
-impl ApiGossipConfig {
-    pub fn host(&self) -> &str {
-        &self.host
-    }
-
-    pub fn port(&self) -> &u16 {
-        &self.port
-    }
-
-    pub fn peers(&self) -> &Option<Vec<String>> {
-        &self.peers
-    }
-
-    pub fn view_size(&self) -> &usize {
-        &self.view_size
-    }
-
-    pub fn actions_size(&self) -> &i32 {
-        &self.actions_size
     }
 }
 

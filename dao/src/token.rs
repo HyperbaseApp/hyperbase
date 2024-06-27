@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::token::TokenModel as TokenMysqlModel;
 use hb_db_postgresql::model::token::TokenModel as TokenPostgresModel;
@@ -264,15 +264,6 @@ impl TokenDao {
         }
     }
 
-    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.upsert_token(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.upsert_token(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.upsert_token(&self.to_sqlitedb_model()).await,
-        }
-    }
-
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_token(id).await?),
@@ -346,53 +337,6 @@ impl TokenDao {
                 .iter()
                 .map(|data| Self::from_sqlitedb_model(data))
                 .collect()),
-        }
-    }
-
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let tokens = db
-                    .select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut tokens_data = Vec::with_capacity(tokens.len());
-                for token in &tokens {
-                    tokens_data.push(Self::from_postgresdb_model(token));
-                }
-                Ok(tokens_data)
-            }
-            Db::MysqlDb(db) => {
-                let tokens = db
-                    .select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut tokens_data = Vec::with_capacity(tokens.len());
-                for token in &tokens {
-                    tokens_data.push(Self::from_mysqldb_model(token));
-                }
-                Ok(tokens_data)
-            }
-            Db::SqliteDb(db) => {
-                let tokens = db
-                    .select_many_tokens_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut tokens_data = Vec::with_capacity(tokens.len());
-                for token in &tokens {
-                    tokens_data.push(Self::from_sqlitedb_model(token));
-                }
-                Ok(tokens_data)
-            }
         }
     }
 

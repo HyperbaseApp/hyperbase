@@ -136,15 +136,6 @@ impl CollectionDao {
         let mut create_unique_indexes_fut = Vec::with_capacity(self.schema_fields.len());
 
         match db {
-            Db::ScyllaDb(_) => {
-                for (field, props) in &self.schema_fields {
-                    if props.unique {
-                        return Err(Error::msg(format!(
-                            "Field '{field}' requires unique index but ScyllaDB doesn't support unique indexes"
-                        )));
-                    }
-                }
-            }
             Db::MysqlDb(_) => {
                 for (field, props) in &self.schema_fields {
                     if props.unique || props.indexed {
@@ -238,64 +229,8 @@ impl CollectionDao {
         }
     }
 
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let collections = db
-                    .select_many_collections_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut collections_data = Vec::with_capacity(collections.len());
-                for collection in &collections {
-                    collections_data.push(Self::from_postgresdb_model(collection)?);
-                }
-                Ok(collections_data)
-            }
-            Db::MysqlDb(db) => {
-                let collections = db
-                    .select_many_collections_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut collections_data = Vec::with_capacity(collections.len());
-                for collection in &collections {
-                    collections_data.push(Self::from_mysqldb_model(collection)?);
-                }
-                Ok(collections_data)
-            }
-            Db::SqliteDb(db) => {
-                let collections = db
-                    .select_many_collections_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut collections_data = Vec::with_capacity(collections.len());
-                for collection in &collections {
-                    collections_data.push(Self::from_sqlitedb_model(collection)?);
-                }
-                Ok(collections_data)
-            }
-        }
-    }
-
     async fn db_update_prepare(&mut self, db: &Db) -> Result<()> {
         match db {
-            Db::ScyllaDb(_) => {
-                for (field, props) in &self.schema_fields {
-                    if props.unique {
-                        return Err(Error::msg(format!(
-                            "Field '{field}' requires unique index but ScyllaDB doesn't support unique indexes"
-                        )));
-                    }
-                }
-            }
             Db::MysqlDb(_) => {
                 for (field, props) in &self.schema_fields {
                     if props.indexed {

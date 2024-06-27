@@ -7,7 +7,6 @@ use hb_api_websocket::message::{MessageKind as WebSocketMessageKind, Target as W
 use hb_dao::{
     admin::AdminDao,
     admin_password_reset::AdminPasswordResetDao,
-    change::{ChangeDao, ChangeState, ChangeTable},
     collection::CollectionDao,
     log::{LogDao, LogKind},
     record::{RecordDao, RecordFilter, RecordFilters, RecordPagination},
@@ -32,7 +31,7 @@ use crate::{
         log::LogResJson,
         Response,
     },
-    util::{self, ws_broadcast::websocket_broadcast},
+    util::ws_broadcast::websocket_broadcast,
     ApiRestCtx,
 };
 
@@ -207,22 +206,6 @@ async fn verify_registration(
 
     if let Err(err) = admin_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Admin,
-        admin_data.id(),
-        &ChangeState::Upsert,
-        admin_data.created_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     if let Err(err) = registration_data.db_delete(ctx.dao().db()).await {
@@ -776,22 +759,6 @@ async fn confirm_password_reset(
     admin_data.set_password_hash(&password_hash.to_string());
 
     if let Err(err) = admin_data.db_update(ctx.dao().db()).await {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Admin,
-        admin_data.id(),
-        &ChangeState::Upsert,
-        admin_data.updated_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 

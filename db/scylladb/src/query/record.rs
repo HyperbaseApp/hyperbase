@@ -133,7 +133,10 @@ pub fn select_many(
     if *with_query_limit {
         query += " LIMIT ?"
     }
-    query + " ALLOW FILTERING"
+    if filter.len() > 0 {
+        query += " ALLOW FILTERING"
+    }
+    query
 }
 
 pub fn update(record_table: &str, columns: &Vec<&str>) -> String {
@@ -174,6 +177,8 @@ pub fn count(record_table: &str, filter: &str, groups: &Vec<&str>) -> String {
             count += 1;
         }
     }
-    query += " ALLOW FILTERING";
+    if filter.len() > 0 {
+        query += " ALLOW FILTERING";
+    }
     query
 }

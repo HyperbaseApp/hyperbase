@@ -1,26 +1,16 @@
 use std::sync::Arc;
 
-use hb_api_internal_gossip::InternalBroadcast;
 use hb_api_websocket::broadcaster::WebSocketBroadcaster;
 use hb_dao::Db;
 
 pub struct ApiMqttCtx {
     dao: ApiMqttDaoCtx,
     websocket: ApiMqttWsCtx,
-    internal_broadcast: Option<InternalBroadcast>,
 }
 
 impl ApiMqttCtx {
-    pub fn new(
-        dao: ApiMqttDaoCtx,
-        websocket: ApiMqttWsCtx,
-        internal_broadcast: Option<InternalBroadcast>,
-    ) -> Self {
-        Self {
-            dao,
-            websocket,
-            internal_broadcast,
-        }
+    pub fn new(dao: ApiMqttDaoCtx, websocket: ApiMqttWsCtx) -> Self {
+        Self { dao, websocket }
     }
 
     pub fn dao(&self) -> &ApiMqttDaoCtx {
@@ -29,10 +19,6 @@ impl ApiMqttCtx {
 
     pub fn websocket(&self) -> &ApiMqttWsCtx {
         &self.websocket
-    }
-
-    pub fn internal_broadcast(&self) -> &Option<InternalBroadcast> {
-        &self.internal_broadcast
     }
 }
 

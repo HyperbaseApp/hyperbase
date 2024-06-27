@@ -1,12 +1,10 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use ahash::{HashMap, HashMapExt, HashSet, HashSetExt};
-use chrono::Utc;
 use hb_dao::{
     admin::AdminDao,
     bucket::BucketDao,
     bucket_rule::BucketRuleDao,
-    change::{ChangeDao, ChangeState, ChangeTable},
     collection::CollectionDao,
     collection_rule::CollectionRuleDao,
     file::FileDao,
@@ -28,7 +26,6 @@ use crate::{
         },
         PaginationRes, Response,
     },
-    util,
 };
 
 pub fn project_api(cfg: &mut web::ServiceConfig) {
@@ -81,22 +78,6 @@ async fn insert_one(
 
     if let Err(err) = project_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Project,
-        project_data.id(),
-        &ChangeState::Upsert,
-        project_data.created_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -216,22 +197,6 @@ async fn update_one(
         if let Err(err) = project_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::Project,
-            project_data.id(),
-            &ChangeState::Upsert,
-            project_data.updated_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-        }
     }
 
     Response::data(
@@ -288,26 +253,8 @@ async fn delete_one(
         );
     }
 
-    let deleted_at = Utc::now();
-
     if let Err(err) = ProjectDao::db_delete(ctx.dao().db(), path.project_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Project,
-        project_data.id(),
-        &ChangeState::Delete,
-        &deleted_at,
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -376,22 +323,6 @@ async fn transfer_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let change_data = ChangeDao::new(
-        &ChangeTable::Project,
-        project_data.id(),
-        &ChangeState::Upsert,
-        project_data.updated_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
     let tokens_data = match TokenDao::db_select_many_by_admin_id_and_project_id(
         ctx.dao().db(),
         &admin_id,
@@ -406,22 +337,6 @@ async fn transfer_one(
     for mut token_data in tokens_data {
         token_data.set_admin_id(admin_data.id());
         if let Err(err) = token_data.db_update(ctx.dao().db()).await {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-        }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::Token,
-            token_data.id(),
-            &ChangeState::Upsert,
-            token_data.updated_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
             return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
         }
     }
@@ -484,22 +399,6 @@ async fn duplicate_one(
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
     }
 
-    let change_data = ChangeDao::new(
-        &ChangeTable::Project,
-        new_project_data.id(),
-        &ChangeState::Upsert,
-        new_project_data.created_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
     let (collections_data, buckets_data, tokens_data) = match tokio::try_join!(
         CollectionDao::db_select_many_by_project_id(ctx.dao().db(), project_data.id(),),
         BucketDao::db_select_many_by_project_id(ctx.dao().db(), project_data.id()),
@@ -520,22 +419,6 @@ async fn duplicate_one(
         );
         if let Err(err) = new_collection_data.db_insert(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-        }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::Collection,
-            new_collection_data.id(),
-            &ChangeState::Insert,
-            new_collection_data.created_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
         }
 
         old_new_collection_id_map.insert(collection_data.id(), *new_collection_data.id());
@@ -582,27 +465,11 @@ async fn duplicate_one(
                     };
                     new_record_data.upsert(field, value);
                 }
-                if let Err(err) = new_record_data.db_insert(ctx.dao().db()).await {
+                if let Err(err) = new_record_data.db_insert(ctx.dao().db(), &None).await {
                     return Response::error_raw(
                         &StatusCode::INTERNAL_SERVER_ERROR,
                         &err.to_string(),
                     );
-                }
-
-                let change_data = ChangeDao::new(
-                    &ChangeTable::Record(*new_record_data.collection_id()),
-                    &new_record_data.id().unwrap(),
-                    &ChangeState::Upsert,
-                    &new_record_data.updated_at().unwrap(),
-                );
-                if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-                    ctx.dao().db(),
-                    change_data,
-                    ctx.internal_broadcast(),
-                )
-                .await
-                {
-                    return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
                 }
             }
         }
@@ -625,22 +492,6 @@ async fn duplicate_one(
         };
         if let Err(err) = new_bucket_data.db_insert(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-        }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::Bucket,
-            new_bucket_data.id(),
-            &ChangeState::Upsert,
-            new_bucket_data.created_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
         }
 
         old_new_bucket_id_map.insert(bucket_data.id(), *new_bucket_data.id());
@@ -685,22 +536,6 @@ async fn duplicate_one(
                         &err.to_string(),
                     );
                 }
-
-                let change_data = ChangeDao::new(
-                    &ChangeTable::File(*new_file_data.bucket_id()),
-                    new_file_data.id(),
-                    &ChangeState::Upsert,
-                    new_file_data.created_at(),
-                );
-                if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-                    ctx.dao().db(),
-                    change_data,
-                    ctx.internal_broadcast(),
-                )
-                .await
-                {
-                    return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-                }
             }
         }
     }
@@ -716,22 +551,6 @@ async fn duplicate_one(
         );
         if let Err(err) = new_token_data.db_insert(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-        }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::Token,
-            new_token_data.id(),
-            &ChangeState::Upsert,
-            new_token_data.created_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
         }
 
         let (collection_rules_data, bucket_rules_data) = match tokio::try_join!(
@@ -770,22 +589,6 @@ async fn duplicate_one(
             if let Err(err) = new_collection_rule_data.db_insert(ctx.dao().db()).await {
                 return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
             }
-
-            let change_data = ChangeDao::new(
-                &ChangeTable::CollectionRule,
-                new_collection_rule_data.id(),
-                &ChangeState::Upsert,
-                new_collection_rule_data.created_at(),
-            );
-            if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-                ctx.dao().db(),
-                change_data,
-                ctx.internal_broadcast(),
-            )
-            .await
-            {
-                return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-            }
         }
 
         for bucket_rule_data in &bucket_rules_data {
@@ -814,22 +617,6 @@ async fn duplicate_one(
             );
             if let Err(err) = new_bucket_rule_data.db_insert(ctx.dao().db()).await {
                 return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-            }
-
-            let change_data = ChangeDao::new(
-                &ChangeTable::BucketRule,
-                new_bucket_rule_data.id(),
-                &ChangeState::Upsert,
-                new_bucket_rule_data.created_at(),
-            );
-            if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-                ctx.dao().db(),
-                change_data,
-                ctx.internal_broadcast(),
-            )
-            .await
-            {
-                return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
             }
         }
     }

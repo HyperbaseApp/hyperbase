@@ -16,12 +16,10 @@ members = [
     "api/rest",
     "api/mqtt",
     "api/websocket",
-    "api/internal/gossip",
 ]
 
 
 [workspace.dependencies]
-hb_api_internal_gossip = { path = "./api/internal/gossip" }
 hb_api_mqtt = { path = "./api/mqtt" }
 hb_api_rest = { path = "./api/rest" }
 hb_api_websocket = { path = "./api/websocket" }

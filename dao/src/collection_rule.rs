@@ -136,15 +136,6 @@ impl CollectionRuleDao {
         }
     }
 
-    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.upsert_collection_rule(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.upsert_collection_rule(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.upsert_collection_rule(&self.to_sqlitedb_model()).await,
-        }
-    }
-
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_collection_rule(id).await?),
@@ -216,53 +207,6 @@ impl CollectionRuleDao {
             Db::SqliteDb(db) => {
                 let collection_rules = db
                     .select_many_collection_rules_by_token_id(token_id)
-                    .await?;
-                let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
-                for collection_rule in &collection_rules {
-                    collection_rules_data.push(Self::from_sqlitedb_model(collection_rule)?);
-                }
-                Ok(collection_rules_data)
-            }
-        }
-    }
-
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let collection_rules = db
-                    .select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
-                for collection_rule in &collection_rules {
-                    collection_rules_data.push(Self::from_postgresdb_model(collection_rule)?);
-                }
-                Ok(collection_rules_data)
-            }
-            Db::MysqlDb(db) => {
-                let collection_rules = db
-                    .select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
-                for collection_rule in &collection_rules {
-                    collection_rules_data.push(Self::from_mysqldb_model(collection_rule)?);
-                }
-                Ok(collection_rules_data)
-            }
-            Db::SqliteDb(db) => {
-                let collection_rules = db
-                    .select_many_collection_rules_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
                     .await?;
                 let mut collection_rules_data = Vec::with_capacity(collection_rules.len());
                 for collection_rule in &collection_rules {

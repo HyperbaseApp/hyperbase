@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use sqlx::{Executor, Pool, Postgres};
 use uuid::Uuid;
 
@@ -12,7 +12,6 @@ const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"bu
 const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"files\" WHERE \"created_by\" = $1 AND \"bucket_id\" = $2";
 const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"bucket_id\" = $1 AND \"updated_at\" < $2";
-const SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"files\" WHERE \"updated_at\" > $1 OR (\"updated_at\" = $1 AND \"id\" > $2) ORDER BY \"updated_at\" ASC, \"id\" ASC LIMIT $3";
 const UPDATE: &str = "UPDATE \"files\" SET \"created_by\" = $1, \"updated_at\" = $2, \"file_name\" = $3, \"public\" = $4 WHERE \"id\" = $5";
 const DELETE: &str = "DELETE FROM \"files\" WHERE \"id\" = $1";
 
@@ -29,7 +28,6 @@ pub async fn init(pool: &Pool<Postgres>) {
         pool.prepare(SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
         pool.prepare(COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID),
         pool.prepare(SELECT_MANY_EXPIRE),
-        pool.prepare(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC),
         pool.prepare(UPDATE),
         pool.prepare(DELETE),
     )
@@ -154,22 +152,6 @@ impl PostgresDb {
                         )
                         .ok_or_else(|| Error::msg("bucket ttl is out of range."))?,
                 ),
-            )
-            .await?)
-    }
-
-    pub async fn select_many_files_from_updated_at_and_after_id_with_limit_asc(
-        &self,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<FileModel>> {
-        Ok(self
-            .fetch_all(
-                sqlx::query_as(SELECT_MANY_FROM_UPDATED_AT_AND_AFTER_ID_WITH_LIMIT_ASC)
-                    .bind(updated_at)
-                    .bind(id)
-                    .bind(limit),
             )
             .await?)
     }

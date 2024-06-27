@@ -4,7 +4,6 @@ use ahash::{HashMap, HashMapExt, HashSet};
 use anyhow::{Error, Result};
 use hb_api_websocket::message::{MessageKind as WebSocketMessageKind, Target as WebSocketTarget};
 use hb_dao::{
-    change::{ChangeDao, ChangeState, ChangeTable},
     collection::CollectionDao,
     log::{LogDao, LogKind},
     project::ProjectDao,
@@ -187,26 +186,11 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
         }
     }
 
-    record_data.db_insert(ctx.dao().db()).await?;
+    let collection_id = collection_data.id().to_owned();
 
-    let record_id = if let Some(id) = record_data.id() {
-        id
-    } else {
-        return Err(Error::msg(format!("Record doesn't have _id")));
-    };
-    let record_updated_at = if let Some(updated_at) = record_data.updated_at() {
-        updated_at
-    } else {
-        return Err(Error::msg(format!("Record doesn't have _updated_at")));
-    };
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Record(*record_data.collection_id()),
-        record_id,
-        &ChangeState::Upsert,
-        record_updated_at,
-    );
-    change_data.db_upsert(ctx.dao().db()).await?;
+    record_data
+        .db_insert(ctx.dao().db(), &Some(collection_data))
+        .await?;
 
     let ws_broadcaster_chan = ctx.websocket().broadcaster().clone();
     tokio::spawn((|| async move {
@@ -229,7 +213,7 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
 
         if let Err(err) = websocket_broadcast(
             &ws_broadcaster_chan,
-            WebSocketTarget::Collection(*collection_data.id()),
+            WebSocketTarget::Collection(collection_id),
             Some(created_by),
             WebSocketMessageKind::InsertOne,
             record,
@@ -242,19 +226,6 @@ async fn insert_one(ctx: Arc<ApiMqttCtx>, payload: &Payload) -> Result<()> {
             );
         }
     })());
-    if let Some(internal_broadcast) = ctx.internal_broadcast() {
-        let internal_broadcast = internal_broadcast.clone();
-        tokio::spawn((|| async move {
-            if let Err(err) = internal_broadcast.broadcast(&change_data).await {
-                hb_log::error(
-                    None,
-                    &format!(
-                        "[ApiMqttClient] Error when broadcasting insert_one record to remote peer: {err}"
-                    ),
-                );
-            }
-        })());
-    }
 
     Ok(())
 }

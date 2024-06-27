@@ -1,9 +1,7 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use chrono::Utc;
 use hb_dao::{
     admin::AdminDao,
-    change::{ChangeDao, ChangeState, ChangeTable},
     collection::CollectionDao,
     collection_rule::{CollectionPermission, CollectionRuleDao},
     project::ProjectDao,
@@ -22,7 +20,6 @@ use crate::{
         },
         PaginationRes, Response,
     },
-    util,
 };
 
 pub fn collection_rule_api(cfg: &mut web::ServiceConfig) {
@@ -149,22 +146,6 @@ async fn insert_one(
 
     if let Err(err) = collection_rule_data.db_insert(ctx.dao().db()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::CollectionRule,
-        collection_rule_data.id(),
-        &ChangeState::Upsert,
-        collection_rule_data.updated_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(
@@ -344,22 +325,6 @@ async fn update_one(
         if let Err(err) = collection_rule_data.db_update(ctx.dao().db()).await {
             return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
         }
-
-        let change_data = ChangeDao::new(
-            &ChangeTable::CollectionRule,
-            collection_rule_data.id(),
-            &ChangeState::Upsert,
-            collection_rule_data.updated_at(),
-        );
-        if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-            ctx.dao().db(),
-            change_data,
-            ctx.internal_broadcast(),
-        )
-        .await
-        {
-            return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-        }
     }
 
     Response::data(
@@ -430,26 +395,8 @@ async fn delete_one(
         );
     }
 
-    let deleted_at = Utc::now();
-
     if let Err(err) = CollectionRuleDao::db_delete(ctx.dao().db(), path.rule_id()).await {
         return Response::error_raw(&StatusCode::INTERNAL_SERVER_ERROR, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::CollectionRule,
-        collection_rule_data.id(),
-        &ChangeState::Delete,
-        &deleted_at,
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
     Response::data(

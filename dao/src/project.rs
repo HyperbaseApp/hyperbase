@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use futures::future;
 use hb_db_mysql::model::project::ProjectModel as ProjectMysqlModel;
@@ -79,15 +79,6 @@ impl ProjectDao {
         }
     }
 
-    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.upsert_project(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.upsert_project(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.upsert_project(&self.to_sqlitedb_model()).await,
-        }
-    }
-
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_project(id).await?),
@@ -125,53 +116,6 @@ impl ProjectDao {
             }
             Db::SqliteDb(db) => {
                 let projects = db.select_many_projects_by_admin_id(admin_id).await?;
-                let mut projects_data = Vec::with_capacity(projects.len());
-                for project in &projects {
-                    projects_data.push(Self::from_sqlitedb_model(project));
-                }
-                Ok(projects_data)
-            }
-        }
-    }
-
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let projects = db
-                    .select_many_projects_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut projects_data = Vec::with_capacity(projects.len());
-                for project in &projects {
-                    projects_data.push(Self::from_postgresdb_model(project));
-                }
-                Ok(projects_data)
-            }
-            Db::MysqlDb(db) => {
-                let projects = db
-                    .select_many_projects_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut projects_data = Vec::with_capacity(projects.len());
-                for project in &projects {
-                    projects_data.push(Self::from_mysqldb_model(project));
-                }
-                Ok(projects_data)
-            }
-            Db::SqliteDb(db) => {
-                let projects = db
-                    .select_many_projects_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
                 let mut projects_data = Vec::with_capacity(projects.len());
                 for project in &projects {
                     projects_data.push(Self::from_sqlitedb_model(project));

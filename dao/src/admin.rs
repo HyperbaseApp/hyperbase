@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hb_db_mysql::model::admin::AdminModel as AdminMysqlModel;
 use hb_db_postgresql::model::admin::AdminModel as AdminPostgresModel;
@@ -78,15 +78,6 @@ impl AdminDao {
         }
     }
 
-    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.upsert_admin(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.upsert_admin(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.upsert_admin(&self.to_sqlitedb_model()).await,
-        }
-    }
-
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_admin(id).await?),
@@ -108,53 +99,6 @@ impl AdminDao {
             Db::SqliteDb(db) => Ok(Self::from_sqlitedb_model(
                 &db.select_admin_by_email(email).await?,
             )),
-        }
-    }
-
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let admins = db
-                    .select_many_admins_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut admins_data = Vec::with_capacity(admins.len());
-                for admin in &admins {
-                    admins_data.push(Self::from_postgresdb_model(admin));
-                }
-                Ok(admins_data)
-            }
-            Db::MysqlDb(db) => {
-                let admins = db
-                    .select_many_admins_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut admins_data = Vec::with_capacity(admins.len());
-                for admin in &admins {
-                    admins_data.push(Self::from_mysqldb_model(admin));
-                }
-                Ok(admins_data)
-            }
-            Db::SqliteDb(db) => {
-                let admins = db
-                    .select_many_admins_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut admins_data = Vec::with_capacity(admins.len());
-                for admin in &admins {
-                    admins_data.push(Self::from_sqlitedb_model(admin));
-                }
-                Ok(admins_data)
-            }
         }
     }
 

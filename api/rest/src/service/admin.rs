@@ -1,10 +1,6 @@
 use actix_web::{http::StatusCode, web, HttpResponse};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
-use chrono::Utc;
-use hb_dao::{
-    admin::AdminDao,
-    change::{ChangeDao, ChangeState, ChangeTable},
-};
+use hb_dao::admin::AdminDao;
 use hb_token_jwt::claim::ClaimId;
 
 use crate::{
@@ -13,7 +9,6 @@ use crate::{
         admin::{AdminResJson, DeleteAdminResJson, UpdateOneAdminReqJson},
         Response,
     },
-    util,
 };
 
 pub fn admin_api(cfg: &mut web::ServiceConfig) {
@@ -109,22 +104,6 @@ async fn update_one(
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 
-    let change_data = ChangeDao::new(
-        &ChangeTable::Admin,
-        admin_data.id(),
-        &ChangeState::Upsert,
-        admin_data.updated_at(),
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
     Response::data(
         &StatusCode::OK,
         &None,
@@ -163,25 +142,7 @@ async fn delete_one(ctx: web::Data<ApiRestCtx>, auth: BearerAuth) -> HttpRespons
         }
     };
 
-    let deleted_at = Utc::now();
-
     if let Err(err) = AdminDao::db_delete(ctx.dao().db(), admin_data.id()).await {
-        return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
-    }
-
-    let change_data = ChangeDao::new(
-        &ChangeTable::Admin,
-        admin_data.id(),
-        &ChangeState::Delete,
-        &deleted_at,
-    );
-    if let Err(err) = util::gossip_broadcast::save_change_data_and_broadcast(
-        ctx.dao().db(),
-        change_data,
-        ctx.internal_broadcast(),
-    )
-    .await
-    {
         return Response::error_raw(&StatusCode::BAD_REQUEST, &err.to_string());
     }
 

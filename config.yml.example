@@ -25,8 +25,6 @@ mailer:
   sender_email: "sender_email"
 
 db:
-  option:
-    refresh_change: false
   scylla:
     user: "user"
     password: "password"
@@ -56,15 +54,6 @@ bucket:
   path: "/app/hyperbase-bucket"
 
 api:
-  internal:
-    gossip:
-      host: "0.0.0.0"
-      port: 7472
-      peers:
-        - "0.0.0.0:7473"
-        - "0.0.0.0:7474"
-      view_size: 4
-      actions_size: 30
   rest:
     host: "0.0.0.0"
     port: 8080

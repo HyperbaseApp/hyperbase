@@ -136,15 +136,6 @@ impl BucketRuleDao {
         }
     }
 
-    pub async fn db_upsert(&self, db: &Db) -> Result<()> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => db.upsert_bucket_rule(&self.to_postgresdb_model()).await,
-            Db::MysqlDb(db) => db.upsert_bucket_rule(&self.to_mysqldb_model()).await,
-            Db::SqliteDb(db) => db.upsert_bucket_rule(&self.to_sqlitedb_model()).await,
-        }
-    }
-
     pub async fn db_select(db: &Db, id: &Uuid) -> Result<Self> {
         match db {
             Db::ScyllaDb(db) => Self::from_scylladb_model(&db.select_bucket_rule(id).await?),
@@ -207,53 +198,6 @@ impl BucketRuleDao {
             }
             Db::SqliteDb(db) => {
                 let bucket_rules = db.select_many_bucket_rules_by_token_id(token_id).await?;
-                let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
-                for bucket_rule in &bucket_rules {
-                    bucket_rules_data.push(Self::from_sqlitedb_model(bucket_rule)?);
-                }
-                Ok(bucket_rules_data)
-            }
-        }
-    }
-
-    pub async fn db_select_many_from_updated_at_and_after_id_with_limit_asc(
-        db: &Db,
-        updated_at: &DateTime<Utc>,
-        id: &Uuid,
-        limit: &i32,
-    ) -> Result<Vec<Self>> {
-        match db {
-            Db::ScyllaDb(_) => Err(Error::msg("Unimplemented")),
-            Db::PostgresqlDb(db) => {
-                let bucket_rules = db
-                    .select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
-                for bucket_rule in &bucket_rules {
-                    bucket_rules_data.push(Self::from_postgresdb_model(bucket_rule)?);
-                }
-                Ok(bucket_rules_data)
-            }
-            Db::MysqlDb(db) => {
-                let bucket_rules = db
-                    .select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
-                let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
-                for bucket_rule in &bucket_rules {
-                    bucket_rules_data.push(Self::from_mysqldb_model(bucket_rule)?);
-                }
-                Ok(bucket_rules_data)
-            }
-            Db::SqliteDb(db) => {
-                let bucket_rules = db
-                    .select_many_bucket_rules_from_updated_at_and_after_id_with_limit_asc(
-                        updated_at, id, limit,
-                    )
-                    .await?;
                 let mut bucket_rules_data = Vec::with_capacity(bucket_rules.len());
                 for bucket_rule in &bucket_rules {
                     bucket_rules_data.push(Self::from_sqlitedb_model(bucket_rule)?);

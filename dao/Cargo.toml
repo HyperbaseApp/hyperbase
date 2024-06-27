@@ -10,7 +10,6 @@ hb_db_mysql = { workspace = true }
 hb_db_postgresql = { workspace = true }
 hb_db_scylladb = { workspace = true }
 hb_db_sqlite = { workspace = true }
-hb_log = { workspace = true }
 
 ahash = { workspace = true }
 anyhow = { workspace = true }

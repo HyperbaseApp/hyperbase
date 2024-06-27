@@ -12,8 +12,8 @@ const INSERT: &str = "INSERT INTO \"hyperbase\".\"files\" (\"id\", \"created_by\
 const SELECT: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"id\" = ?";
 const SELECT_MANY_BY_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
 const COUNT_MANY_BY_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ?";
-const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
-const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"created_by\" = ? AND \"bucket_id\" = ? ALLOW FILTERING";
+const SELECT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"created_by\" = ?";
+const COUNT_MANY_BY_CREATED_BY_AND_BUCKET_ID: &str = "SELECT COUNT(1) FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"created_by\" = ? ALLOW FILTERING";
 const SELECT_MANY_EXPIRE: &str = "SELECT \"id\", \"created_by\", \"created_at\", \"updated_at\", \"bucket_id\", \"file_name\", \"content_type\", \"size\", \"public\" FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"updated_at\" < ? ALLOW FILTERING";
 const UPDATE: &str = "UPDATE \"hyperbase\".\"files\" SET \"created_by\" = ?, \"updated_at\" = ?, \"file_name\" = ?, \"public\" = ? WHERE \"bucket_id\" = ? AND \"id\" = ?";
 const DELETE: &str = "DELETE FROM \"hyperbase\".\"files\" WHERE \"bucket_id\" = ? AND \"id\" = ?";
@@ -22,6 +22,14 @@ pub async fn init(cached_session: &CachingSession) {
     hb_log::info(Some("🔧"), "[ScyllaDB] Setting up files table");
 
     cached_session.get_session().query("CREATE TABLE IF NOT EXISTS \"hyperbase\".\"files\" (\"id\" uuid, \"created_by\" uuid, \"created_at\" timestamp, \"updated_at\" timestamp, \"bucket_id\" uuid, \"file_name\" text, \"content_type\" text, \"size\" bigint, \"public\" boolean, PRIMARY KEY (\"bucket_id\", \"id\")) WITH CLUSTERING ORDER BY (\"id\" DESC)", &[]).await.unwrap();
+    cached_session
+    .get_session()
+    .query(
+        "CREATE INDEX IF NOT EXISTS ON \"hyperbase\".\"files\" ((\"bucket_id\"), \"created_by\")",
+        &[],
+    )
+    .await
+    .unwrap();
 
     cached_session
         .add_prepared_statement(&INSERT.into())
@@ -92,7 +100,6 @@ impl ScyllaDb {
             query += " LIMIT ?";
             values.push(Box::new(*limit));
         }
-        query += " ALLOW FILTERING";
         Ok(self.execute(&query, &values).await?.rows_typed()?)
     }
 
@@ -124,7 +131,6 @@ impl ScyllaDb {
             query += " LIMIT ?";
             values.push(Box::new(*limit));
         }
-        query += " ALLOW FILTERING";
         Ok(self.execute(&query, &values).await?.rows_typed()?)
     }
 
