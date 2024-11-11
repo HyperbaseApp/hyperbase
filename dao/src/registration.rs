@@ -4,7 +4,7 @@ use hb_db_mysql::model::registration::RegistrationModel as RegistrationMysqlMode
 use hb_db_postgresql::model::registration::RegistrationModel as RegistrationPostgresModel;
 use hb_db_scylladb::model::registration::RegistrationModel as RegistrationScyllaModel;
 use hb_db_sqlite::model::registration::RegistrationModel as RegistrationSqliteModel;
-use rand::{thread_rng, Rng};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -27,7 +27,10 @@ impl RegistrationDao {
             updated_at: now,
             email: email.to_owned(),
             password_hash: password_hash.to_owned(),
-            code: thread_rng().gen_range(100000..=999999).to_string(),
+            code: (0..8)
+                .map(|_| thread_rng().sample(Alphanumeric))
+                .map(char::from)
+                .collect(),
         }
     }
 

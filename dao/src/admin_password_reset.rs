@@ -4,7 +4,7 @@ use hb_db_mysql::model::admin_password_reset::AdminPasswordResetModel as AdminPa
 use hb_db_postgresql::model::admin_password_reset::AdminPasswordResetModel as AdminPasswordResetPostgresModel;
 use hb_db_scylladb::model::admin_password_reset::AdminPasswordResetModel as AdminPasswordResetScyllaModel;
 use hb_db_sqlite::model::admin_password_reset::AdminPasswordResetModel as AdminPasswordResetSqliteModel;
-use rand::{thread_rng, Rng};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use uuid::Uuid;
 
 use crate::{util::conversion, Db};
@@ -25,7 +25,10 @@ impl AdminPasswordResetDao {
             created_at: now,
             updated_at: now,
             admin_id: *admin_id,
-            code: thread_rng().gen_range(100000..=999999).to_string(),
+            code: (0..8)
+                .map(|_| thread_rng().sample(Alphanumeric))
+                .map(char::from)
+                .collect(),
         }
     }
 
