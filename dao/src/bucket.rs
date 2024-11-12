@@ -1,4 +1,6 @@
-use anyhow::Result;
+use std::path::PathBuf;
+
+use anyhow::{Error, Ok, Result};
 use chrono::{DateTime, Utc};
 use futures::future;
 use hb_db_mysql::model::bucket::BucketModel as BucketMysqlModel;
@@ -29,7 +31,7 @@ impl BucketDao {
         path: &str,
         opt_ttl: &Option<i64>,
     ) -> Result<Self> {
-        fs::create_dir_all(path).await?;
+        Self::create_bucket_directory(path).await?;
 
         let now = Utc::now();
 
@@ -181,6 +183,31 @@ impl BucketDao {
             Db::MysqlDb(db) => db.delete_bucket(id).await,
             Db::SqliteDb(db) => db.delete_bucket(id).await,
         }
+    }
+
+    async fn create_bucket_directory(path: &str) -> Result<()> {
+        let bucket_path = match path.starts_with("/") {
+            true => PathBuf::from(path),
+            false => {
+                let exe_path = std::env::current_exe()?;
+                let dir_path = match exe_path.parent() {
+                    Some(dir_path) => match dir_path.to_str(){
+                        Some(path) => path,
+                        None => return Err(Error::msg(
+                            "Failed to convert directory path of the current executable as a string",
+                        )),
+                    },
+                    None => {
+                        return Err(Error::msg(
+                            "Failed to get directory path of the current executable",
+                        ))
+                    }
+                };
+                PathBuf::from(format!("{}/{}", dir_path, path))
+            }
+        };
+        fs::create_dir_all(bucket_path).await?;
+        Ok(())
     }
 
     fn from_scylladb_model(model: &BucketScyllaModel) -> Result<Self> {

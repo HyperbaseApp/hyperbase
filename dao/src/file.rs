@@ -131,25 +131,30 @@ impl FileDao {
     }
 
     pub fn full_path(bucket_path: &str, id: &Uuid) -> Result<PathBuf> {
-        let exe_path = std::env::current_exe()?;
-        let dir_path =
-            match exe_path.parent() {
-                Some(dir_path) => match dir_path.to_str() {
-                    Some(path) => path,
-                    None => return Err(Error::msg(
-                        "Failed to convert directory path of the current executable as a string",
-                    )),
-                },
-                None => {
-                    return Err(Error::msg(
-                        "Failed to get directory path of the current executable",
-                    ))
-                }
-            };
-        Ok(PathBuf::from(format!(
-            "{}/{}/{}",
-            dir_path, bucket_path, id
-        )))
+        match bucket_path.starts_with("/") {
+            true => Ok(PathBuf::from(format!("{}/{}", bucket_path, id))),
+            false => {
+                let exe_path = std::env::current_exe()?;
+                let dir_path =
+                    match exe_path.parent() {
+                        Some(dir_path) => match dir_path.to_str() {
+                            Some(path) => path,
+                            None => return Err(Error::msg(
+                                "Failed to convert directory path of the current executable as a string",
+                            )),
+                        },
+                        None => {
+                            return Err(Error::msg(
+                                "Failed to get directory path of the current executable",
+                            ))
+                        }
+                    };
+                Ok(PathBuf::from(format!(
+                    "{}/{}/{}",
+                    dir_path, bucket_path, id
+                )))
+            }
+        }
     }
 
     pub async fn save(&self, db: &Db, bucket_path: &str, path: impl AsRef<Path>) -> Result<()> {
